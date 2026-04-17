@@ -55,13 +55,13 @@ type FoodProvider = {
   } | null
   service_provider_subcategories?: Array<{
     subcategory_id: string | number
-    service_subcategories?: {
+    service_subcategories?: Array<{
       id: string | number
       category_id: string | number
       slug?: string | null
       name_en?: string | null
       name_ar?: string | null
-    } | null
+    }> | null
   }> | null
   service_provider_universities?: Array<{
     university_id: string | number
