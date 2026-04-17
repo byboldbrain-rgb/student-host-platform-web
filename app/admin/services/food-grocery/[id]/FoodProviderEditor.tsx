@@ -84,6 +84,22 @@ type ServiceSubcategory = {
   is_active?: boolean | null
 }
 
+type NormalizedServiceCategory = {
+  id: number
+  slug: string
+  name_en: string
+  name_ar?: string | null
+}
+
+type NormalizedServiceSubcategory = {
+  id: number
+  category_id: number
+  slug: string
+  name_en: string
+  name_ar: string
+  is_active?: boolean | null
+}
+
 type MenuCategory = {
   id: number
   restaurant_id: number
@@ -267,16 +283,35 @@ export default function FoodProviderEditor({
     ? serviceSubcategories
     : []
 
+  const normalizedServiceCategories = useMemo<NormalizedServiceCategory[]>(
+    () =>
+      safeServiceCategories.map((category) => ({
+        ...category,
+        id: Number(category.id),
+      })),
+    [safeServiceCategories]
+  )
+
+  const normalizedServiceSubcategories = useMemo<NormalizedServiceSubcategory[]>(
+    () =>
+      safeServiceSubcategories.map((subcategory) => ({
+        ...subcategory,
+        id: Number(subcategory.id),
+        category_id: Number(subcategory.category_id),
+      })),
+    [safeServiceSubcategories]
+  )
+
   const foodGroceryCategory = useMemo(() => {
     return (
-      safeServiceCategories.find(
+      normalizedServiceCategories.find(
         (category) =>
           category.slug === 'food-grocery' ||
           category.slug === 'food_grocery' ||
           category.name_en?.toLowerCase() === 'food & grocery'
       ) || null
     )
-  }, [safeServiceCategories])
+  }, [normalizedServiceCategories])
 
   const existingSubcategoryIds = (
     provider.service_provider_subcategories?.map((item) => String(item.subcategory_id)) || []
@@ -292,7 +327,7 @@ export default function FoodProviderEditor({
     )
   )
 
-  const existingSubcategories = safeServiceSubcategories.filter((subcategory) =>
+  const existingSubcategories = normalizedServiceSubcategories.filter((subcategory) =>
     existingSubcategoryIds.includes(String(subcategory.id))
   )
 
@@ -702,8 +737,8 @@ export default function FoodProviderEditor({
           setForm={setProviderForm}
           cities={cities}
           universities={universities}
-          serviceCategories={safeServiceCategories}
-          serviceSubcategories={safeServiceSubcategories}
+          serviceCategories={normalizedServiceCategories}
+          serviceSubcategories={normalizedServiceSubcategories}
         />
       )
     }
@@ -722,7 +757,7 @@ export default function FoodProviderEditor({
       )
     }
 
-        if (current.key === 'zones' && isRestaurant) {
+    if (current.key === 'zones' && isRestaurant) {
       return (
         <DeliveryZonesEditor
           cityId={providerForm.city_id}
