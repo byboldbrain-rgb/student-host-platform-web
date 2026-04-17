@@ -5,7 +5,7 @@ import FoodProviderEditor from './FoodProviderEditor'
 
 type FoodProvider = {
   id: number
-  category_id: number
+  category_id: number | string
   city_id?: string | null
   primary_university_id?: string | null
   name_en: string
@@ -32,23 +32,23 @@ type FoodProvider = {
   created_at?: string | null
   updated_at?: string | null
   service_categories?: {
-    id?: number
+    id?: number | string
     slug?: string | null
     name_en?: string | null
     name_ar?: string | null
   } | null
   service_provider_subcategories?: Array<{
-    subcategory_id: number
-    service_subcategories?: {
-      id: number
-      category_id: number
+    subcategory_id: number | string
+    service_subcategories?: Array<{
+      id: number | string
+      category_id: number | string
       slug?: string | null
       name_en?: string | null
       name_ar?: string | null
-    } | null
+    }> | null
   }> | null
   service_provider_universities?: Array<{
-    university_id: number
+    university_id: number | string
   }> | null
 }
 
@@ -231,7 +231,7 @@ export default async function FoodProviderDetailsPage({
   if (error) throw new Error(error.message)
   if (!data) notFound()
 
-  const provider = data as FoodProvider
+  const provider = data as unknown as FoodProvider
 
   const deliveryAreasPromise = provider.city_id
     ? supabase
