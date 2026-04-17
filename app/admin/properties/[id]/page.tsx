@@ -197,6 +197,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
           (x: any) => x.bill_type_id
         )}
         rooms={roomsRes.data ?? []}
+        bookingRequests={[]}
         canChangeBroker={isSuperAdmin(admin)}
         canChangeAdminStatus={isSuperAdmin(admin)}
       />
