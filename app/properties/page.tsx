@@ -154,6 +154,7 @@ const TRANSLATIONS = {
     pricesIncludeFees: 'الأسعار تشمل جميع الرسوم',
     help: 'مساعدة',
     signUp: 'إنشاء حساب',
+    community: 'ي',
     logIn: 'تسجيل الدخول',
     language: 'اللغة',
     english: 'English',
