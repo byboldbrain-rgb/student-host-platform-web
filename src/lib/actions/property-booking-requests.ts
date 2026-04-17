@@ -1,0 +1,161 @@
+'use server'
+
+import { createClient } from '@/src/lib/supabase/server'
+
+export type RequestedOptionCode =
+  | 'triple_room'
+  | 'double_room'
+  | 'single_room'
+  | 'full_apartment'
+
+export type CreatePropertyBookingRequestResult =
+  | {
+      success: true
+      requestId: string
+    }
+  | {
+      success: false
+      error: string
+      code?:
+        | 'UNAUTHENTICATED'
+        | 'PROFILE_NOT_FOUND'
+        | 'PROFILE_INCOMPLETE'
+        | 'PROPERTY_NOT_FOUND'
+        | 'UNKNOWN'
+    }
+
+function getRequestedOptionLabel(optionCode: RequestedOptionCode) {
+  if (optionCode === 'triple_room') return 'Triple Room'
+  if (optionCode === 'double_room') return 'Double Room'
+  if (optionCode === 'single_room') return 'Single Room'
+  return 'Full Apartment'
+}
+
+export async function createPropertyBookingRequestFromProfile(
+  propertyId: string,
+  requestedOptionCode: RequestedOptionCode,
+  requestedOptionLabel?: string
+): Promise<CreatePropertyBookingRequestResult> {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError) {
+      return {
+        success: false,
+        error: userError.message,
+        code: 'UNAUTHENTICATED',
+      }
+    }
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'You must sign in first.',
+        code: 'UNAUTHENTICATED',
+      }
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, full_name, phone, whatsapp')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      return {
+        success: false,
+        error: profileError.message,
+        code: 'PROFILE_NOT_FOUND',
+      }
+    }
+
+    if (!profile) {
+      return {
+        success: false,
+        error: 'User profile was not found.',
+        code: 'PROFILE_NOT_FOUND',
+      }
+    }
+
+    const fullName = profile.full_name?.trim() || ''
+    const phone = profile.phone?.trim() || ''
+    const whatsapp = profile.whatsapp?.trim() || ''
+    const email = user.email?.trim() || ''
+
+    if (!fullName || (!phone && !email)) {
+      return {
+        success: false,
+        error:
+          'Your profile is incomplete. Please complete your account details first.',
+        code: 'PROFILE_INCOMPLETE',
+      }
+    }
+
+    const { data: property, error: propertyError } = await supabase
+      .from('properties')
+      .select('id, broker_id')
+      .eq('id', propertyId)
+      .maybeSingle()
+
+    if (propertyError) {
+      return {
+        success: false,
+        error: propertyError.message,
+        code: 'PROPERTY_NOT_FOUND',
+      }
+    }
+
+    if (!property) {
+      return {
+        success: false,
+        error: 'العقار غير موجود.',
+        code: 'PROPERTY_NOT_FOUND',
+      }
+    }
+
+    const normalizedOptionLabel =
+      requestedOptionLabel?.trim() || getRequestedOptionLabel(requestedOptionCode)
+
+    const bookingMessage = `Requested option: ${normalizedOptionLabel}`
+
+    const { data: insertedRequest, error: insertError } = await supabase
+      .from('property_booking_requests')
+      .insert({
+        property_id: property.id,
+        broker_id: property.broker_id,
+        user_id: user.id,
+        customer_name: fullName,
+        customer_phone: phone || null,
+        customer_email: email || null,
+        customer_whatsapp: whatsapp || null,
+        requested_option_code: requestedOptionCode,
+        message: bookingMessage,
+      })
+      .select('id')
+      .single()
+
+    if (insertError) {
+      return {
+        success: false,
+        error: insertError.message,
+        code: 'UNKNOWN',
+      }
+    }
+
+    return {
+      success: true,
+      requestId: insertedRequest.id,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'حدث خطأ غير متوقع.',
+      code: 'UNKNOWN',
+    }
+  }
+}
