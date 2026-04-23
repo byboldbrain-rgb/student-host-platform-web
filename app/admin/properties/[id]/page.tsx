@@ -222,8 +222,6 @@ export default async function EditPropertyPage({ params }: PageProps) {
         selectedBillTypeIds={(propertyBillsRes.data ?? []).map(
           (x: any) => x.bill_type_id
         )}
-
-        rooms={roomsRes.data ?? []}
         rooms={activeRooms}
         bookingRequests={[]}
         canChangeBroker={isSuperAdmin(admin)}
