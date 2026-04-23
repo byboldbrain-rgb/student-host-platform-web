@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Student Host Platform',
-    short_name: 'StudentHost',
-    description: 'Student Host Platform',
+    name: 'Navienty',
+    short_name: 'Navienty',
+    description: 'Student accommodation listing platform',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',
