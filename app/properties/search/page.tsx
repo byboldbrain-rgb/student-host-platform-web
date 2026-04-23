@@ -83,6 +83,12 @@ type NormalizedAvailabilityStatus =
   | 'unavailable'
   | 'unknown'
 
+type MenuFooterLink = {
+  label: string
+  href: string
+  isEmail?: boolean
+}
+
 const TRANSLATIONS = {
   en: {
     stay: 'stay',
@@ -106,7 +112,6 @@ const TRANSLATIONS = {
     unavailable: 'Unavailable',
     reserved: 'Reserved',
     startSearch: 'Start your search',
-    searchResults: 'Search Results',
     noResults: 'No properties found matching your search.',
     sortBy: 'Sort By',
     newlyListed: 'Newly listed',
@@ -115,8 +120,9 @@ const TRANSLATIONS = {
     boys: 'Stays for Boys',
     girls: 'Stays for Girls',
     close: 'Close',
+    backToProperties: 'Back to properties',
     login: 'Log in or sign up',
-    join: 'Join our community',
+    join: 'Community',
     facebook: 'Facebook',
     instagram: 'Instagram',
     linkedIn: 'LinkedIn',
@@ -164,6 +170,7 @@ const TRANSLATIONS = {
     boys: 'منازل للأولاد',
     girls: 'منازل للبنات',
     close: 'إغلاق',
+    backToProperties: 'الرجوع إلى العقارات',
     login: 'سجّل الدخول أو أنشئ حسابًا',
     join: 'انضم إلى مجتمعنا',
     facebook: 'فيسبوك',
@@ -520,7 +527,12 @@ export default async function SearchResultsPage({
   ]
 
   const primaryMenuLinks = [
-    { label: t.login, href: buildSimpleNavLink('/login') },
+    {
+      label: isLoggedIn ? t.account : t.login,
+      href: isLoggedIn
+        ? buildSimpleNavLink('/account')
+        : buildSimpleNavLink('/login'),
+    },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
 
@@ -535,6 +547,13 @@ export default async function SearchResultsPage({
     { label: t.board, href: buildSimpleNavLink('/board') },
     { label: t.contact, href: buildSimpleNavLink('/contact') },
   ]
+
+  const menuFooterLinks: MenuFooterLink[] = [
+    ...footerQuickLinks,
+    { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
+  ]
+
+  const backToPropertiesHref = buildPropertiesPageLink()
 
   const searchBarProps = {
     cities: (cities as City[]) ?? [],
@@ -561,33 +580,100 @@ export default async function SearchResultsPage({
       daily: t.daily,
       monthly: t.monthly,
     },
+    mobileHeaderStartSlot: (
+      <Link
+        href={backToPropertiesHref}
+        aria-label={t.backToProperties}
+        className="flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white text-[#111827] shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition hover:bg-[#f8fafc]"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2.2}
+          stroke="currentColor"
+          className="h-5 w-5"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d={
+              isArabic
+                ? 'm8.25 4.5 7.5 7.5-7.5 7.5'
+                : 'M15.75 19.5 8.25 12l7.5-7.5'
+            }
+          />
+        </svg>
+      </Link>
+    ),
+    mobileHeaderEndSlot: (
+      <SortDropdown
+        isArabic={isArabic}
+        selectedSort={selectedSort}
+        sortByLabel={t.sortBy}
+        options={sortOptions}
+      />
+    ),
+    mobileSearchBarClassName: 'mt-0',
   }
 
-  const getFirstImage = (property: Property) => {
+  const mobileAccountHref = isLoggedIn
+    ? buildSimpleNavLink('/account')
+    : buildSimpleNavLink('/login')
+
+  const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
+
+  const getPropertyImages = (property: Property) => {
     if (!property.property_images || property.property_images.length === 0) {
-      return null
+      return []
     }
 
-    return property.property_images[0]?.image_url || null
+    return property.property_images
+      .map((item) => item?.image_url?.trim())
+      .filter((url): url is string => Boolean(url))
   }
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
-    const firstImage = getFirstImage(property)
+    const images = getPropertyImages(property)
     const normalizedStatus = normalizeAvailabilityStatusForUi(
       property.availability_status
     )
 
     const isReserved = normalizedStatus === 'reserved'
     const isAvailable = normalizedStatus === 'available'
+    const propertyTitle = isArabic ? property.title_ar : property.title_en
 
     return (
       <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_10px_30px_rgba(15,23,42,0.10)] md:rounded-[28px]">
-        {firstImage ? (
-          <img
-            src={firstImage}
-            alt={property.title_en}
-            className="h-full w-full object-cover transition duration-700 group-hover/image:scale-[1.04]"
-          />
+        {images.length > 0 ? (
+          <div className="property-media-slider">
+            <div className="property-media-slider__track">
+              {images.map((imageUrl, index) => (
+                <div
+                  key={`${property.id}-${index}`}
+                  className="property-media-slider__slide"
+                >
+                  <img
+                    src={imageUrl}
+                    alt={`${propertyTitle} ${index + 1}`}
+                    draggable={false}
+                    className="h-full w-full object-cover transition duration-700 group-hover/image:scale-[1.04]"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {images.length > 1 && (
+              <div className="property-media-slider__dots">
+                {images.map((_, index) => (
+                  <span
+                    key={`${property.id}-dot-${index}`}
+                    className="property-media-slider__dot"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 transition duration-700 group-hover/image:scale-[1.03]" />
         )}
@@ -649,12 +735,6 @@ export default async function SearchResultsPage({
       </div>
     </Link>
   )
-
-  const mobileAccountHref = isLoggedIn
-    ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/login')
-
-  const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
 
   return (
     <main
@@ -938,8 +1018,115 @@ export default async function SearchResultsPage({
           opacity: 0.9;
         }
 
+        .mega-menu-footer-links {
+          position: absolute;
+          right: 56px;
+          bottom: 12px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 10px;
+          max-width: 240px;
+          text-align: right;
+        }
+
+        .mega-menu-footer-link {
+          color: rgba(242, 234, 216, 0.88);
+          text-decoration: none;
+          font-size: 18px;
+          line-height: 1.35;
+          font-weight: 500;
+          letter-spacing: -0.02em;
+          transition:
+            opacity 0.2s ease,
+            transform 0.2s ease,
+            color 0.2s ease;
+        }
+
+        .mega-menu-footer-link:hover {
+          opacity: 1;
+          color: var(--menu-cream);
+          transform: translateX(-2px);
+        }
+
+        .mega-menu-footer-link--email {
+          margin-top: 8px;
+          opacity: 0.76;
+          font-size: 16px;
+        }
+
         .property-media-card {
           isolation: isolate;
+        }
+
+        .property-media-slider {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          touch-action: pan-x;
+          overscroll-behavior-x: contain;
+        }
+
+        .property-media-slider::-webkit-scrollbar {
+          display: none;
+        }
+
+        .property-media-slider__track {
+          display: flex;
+          width: 100%;
+          height: 100%;
+        }
+
+        .property-media-slider__slide {
+          position: relative;
+          flex: 0 0 100%;
+          width: 100%;
+          height: 100%;
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+          user-select: none;
+          -webkit-user-drag: none;
+        }
+
+        .property-media-slider__slide img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          user-select: none;
+          -webkit-user-drag: none;
+          pointer-events: none;
+        }
+
+        .property-media-slider__dots {
+          pointer-events: none;
+          position: absolute;
+          left: 50%;
+          bottom: 12px;
+          z-index: 6;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transform: translateX(-50%);
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: rgba(15, 23, 42, 0.28);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+        }
+
+        .property-media-slider__dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.88);
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+          flex-shrink: 0;
         }
 
         .status-ribbon {
@@ -1069,10 +1256,21 @@ export default async function SearchResultsPage({
           color: #054aff;
         }
 
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
+        }
+
         .mobile-bottom-nav__icon {
           width: 22px;
           height: 22px;
           display: block;
+        }
+
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.55);
+          transition: filter 0.2s ease;
         }
 
         .mobile-bottom-nav__label {
@@ -1227,7 +1425,7 @@ export default async function SearchResultsPage({
             padding-top: 160px;
             padding-left: 0;
             padding-right: 0;
-            padding-bottom: 140px;
+            padding-bottom: 180px;
           }
 
           .mega-menu-left {
@@ -1263,6 +1461,20 @@ export default async function SearchResultsPage({
 
           .mega-menu-small-link {
             font-size: 24px;
+          }
+
+          .mega-menu-footer-links {
+            right: 24px;
+            bottom: 12px;
+            max-width: 220px;
+          }
+
+          .mega-menu-footer-link {
+            font-size: 16px;
+          }
+
+          .mega-menu-footer-link--email {
+            font-size: 15px;
           }
 
           .status-ribbon {
@@ -1305,36 +1517,47 @@ export default async function SearchResultsPage({
             display: block;
           }
 
-          .footer-esaf-container {
-            padding: 48px 22px 28px;
+          .mega-menu-body {
+            padding-bottom: 220px;
           }
 
-          .footer-esaf-top {
-            grid-template-columns: 1fr;
-            gap: 34px;
+          .mega-menu-footer-links {
+            left: 24px;
+            right: 24px;
+            bottom: 76px;
+            align-items: flex-start;
+            text-align: left;
+            max-width: none;
+            gap: 8px;
           }
 
-          .footer-esaf-title {
-            font-size: 36px;
+          [dir='rtl'] .mega-menu-footer-links {
+            align-items: flex-end;
+            text-align: right;
           }
 
-          .footer-esaf-heading {
-            font-size: 22px;
-            margin-bottom: 14px;
+          .mega-menu-footer-link {
+            font-size: 16px;
           }
 
-          .footer-esaf-link,
-          .footer-esaf-email {
-            font-size: 17px;
-          }
-
-          .footer-esaf-bottom {
-            padding-top: 56px;
-            gap: 26px;
-          }
-
-          .footer-esaf-copyright {
+          .mega-menu-footer-link--email {
+            margin-top: 6px;
             font-size: 14px;
+          }
+
+          .footer-esaf {
+            display: none;
+          }
+
+          .property-media-slider__dots {
+            bottom: 10px;
+            gap: 5px;
+            padding: 5px 8px;
+          }
+
+          .property-media-slider__dot {
+            width: 5px;
+            height: 5px;
           }
         }
       `}</style>
@@ -1342,7 +1565,19 @@ export default async function SearchResultsPage({
       <PropertiesHeader
         homeHref={buildPropertiesPageLink()}
         searchBarProps={searchBarProps}
-        t={{ startSearch: t.startSearch }}
+        t={{
+          startSearch: t.startSearch,
+          sortBy: t.sortBy,
+          backToProperties: t.backToProperties,
+        }}
+        showMobileSearchHeaderExtras
+        mobileBackHref={buildPropertiesPageLink()}
+        mobileSortProps={{
+          isArabic,
+          selectedSort,
+          sortByLabel: t.sortBy,
+          options: sortOptions,
+        }}
       />
 
       <div className="mega-menu-overlay">
@@ -1399,18 +1634,34 @@ export default async function SearchResultsPage({
                 ))}
               </div>
             </div>
+
+            <div className="mega-menu-footer-links">
+              {menuFooterLinks.map((item) =>
+                item.isEmail ? (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="mega-menu-footer-link mega-menu-footer-link--email"
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="mega-menu-footer-link"
+                  >
+                    {item.label}
+                  </Link>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <section className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1
-            className={`${squadaOne.className} text-[28px] tracking-tight text-slate-900 md:text-[34px]`}
-          >
-            {t.searchResults}
-          </h1>
-
+        <div className="mb-8 hidden flex-col gap-4 sm:flex-row sm:items-center sm:justify-between md:flex">
           <SortDropdown
             isArabic={isArabic}
             selectedSort={selectedSort}
@@ -1580,20 +1831,11 @@ export default async function SearchResultsPage({
             href={buildSimpleNavLink('/community')}
             className="mobile-bottom-nav__item"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.9}
-              stroke="currentColor"
-              className="mobile-bottom-nav__icon"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 20.25s-6.75-4.35-9-8.25C1.2 8.7 3.3 4.5 7.5 4.5c2.1 0 3.45 1.2 4.5 2.55 1.05-1.35 2.4-2.55 4.5-2.55 4.2 0 6.3 4.2 4.5 7.5-2.25 3.9-9 8.25-9 8.25Z"
-              />
-            </svg>
+            <img
+              src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
+              alt="Community"
+              className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+            />
             <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 

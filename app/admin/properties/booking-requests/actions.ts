@@ -381,13 +381,31 @@ function getOptionIdsByCode(options: RoomSellableOptionRow[], code: RequestedOpt
     .map((option) => option.id)
 }
 
-function getPaymentStatusFromWalletUsage(params: {
-  totalPrice: number
-  walletAmountUsed: number
+function assertRequestedModeCompatibility(params: {
+  requestedOptionCode: RequestedOptionCode
+  modeState: RoomModeState
 }) {
-  if (params.walletAmountUsed <= 0) return 'unpaid'
-  if (params.walletAmountUsed >= params.totalPrice) return 'paid'
-  return 'partial'
+  const { requestedOptionCode, modeState } = params
+
+  if (requestedOptionCode === 'single_room') {
+    if (modeState.hasSingleMode || modeState.hasDoubleMode || modeState.hasTripleMode) {
+      throw new Error('This room already has an active booking mode')
+    }
+    return
+  }
+
+  if (requestedOptionCode === 'double_room') {
+    if (modeState.hasSingleMode || modeState.hasTripleMode) {
+      throw new Error('This room is currently locked to another booking mode')
+    }
+    return
+  }
+
+  if (requestedOptionCode === 'triple_room') {
+    if (modeState.hasSingleMode || modeState.hasDoubleMode) {
+      throw new Error('This room is currently locked to another booking mode')
+    }
+  }
 }
 
 async function awardReferralAfterPaidReservationDirectly(params: {
@@ -1168,13 +1186,10 @@ async function acceptTripleRoomReservation(params: {
 
   const modeState = await getRoomModeState({ supabase, room })
 
-  if (modeState.hasSingleMode) {
-    throw new Error('This room is already reserved as Single Room')
-  }
-
-  if (modeState.hasDoubleMode) {
-    throw new Error('This room is currently operating as Double Room')
-  }
+  assertRequestedModeCompatibility({
+    requestedOptionCode: 'triple_room',
+    modeState,
+  })
 
   if (modeState.tripleCapacity <= 0) {
     throw new Error('This room does not support Triple Room')
@@ -1226,13 +1241,10 @@ async function acceptDoubleRoomReservation(params: {
 
   const modeState = await getRoomModeState({ supabase, room })
 
-  if (modeState.hasSingleMode) {
-    throw new Error('This room is already reserved as Single Room')
-  }
-
-  if (modeState.hasTripleMode) {
-    throw new Error('This room is currently operating as Triple Room')
-  }
+  assertRequestedModeCompatibility({
+    requestedOptionCode: 'double_room',
+    modeState,
+  })
 
   if (modeState.doubleCapacity <= 0) {
     throw new Error('This room does not support Double Room')
@@ -1284,13 +1296,10 @@ async function acceptSingleRoomReservation(params: {
 
   const modeState = await getRoomModeState({ supabase, room })
 
-  if (
-    modeState.hasSingleMode ||
-    modeState.hasDoubleMode ||
-    modeState.hasTripleMode
-  ) {
-    throw new Error('This room already contains another reservation mode')
-  }
+  assertRequestedModeCompatibility({
+    requestedOptionCode: 'single_room',
+    modeState,
+  })
 
   if (modeState.totalActiveBeds === 0) {
     throw new Error('This room has no active beds to reserve')
@@ -1468,28 +1477,20 @@ async function applyWalletToReservation(params: {
     walletAmountToUse,
   } = params
 
-  if (!useWalletBalance || !request.user_id || walletAmountToUse <= 0) {
-    const { error: updateError } = await supabase
-      .from('property_reservations')
-      .update({
-        wallet_amount_used: 0,
-        payment_status: 'unpaid',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', reservationId)
-
-    if (updateError) {
-      throw new Error(updateError.message)
-    }
-
-    return {
-      walletAmountUsed: 0,
-      paymentStatus: 'unpaid' as const,
-    }
+  if (!request.user_id) {
+    throw new Error('Wallet payment requires a linked user account')
   }
 
-  if (walletAmountToUse > totalPrice) {
-    throw new Error('Wallet amount cannot be greater than total price')
+  if (!useWalletBalance) {
+    throw new Error('Wallet payment is mandatory for this reservation')
+  }
+
+  if (walletAmountToUse <= 0) {
+    throw new Error('Wallet payment amount must be greater than zero')
+  }
+
+  if (walletAmountToUse !== totalPrice) {
+    throw new Error('Wallet payment must cover 100% of the reservation total')
   }
 
   const { data: walletRow, error: walletError } = await supabase
@@ -1504,12 +1505,8 @@ async function applyWalletToReservation(params: {
 
   const currentBalance = Number(walletRow?.balance || 0)
 
-  if (currentBalance <= 0) {
-    throw new Error('This user does not have available wallet balance')
-  }
-
-  if (walletAmountToUse > currentBalance) {
-    throw new Error('Wallet amount exceeds current wallet balance')
+  if (currentBalance < totalPrice) {
+    throw new Error('Insufficient wallet balance to cover the full reservation amount')
   }
 
   await applyWalletTransactionByAdmin({
@@ -1523,10 +1520,7 @@ async function applyWalletToReservation(params: {
     createdByAdminId: adminUserId,
   })
 
-  const paymentStatus = getPaymentStatusFromWalletUsage({
-    totalPrice,
-    walletAmountUsed: walletAmountToUse,
-  })
+  const paymentStatus = 'paid'
 
   const { error: reservationUpdateError } = await supabase
     .from('property_reservations')
@@ -1664,9 +1658,13 @@ export async function acceptBookingRequestAction(formData: FormData) {
   const sellableOptionId =
     reservationScope === 'entire_property' ? rawSellableOptionId : null
 
-  const useWalletBalance = parseBoolean(formData.get('use_wallet_balance'), false)
-  const walletAmountToUse =
-    parseNullableNumber(formData.get('wallet_amount_to_use')) ?? 0
+  const submittedUseWalletBalance = parseBoolean(
+    formData.get('use_wallet_balance'),
+    true
+  )
+  const submittedWalletAmount = parseNullableNumber(
+    formData.get('wallet_amount_to_use')
+  )
 
   let reservedUnitsCount = parsePositiveInteger(
     formData.get('reserved_units_count'),
@@ -1759,17 +1757,40 @@ export async function acceptBookingRequestAction(formData: FormData) {
     }
   }
 
-  if (totalPrice === null || totalPrice < 0) {
+  if (totalPrice === null || totalPrice <= 0) {
     throw new Error('A valid total price is required before accepting the request')
   }
 
-  if (useWalletBalance && walletAmountToUse <= 0) {
-    throw new Error('Wallet amount must be a valid positive number')
+  if (!request.user_id) {
+    throw new Error('This booking request is not linked to a user account')
   }
 
-  if (useWalletBalance && walletAmountToUse > totalPrice) {
-    throw new Error('Wallet amount cannot be greater than total price')
+  if (!submittedUseWalletBalance) {
+    throw new Error('Wallet payment is mandatory for accepting this booking request')
   }
+
+  if (submittedWalletAmount !== null && submittedWalletAmount !== totalPrice) {
+    throw new Error('Wallet amount must equal 100% of the total reservation price')
+  }
+
+  const { data: walletRow, error: walletError } = await supabase
+    .from('user_wallets')
+    .select('balance')
+    .eq('user_id', request.user_id)
+    .maybeSingle()
+
+  if (walletError) {
+    throw new Error(walletError.message)
+  }
+
+  const currentBalance = Number(walletRow?.balance || 0)
+
+  if (currentBalance < totalPrice) {
+    throw new Error('Insufficient wallet balance to cover 100% of the reservation amount')
+  }
+
+  const useWalletBalance = true
+  const walletAmountToUse = totalPrice
 
   let reservationId: string | null = null
 

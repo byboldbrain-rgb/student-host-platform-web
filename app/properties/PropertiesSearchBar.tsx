@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 
 type City = {
@@ -50,6 +50,14 @@ type Props = {
   mobileMode?: boolean
   mobileOpen?: boolean
   onRequestClose?: () => void
+
+  /**
+   * Search page only customizations
+   * خليهم optional علشان باقي الصفحات ما تتأثرش
+   */
+  mobileHeaderStartSlot?: ReactNode
+  mobileHeaderEndSlot?: ReactNode
+  mobileSearchBarClassName?: string
 }
 
 type OpenMenu = 'city' | 'university' | 'duration' | null
@@ -90,6 +98,10 @@ function ChevronDownIcon() {
   )
 }
 
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ')
+}
+
 export default function PropertiesSearchBar({
   cities,
   universities,
@@ -105,6 +117,10 @@ export default function PropertiesSearchBar({
   mobileMode = false,
   mobileOpen = false,
   onRequestClose,
+
+  mobileHeaderStartSlot,
+  mobileHeaderEndSlot,
+  mobileSearchBarClassName = '',
 }: Props) {
   const router = useRouter()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -294,14 +310,14 @@ export default function PropertiesSearchBar({
   }`
 
   const valueTextClass = isCompact
-    ? 'px-2 text-[14px] font-semibold text-[#222222] whitespace-nowrap'
+    ? 'truncate text-[14px] font-semibold leading-none text-[#222222]'
     : 'mt-1 truncate text-[16px] font-normal text-[#6a6a6a]'
 
   const titleTextClass = isCompact
     ? 'sr-only'
     : 'text-[14px] font-semibold leading-none text-[#222222]'
 
-  const sectionPaddingClass = isCompact ? 'px-4 py-3' : 'px-6 py-3'
+  const sectionPaddingClass = isCompact ? 'px-3 py-2' : 'px-6 py-3'
 
   if (mobileMode) {
     const showCityCard =
@@ -313,8 +329,15 @@ export default function PropertiesSearchBar({
 
     return (
       <div dir={isArabic ? 'rtl' : 'ltr'} className="w-full">
+        
+
         <div className="space-y-3">
-          <div className="rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)]">
+          <div
+            className={cn(
+              'rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)]',
+              mobileSearchBarClassName
+            )}
+          >
             <div className="mb-4">
               <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222]">
                 {openMenu === 'city'
@@ -659,20 +682,20 @@ export default function PropertiesSearchBar({
   }
 
   return (
-    <div className="w-full pointer-events-auto">
+    <div className="pointer-events-auto w-full">
       <div
         ref={wrapperRef}
         dir={isArabic ? 'rtl' : 'ltr'}
         className={`pointer-events-auto relative z-[70] mx-auto flex items-center rounded-full border border-[#dddddd] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ${
           isCompact
-            ? 'w-full max-w-[760px] px-2 py-2'
+            ? 'w-fit max-w-full px-1 py-1'
             : 'w-full max-w-[1000px]'
         }`}
       >
         <div
           className={`relative z-[71] min-w-0 transition hover:bg-[#f7f7f7] ${
             isArabic ? 'rounded-r-full' : 'rounded-l-full'
-          } ${isCompact ? 'flex-1 min-w-[130px]' : 'flex-1'}`}
+          } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
         >
           <button
             type="button"
@@ -682,7 +705,7 @@ export default function PropertiesSearchBar({
             }}
             className={`relative z-[72] w-full cursor-pointer ${sectionPaddingClass} ${
               isArabic ? 'rounded-r-full text-right' : 'rounded-l-full text-left'
-            }`}
+            } ${isCompact ? 'min-w-[110px]' : ''}`}
           >
             <p className={titleTextClass}>{labels.city}</p>
 
@@ -745,12 +768,12 @@ export default function PropertiesSearchBar({
         </div>
 
         <div
-          className={`${isCompact ? 'mx-1 h-5' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
+          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
         />
 
         <div
           className={`relative z-[71] min-w-0 transition hover:bg-[#f7f7f7] ${
-            isCompact ? 'flex-1 min-w-[150px]' : 'flex-1'
+            isCompact ? 'w-auto flex-none' : 'flex-1'
           }`}
         >
           <button
@@ -761,7 +784,7 @@ export default function PropertiesSearchBar({
             }}
             className={`relative z-[72] w-full cursor-pointer ${sectionPaddingClass} ${
               isArabic ? 'text-right' : 'text-left'
-            }`}
+            } ${isCompact ? 'min-w-[130px]' : ''}`}
           >
             <p className={titleTextClass}>{labels.university}</p>
 
@@ -824,12 +847,12 @@ export default function PropertiesSearchBar({
         </div>
 
         <div
-          className={`${isCompact ? 'mx-1 h-5' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
+          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
         />
 
         <div
           className={`relative z-[71] min-w-0 transition hover:bg-[#f7f7f7] ${
-            isCompact ? 'flex-1 min-w-[120px]' : 'flex-1'
+            isCompact ? 'w-auto flex-none' : 'flex-1'
           }`}
         >
           <button
@@ -839,7 +862,7 @@ export default function PropertiesSearchBar({
             }
             className={`relative z-[72] w-full cursor-pointer ${sectionPaddingClass} ${
               isArabic ? 'text-right' : 'text-left'
-            }`}
+            } ${isCompact ? 'min-w-[95px]' : ''}`}
           >
             <p className={titleTextClass}>{labels.duration}</p>
             <p className={valueTextClass}>{selectedDurationLabel}</p>
@@ -881,7 +904,7 @@ export default function PropertiesSearchBar({
           )}
         </div>
 
-        <div className={`${isCompact ? 'pl-2 pr-2' : 'pr-4'} shrink-0`}>
+        <div className={`${isCompact ? 'pl-1 pr-1' : 'pr-4'} shrink-0`}>
           <button
             type="button"
             onClick={() => applySearch()}
@@ -889,7 +912,7 @@ export default function PropertiesSearchBar({
               isExpandedSearch
                 ? 'h-[44px] gap-2 px-4'
                 : isCompact
-                ? 'h-[44px] w-[44px]'
+                ? 'h-[40px] w-[40px]'
                 : 'h-[48px] w-[48px]'
             }`}
           >

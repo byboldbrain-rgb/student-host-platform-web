@@ -106,6 +106,7 @@ type PropertyBookingRequest = {
 }
 
 type RoomForm = {
+  id: string
   room_name: string
   room_name_ar: string
   room_type: 'single' | 'double' | 'triple' | 'quad' | 'custom'
@@ -113,10 +114,13 @@ type RoomForm = {
   beds_count: string
   private_bathroom: boolean
   is_reserved: boolean
+  single_room_option_id: string
   single_room_enabled: boolean
   single_room_price_egp: string
+  double_room_option_id: string
   double_room_enabled: boolean
   double_room_price_egp: string
+  triple_room_option_id: string
   triple_room_enabled: boolean
   triple_room_price_egp: string
 }
@@ -177,6 +181,7 @@ const DISPLAY_STEPS: DisplayStep[] = [
 ]
 
 const initialRoom: RoomForm = {
+  id: '',
   room_name: '',
   room_name_ar: '',
   room_type: 'single',
@@ -184,10 +189,13 @@ const initialRoom: RoomForm = {
   beds_count: '1',
   private_bathroom: false,
   is_reserved: false,
+  single_room_option_id: '',
   single_room_enabled: true,
   single_room_price_egp: '',
+  double_room_option_id: '',
   double_room_enabled: false,
   double_room_price_egp: '',
+  triple_room_option_id: '',
   triple_room_enabled: false,
   triple_room_price_egp: '',
 }
@@ -376,6 +384,21 @@ function getRoomOptionEnabled(
   )
 }
 
+function getRoomOptionId(
+  room: PropertyRoom,
+  code: 'single_room' | 'double_room' | 'triple_room'
+) {
+  const options = Array.isArray(room?.room_sellable_options)
+    ? room.room_sellable_options
+    : []
+
+  const option = options.find(
+    (item) => item.code === code && item.is_active !== false
+  )
+
+  return option?.id || ''
+}
+
 function getEnabledRoomOptions(room: RoomForm) {
   const options: Array<{ label: string; price: string; bedsUsed: number }> = []
 
@@ -534,6 +557,7 @@ export default function EditPropertyForm({
   const [roomState, setRoomState] = useState<RoomForm[]>(
     safeRooms.length > 0
       ? safeRooms.map((room) => ({
+          id: room?.id || '',
           room_name: room?.room_name || '',
           room_name_ar: room?.room_name_ar || '',
           room_type: room?.room_type || 'single',
@@ -542,10 +566,13 @@ export default function EditPropertyForm({
           private_bathroom: Boolean(room?.private_bathroom),
           is_reserved:
             room?.status === 'fully_reserved' || room?.status === 'partially_reserved',
+          single_room_option_id: getRoomOptionId(room, 'single_room'),
           single_room_enabled: getRoomOptionEnabled(room, 'single_room'),
           single_room_price_egp: getRoomOptionPrice(room, 'single_room'),
+          double_room_option_id: getRoomOptionId(room, 'double_room'),
           double_room_enabled: getRoomOptionEnabled(room, 'double_room'),
           double_room_price_egp: getRoomOptionPrice(room, 'double_room'),
+          triple_room_option_id: getRoomOptionId(room, 'triple_room'),
           triple_room_enabled: getRoomOptionEnabled(room, 'triple_room'),
           triple_room_price_egp: getRoomOptionPrice(room, 'triple_room'),
         }))
@@ -666,8 +693,14 @@ export default function EditPropertyForm({
   useEffect(() => {
     if (roomState.length > 0) {
       setBedsCount(String(totalBedsFromRooms))
+    } else {
+      setBedsCount('0')
     }
   }, [totalBedsFromRooms, roomState.length])
+
+  useEffect(() => {
+    setBedroomsCount(String(roomState.length))
+  }, [roomState.length])
 
   useEffect(() => {
     if (availabilityStatus !== 'inactive') {
@@ -770,7 +803,13 @@ export default function EditPropertyForm({
           ? {
               ...room,
               [field]:
-                typeof value === 'string' && field !== 'room_name' && field !== 'room_name_ar'
+                typeof value === 'string' &&
+                field !== 'room_name' &&
+                field !== 'room_name_ar' &&
+                field !== 'id' &&
+                field !== 'single_room_option_id' &&
+                field !== 'double_room_option_id' &&
+                field !== 'triple_room_option_id'
                   ? normalizeRoomNumberFieldIfNeeded(field, value)
                   : value,
             }
@@ -943,7 +982,7 @@ export default function EditPropertyForm({
     formData.set('price_egp', normalizeNumberString(priceEgp))
     formData.set('rental_duration', propertyRentalDuration)
     formData.set('availability_status', derivedAvailabilityStatus)
-    formData.set('bedrooms_count', normalizeNumberString(bedroomsCount))
+    formData.set('bedrooms_count', String(roomState.length))
     formData.set('bathrooms_count', normalizeNumberString(bathroomsCount))
     formData.set('beds_count', normalizeNumberString(bedsCount))
     formData.set('guests_count', normalizeNumberString(guestsCount))
@@ -984,6 +1023,7 @@ export default function EditPropertyForm({
     formData.set('cover_kind', coverSelection.kind)
     formData.set('cover_index', String(coverSelection.index))
 
+    formData.delete('room_id')
     formData.delete('room_name')
     formData.delete('room_name_ar')
     formData.delete('room_type')
@@ -991,14 +1031,18 @@ export default function EditPropertyForm({
     formData.delete('room_beds_count')
     formData.delete('room_private_bathroom')
     formData.delete('room_is_reserved')
+    formData.delete('room_single_room_option_id')
     formData.delete('room_single_room_enabled')
     formData.delete('room_single_room_price_egp')
+    formData.delete('room_double_room_option_id')
     formData.delete('room_double_room_enabled')
     formData.delete('room_double_room_price_egp')
+    formData.delete('room_triple_room_option_id')
     formData.delete('room_triple_room_enabled')
     formData.delete('room_triple_room_price_egp')
 
     roomState.forEach((room) => {
+      formData.append('room_id', room.id || '')
       formData.append('room_name', room.room_name)
       formData.append('room_name_ar', room.room_name_ar)
       formData.append('room_type', room.room_type)
@@ -1007,6 +1051,7 @@ export default function EditPropertyForm({
       formData.append('room_private_bathroom', room.private_bathroom ? 'true' : 'false')
       formData.append('room_is_reserved', room.is_reserved ? 'true' : 'false')
 
+      formData.append('room_single_room_option_id', room.single_room_option_id || '')
       formData.append(
         'room_single_room_enabled',
         room.single_room_enabled ? 'true' : 'false'
@@ -1016,6 +1061,7 @@ export default function EditPropertyForm({
         normalizeNumberString(room.single_room_price_egp)
       )
 
+      formData.append('room_double_room_option_id', room.double_room_option_id || '')
       formData.append(
         'room_double_room_enabled',
         room.double_room_enabled ? 'true' : 'false'
@@ -1025,6 +1071,7 @@ export default function EditPropertyForm({
         normalizeNumberString(room.double_room_price_egp)
       )
 
+      formData.append('room_triple_room_option_id', room.triple_room_option_id || '')
       formData.append(
         'room_triple_room_enabled',
         room.triple_room_enabled ? 'true' : 'false'
@@ -1604,11 +1651,19 @@ export default function EditPropertyForm({
               <div className="mt-6 rounded-md border border-[#e7e7e7] bg-white p-6 shadow-sm">
                 <div className="space-y-10">
                   <div>
-                    <CounterField
-                      label="How many bedrooms are there?"
-                      value={bedroomsCount}
-                      onChange={setBedroomsCount}
-                    />
+                    <p className="mb-3 text-[18px] font-medium text-[#1a1a1a]">
+                      How many bedrooms are there?
+                    </p>
+
+                    <div className="flex h-[52px] w-[160px] items-center justify-center rounded-md border border-[#bfbfbf] bg-[#f9fafb] px-4">
+                      <span className="text-[24px] font-semibold text-[#1a1a1a]">
+                        {bedroomsCount}
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-sm text-[#6b7280]">
+                      This value is automatically calculated from the number of rooms.
+                    </p>
                   </div>
 
                   <div>
@@ -1760,7 +1815,7 @@ export default function EditPropertyForm({
 
                     return (
                       <div
-                        key={index}
+                        key={room.id || `room-${index}`}
                         className="rounded-md border border-[#e5e7eb] bg-white p-5 shadow-sm"
                       >
                         <div className="mb-5 flex items-start justify-between gap-4">
@@ -2177,7 +2232,7 @@ export default function EditPropertyForm({
 
                           return (
                             <div
-                              key={index}
+                              key={room.id || `review-room-${index}`}
                               className="rounded-md border border-[#ececec] p-3"
                             >
                               <p className="font-semibold text-[#1a1a1a]">

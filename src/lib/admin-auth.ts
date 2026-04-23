@@ -10,6 +10,7 @@ export type AdminDepartment =
   | 'university_supplies'
   | 'student_activities'
   | 'co_working_spaces'
+  | 'community'
 
 export type AdminRole =
   | 'super_admin'
@@ -38,6 +39,9 @@ export type AdminRole =
   | 'coworking_adder'
   | 'coworking_editor'
   | 'coworking_receiver'
+  | 'community_super_admin'
+  | 'community_editor'
+  | 'community_hr'
 
 export type AdminProfile = {
   id: string
@@ -376,6 +380,35 @@ export function canManageCoworkingAdmins(admin: AdminProfile) {
 }
 
 /* =========================
+   Community
+========================= */
+
+export function isCommunitySuperAdmin(admin: AdminProfile) {
+  return isSuperAdmin(admin) || admin.role === 'community_super_admin'
+}
+
+export function hasCommunitySectionAccess(admin: AdminProfile) {
+  return (
+    isCommunitySuperAdmin(admin) ||
+    admin.role === 'community_editor' ||
+    admin.role === 'community_hr' ||
+    admin.department === 'community'
+  )
+}
+
+export function canManageCommunityPosts(admin: AdminProfile) {
+  return isCommunitySuperAdmin(admin) || admin.role === 'community_editor'
+}
+
+export function canManageCommunityJoinRequests(admin: AdminProfile) {
+  return isCommunitySuperAdmin(admin) || admin.role === 'community_hr'
+}
+
+export function canManageCommunityAdmins(admin: AdminProfile) {
+  return isCommunitySuperAdmin(admin)
+}
+
+/* =========================
    Career
 ========================= */
 
@@ -484,6 +517,22 @@ export function getDefaultAdminRoute(admin: AdminProfile) {
     return '/admin/services/co-working-spaces/booking-requests'
   }
 
+  if (admin.role === 'community_super_admin') {
+    return '/admin/community/posts'
+  }
+
+  if (admin.role === 'community_editor') {
+    return '/admin/community/posts'
+  }
+
+  if (admin.role === 'community_hr') {
+    return '/admin/community/join-requests'
+  }
+
+  if (admin.department === 'community') {
+    return '/admin/community/posts'
+  }
+
   if (admin.department === 'student_activities') {
     return '/admin/services/student-activities'
   }
@@ -506,6 +555,10 @@ export function getDefaultAdminRoute(admin: AdminProfile) {
 
   if (hasCareerSectionAccess(admin)) {
     return '/admin/career'
+  }
+
+  if (hasCommunitySectionAccess(admin)) {
+    return '/admin/community/posts'
   }
 
   if (hasStudentActivitiesSectionAccess(admin)) {
@@ -673,6 +726,36 @@ export async function requireCoworkingPageAccess() {
   const adminContext = await requireAdmin()
 
   if (!hasCoworkingSectionAccess(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
+}
+
+export async function requireCommunityPageAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!hasCommunitySectionAccess(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
+}
+
+export async function requireCommunityPostsAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!canManageCommunityPosts(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
+}
+
+export async function requireCommunityJoinRequestsAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!canManageCommunityJoinRequests(adminContext.admin)) {
     redirect('/admin/unauthorized')
   }
 

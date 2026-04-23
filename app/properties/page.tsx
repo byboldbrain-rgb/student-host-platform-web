@@ -74,11 +74,17 @@ type NormalizedAvailabilityStatus =
   | 'unavailable'
   | 'unknown'
 
+type MenuFooterLink = {
+  label: string
+  href: string
+  isEmail?: boolean
+}
+
 const TRANSLATIONS = {
   en: {
     seeAll: 'See All',
-    popularHomesIn: 'Popular homes in',
-    popularHomesNear: 'Popular homes near',
+    popularHomesIn: 'Popular stays in',
+    popularHomesNear: 'Popular stays near',
     stay: 'stay',
     night: 'night',
     month: 'month',
@@ -109,7 +115,7 @@ const TRANSLATIONS = {
     arabic: 'العربية',
     close: 'Close',
     login: 'Log in or sign up',
-    join: 'Join our community',
+    join: 'Community',
     facebook: 'Facebook',
     instagram: 'Instagram',
     linkedIn: 'LinkedIn',
@@ -658,7 +664,12 @@ export default async function PropertiesPage({
   )
 
   const primaryMenuLinks = [
-    { label: t.login, href: buildSimpleNavLink('/login') },
+    {
+      label: isLoggedIn ? t.account : t.login,
+      href: isLoggedIn
+        ? buildSimpleNavLink('/account')
+        : buildSimpleNavLink('/login'),
+    },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
 
@@ -672,6 +683,11 @@ export default async function PropertiesPage({
     { label: t.aboutUs, href: buildSimpleNavLink('/about') },
     { label: t.board, href: buildSimpleNavLink('/board') },
     { label: t.contact, href: buildSimpleNavLink('/contact') },
+  ]
+
+  const menuFooterLinks: MenuFooterLink[] = [
+    ...footerQuickLinks,
+    { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
   ]
 
   const searchBarProps = {
@@ -1013,16 +1029,53 @@ export default async function PropertiesPage({
           opacity: 0.9;
         }
 
+        .mega-menu-footer-links {
+          position: absolute;
+          right: 56px;
+          bottom: 12px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 10px;
+          max-width: 240px;
+          text-align: right;
+        }
+
+        .mega-menu-footer-link {
+          color: rgba(242, 234, 216, 0.88);
+          text-decoration: none;
+          font-size: 18px;
+          line-height: 1.35;
+          font-weight: 500;
+          letter-spacing: -0.02em;
+          transition:
+            opacity 0.2s ease,
+            transform 0.2s ease,
+            color 0.2s ease;
+        }
+
+        .mega-menu-footer-link:hover {
+          opacity: 1;
+          color: var(--menu-cream);
+          transform: translateX(-2px);
+        }
+
+        .mega-menu-footer-link--email {
+          margin-top: 8px;
+          opacity: 0.76;
+          font-size: 16px;
+        }
+
         .property-media-card {
           isolation: isolate;
         }
 
         .status-ribbon {
           position: absolute;
-          top: -10px;
-          left: -10px;
-          width: 150px;
-          height: 150px;
+          top: -4px;
+          left: -4px;
+          width: 96px;
+          height: 96px;
           overflow: hidden;
           z-index: 30;
           pointer-events: none;
@@ -1030,21 +1083,21 @@ export default async function PropertiesPage({
 
         .status-ribbon__inner {
           position: absolute;
-          top: 34px;
-          left: -42px;
-          width: 210px;
-          height: 42px;
+          top: 20px;
+          left: -34px;
+          width: 140px;
+          height: 24px;
           display: flex;
           align-items: center;
           justify-content: center;
           transform: rotate(-45deg);
           color: #ffffff;
-          font-size: 11px;
+          font-size: 8px;
           font-weight: 800;
-          letter-spacing: 0.18em;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
           box-shadow:
-            0 10px 22px rgba(0, 0, 0, 0.28),
+            0 8px 18px rgba(0, 0, 0, 0.24),
             inset 0 1px 0 rgba(255, 255, 255, 0.22);
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
           transition:
@@ -1056,8 +1109,8 @@ export default async function PropertiesPage({
         .status-ribbon::after {
           content: '';
           position: absolute;
-          width: 12px;
-          height: 12px;
+          width: 10px;
+          height: 10px;
           left: 0;
           bottom: 0;
           z-index: -1;
@@ -1073,7 +1126,7 @@ export default async function PropertiesPage({
         }
 
         .status-ribbon--available::after {
-          box-shadow: 138px -138px #06664a;
+          box-shadow: 88px -88px #06664a;
           background: linear-gradient(135deg, #0a7a56 0%, #0f5e45 100%);
         }
 
@@ -1087,7 +1140,7 @@ export default async function PropertiesPage({
         }
 
         .status-ribbon--reserved::after {
-          box-shadow: 138px -138px #8f1239;
+          box-shadow: 88px -88px #8f1239;
           background: linear-gradient(135deg, #9f1239 0%, #7f1d1d 100%);
         }
 
@@ -1095,7 +1148,7 @@ export default async function PropertiesPage({
           transform: rotate(-45deg) scale(1.03);
           filter: saturate(1.06) brightness(1.02);
           box-shadow:
-            0 14px 26px rgba(0, 0, 0, 0.32),
+            0 12px 22px rgba(0, 0, 0, 0.28),
             inset 0 1px 0 rgba(255, 255, 255, 0.26);
         }
 
@@ -1144,10 +1197,21 @@ export default async function PropertiesPage({
           color: #054aff;
         }
 
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
+        }
+
         .mobile-bottom-nav__icon {
           width: 22px;
           height: 22px;
           display: block;
+        }
+
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.55);
+          transition: filter 0.2s ease;
         }
 
         .mobile-bottom-nav__label {
@@ -1344,7 +1408,7 @@ export default async function PropertiesPage({
             padding-top: 160px;
             padding-left: 0;
             padding-right: 0;
-            padding-bottom: 140px;
+            padding-bottom: 180px;
           }
 
           .mega-menu-left {
@@ -1382,33 +1446,41 @@ export default async function PropertiesPage({
             font-size: 24px;
           }
 
+          .mega-menu-footer-links {
+            right: 24px;
+            bottom: 28px;
+            max-width: 220px;
+          }
+
+          .mega-menu-footer-link {
+            font-size: 16px;
+          }
+
+          .mega-menu-footer-link--email {
+            font-size: 15px;
+          }
+
           .status-ribbon {
-            width: 132px;
-            height: 132px;
-            top: -8px;
-            left: -8px;
+            width: 88px;
+            height: 88px;
+            top: -3px;
+            left: -3px;
           }
 
           .status-ribbon__inner {
-            top: 31px;
-            left: -40px;
-            width: 190px;
-            height: 38px;
-            font-size: 10px;
-            letter-spacing: 0.16em;
-          }
-
-          .status-ribbon--available::after,
-          .status-ribbon--reserved::after {
-            box-shadow: 120px -120px currentColor;
+            top: 18px;
+            left: -30px;
+            width: 120px;
+            height: 22px;
+            font-size: 7px;
           }
 
           .status-ribbon--available::after {
-            color: #06664a;
+            box-shadow: 80px -80px #06664a;
           }
 
           .status-ribbon--reserved::after {
-            color: #8f1239;
+            box-shadow: 80px -80px #8f1239;
           }
         }
 
@@ -1420,6 +1492,39 @@ export default async function PropertiesPage({
 
           .mobile-bottom-nav {
             display: block;
+          }
+
+          .mega-menu-body {
+            padding-bottom: 220px;
+          }
+
+          .mega-menu-left {
+            left: 24px;
+            bottom: 24px;
+          }
+
+          .mega-menu-footer-links {
+            left: 24px;
+            right: 24px;
+            bottom: 96px;
+            align-items: flex-start;
+            text-align: left;
+            max-width: none;
+            gap: 8px;
+          }
+
+          [dir='rtl'] .mega-menu-footer-links {
+            align-items: flex-end;
+            text-align: right;
+          }
+
+          .mega-menu-footer-link {
+            font-size: 16px;
+          }
+
+          .mega-menu-footer-link--email {
+            margin-top: 6px;
+            font-size: 14px;
           }
 
           .footer-esaf-container {
@@ -1532,6 +1637,28 @@ export default async function PropertiesPage({
                 ))}
               </div>
             </div>
+
+            <div className="mega-menu-footer-links">
+              {menuFooterLinks.map((item) =>
+                item.isEmail ? (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="mega-menu-footer-link mega-menu-footer-link--email"
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="mega-menu-footer-link"
+                  >
+                    {item.label}
+                  </Link>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1591,7 +1718,7 @@ export default async function PropertiesPage({
         )}
       </div>
 
-      <footer className="footer-esaf">
+      <footer className="footer-esaf hidden md:block">
         <div className="footer-esaf-container">
           <div className="footer-esaf-top">
             <div className="footer-esaf-top-left">
@@ -1657,20 +1784,11 @@ export default async function PropertiesPage({
             href={buildSimpleNavLink('/community')}
             className="mobile-bottom-nav__item"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.9}
-              stroke="currentColor"
-              className="mobile-bottom-nav__icon"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 20.25s-6.75-4.35-9-8.25C1.2 8.7 3.3 4.5 7.5 4.5c2.1 0 3.45 1.2 4.5 2.55 1.05-1.35 2.4-2.55 4.5-2.55 4.2 0 6.3 4.2 4.5 7.5-2.25 3.9-9 8.25-9 8.25Z"
-              />
-            </svg>
+            <img
+              src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
+              alt="Community"
+              className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+            />
             <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 

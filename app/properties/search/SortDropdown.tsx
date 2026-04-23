@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 type SupportedSort =
   | 'newly_listed'
@@ -10,50 +10,195 @@ type SupportedSort =
   | 'boys'
   | 'girls'
 
-type Props = {
+type SortOption = {
+  value: SupportedSort
+  label: string
+  href: string
+}
+
+type SortDropdownProps = {
   isArabic: boolean
   selectedSort: SupportedSort
   sortByLabel: string
-  options: {
-    value: SupportedSort
-    label: string
-    href: string
-  }[]
+  options: SortOption[]
 }
 
-function SortIcon() {
+type GenderValue = 'boys' | 'girls'
+type SortValue = 'newly_listed' | 'lowest_price' | 'highest_price'
+
+function FilterIcon() {
   return (
     <svg
-      xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      className="h-[18px] w-[18px] shrink-0"
+      className="h-[15px] w-[15px] md:h-[18px] md:w-[18px]"
       aria-hidden="true"
     >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 4v16" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="m5 7 3-3 3 3" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16 20V4" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="m13 17 3 3 3-3" />
+      <path
+        d="M4 7h8"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 12h16"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 17h10"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <circle cx="15.5" cy="7" r="1.55" fill="currentColor" />
+      <circle cx="17.5" cy="17" r="1.55" fill="currentColor" />
     </svg>
   )
 }
 
-function CheckIcon() {
+function CloseIcon() {
   return (
     <svg
-      xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      className="h-[18px] w-[18px] shrink-0"
+      className="h-6 w-6"
       aria-hidden="true"
     >
-      <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4.2 4.2L19 6.8" />
+      <path
+        d="M6 6l12 12M18 6 6 18"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   )
+}
+
+function buildSectionedOptions(options: SortOption[]) {
+  const genderOrder: GenderValue[] = ['girls', 'boys']
+  const sortOrder: SortValue[] = [
+    'newly_listed',
+    'highest_price',
+    'lowest_price',
+  ]
+
+  const byValue = new Map(options.map((option) => [option.value, option]))
+
+  return {
+    gender: genderOrder
+      .map((value) => byValue.get(value))
+      .filter(Boolean) as SortOption[],
+    sortBy: sortOrder
+      .map((value) => byValue.get(value))
+      .filter(Boolean) as SortOption[],
+  }
+}
+
+function GenderIcon({ value, label }: { value: SupportedSort; label: string }) {
+  const iconSrc =
+    value === 'boys'
+      ? 'https://i.ibb.co/DHvFXzLP/young-man-15375361.png'
+      : 'https://i.ibb.co/MkG4qbfM/painter-10645956.png'
+
+  return (
+    <img
+      src={iconSrc}
+      alt={label}
+      className="h-[52px] w-[52px] object-contain"
+      loading="lazy"
+    />
+  )
+}
+
+function GenderCard({
+  option,
+  isActive,
+  onSelect,
+}: {
+  option: SortOption
+  isActive: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button type="button" onClick={onSelect} className="group block text-start">
+      <div
+        className={`rounded-[18px] border bg-white px-3 py-4 transition ${
+          isActive
+            ? 'border-[#222222]'
+            : 'border-[#d9d9d9] hover:border-[#bdbdbd]'
+        }`}
+      >
+        <div className="flex h-[96px] items-center justify-center rounded-[14px] bg-white">
+          <GenderIcon value={option.value} label={option.label} />
+        </div>
+      </div>
+
+      <div className="pt-3 text-center text-[14px] font-medium leading-snug text-[#222222]">
+        {option.label}
+      </div>
+    </button>
+  )
+}
+
+function getSearchParamsFromHref(href: string) {
+  const url = new URL(href, 'https://dummy.local')
+  return url.searchParams
+}
+
+function matchesCurrentParams(href: string, currentParams: URLSearchParams) {
+  const optionParams = getSearchParamsFromHref(href)
+
+  if ([...optionParams.keys()].length === 0) {
+    return false
+  }
+
+  for (const [key, value] of optionParams.entries()) {
+    if (currentParams.get(key) !== value) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function getOptionByCurrentParams(
+  options: SortOption[],
+  currentParams: URLSearchParams
+) {
+  return (
+    options.find((option) => matchesCurrentParams(option.href, currentParams)) ??
+    null
+  )
+}
+
+function getParamKeys(options: SortOption[]) {
+  const keys = new Set<string>()
+
+  options.forEach((option) => {
+    const params = getSearchParamsFromHref(option.href)
+    params.forEach((_, key) => {
+      keys.add(key)
+    })
+  })
+
+  return [...keys]
+}
+
+function applyOptionParams(
+  params: URLSearchParams,
+  option: SortOption | null,
+  keysToReset: string[]
+) {
+  keysToReset.forEach((key) => params.delete(key))
+
+  if (!option) return
+
+  const optionParams = getSearchParamsFromHref(option.href)
+  optionParams.forEach((value, key) => {
+    params.set(key, value)
+  })
 }
 
 export default function SortDropdown({
@@ -61,103 +206,233 @@ export default function SortDropdown({
   selectedSort,
   sortByLabel,
   options,
-}: Props) {
-  const [open, setOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
+}: SortDropdownProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [isOpen, setIsOpen] = useState(false)
+  const groupedOptions = useMemo(() => buildSectionedOptions(options), [options])
+
+  const genderParamKeys = useMemo(
+    () => getParamKeys(groupedOptions.gender),
+    [groupedOptions.gender]
+  )
+
+  const sortParamKeys = useMemo(
+    () => getParamKeys(groupedOptions.sortBy),
+    [groupedOptions.sortBy]
+  )
+
+  const currentGenderOption = useMemo(() => {
+    const fromParams = getOptionByCurrentParams(
+      groupedOptions.gender,
+      new URLSearchParams(searchParams.toString())
+    )
+
+    if (fromParams) return fromParams
+
+    return selectedSort === 'boys' || selectedSort === 'girls'
+      ? groupedOptions.gender.find((option) => option.value === selectedSort) ??
+          null
+      : null
+  }, [groupedOptions.gender, searchParams, selectedSort])
+
+  const currentSortOption = useMemo(() => {
+    const fromParams = getOptionByCurrentParams(
+      groupedOptions.sortBy,
+      new URLSearchParams(searchParams.toString())
+    )
+
+    if (fromParams) return fromParams
+
+    return selectedSort !== 'boys' && selectedSort !== 'girls'
+      ? groupedOptions.sortBy.find((option) => option.value === selectedSort) ??
+          null
+      : null
+  }, [groupedOptions.sortBy, searchParams, selectedSort])
+
+  const [tempSelectedGender, setTempSelectedGender] = useState<GenderValue | null>(
+    (currentGenderOption?.value as GenderValue | null) ?? null
+  )
+  const [tempSelectedSortOption, setTempSelectedSortOption] = useState<SortValue | null>(
+    (currentSortOption?.value as SortValue | null) ?? null
+  )
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
-        setOpen(false)
-      }
+    if (!isOpen) return
+
+    setTempSelectedGender((currentGenderOption?.value as GenderValue | null) ?? null)
+    setTempSelectedSortOption(
+      (currentSortOption?.value as SortValue | null) ?? null
+    )
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
     }
 
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEscape)
+    document.addEventListener('keydown', onEscape)
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onEscape)
     }
-  }, [])
+  }, [isOpen, currentGenderOption, currentSortOption])
+
+  const genderTitle = isArabic ? 'Gender' : 'Gender'
+  const sortSectionTitle = isArabic ? 'Sort by' : 'Sort by'
+  const clearAllLabel = isArabic ? 'Clear all' : 'Clear all'
+  const showResultsLabel = isArabic ? 'Show results' : 'Show results'
+
+  const selectedGenderOption =
+    groupedOptions.gender.find((option) => option.value === tempSelectedGender) ??
+    null
+
+  const selectedSortOption =
+    groupedOptions.sortBy.find((option) => option.value === tempSelectedSortOption) ??
+    null
+
+  const handleClearAll = () => {
+    setTempSelectedGender(null)
+    setTempSelectedSortOption(null)
+  }
+
+  const handleShowResults = () => {
+    const nextParams = new URLSearchParams(searchParams.toString())
+
+    applyOptionParams(nextParams, selectedGenderOption, genderParamKeys)
+    applyOptionParams(nextParams, selectedSortOption, sortParamKeys)
+
+    nextParams.delete('page')
+
+    const nextQuery = nextParams.toString()
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname
+
+    setIsOpen(false)
+    router.push(nextUrl)
+  }
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <>
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex h-[42px] items-center gap-2 rounded-xl border border-gray-300 bg-white px-3.5 text-[14px] font-semibold text-gray-800 shadow-[0_2px_10px_rgba(0,0,0,0.06)] transition hover:border-gray-400 hover:shadow-[0_5px_16px_rgba(0,0,0,0.08)]"
-        aria-haspopup="menu"
-        aria-expanded={open}
+        onClick={() => setIsOpen(true)}
+        dir={isArabic ? 'rtl' : 'ltr'}
+        className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white p-0 text-[#222222] transition hover:shadow-sm md:h-[48px] md:w-auto md:gap-2 md:px-5"
+        aria-label={sortByLabel}
       >
-        <span className="text-gray-700">
-          <SortIcon />
-        </span>
-
-        <span>{sortByLabel}</span>
-
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className={`h-4 w-4 text-gray-500 transition duration-200 ${
-            open ? 'rotate-180' : ''
-          }`}
-          aria-hidden="true"
-        >
-          <path
-            fillRule="evenodd"
-            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.51a.75.75 0 0 1-1.08 0l-4.25-4.51a.75.75 0 0 1 .02-1.06Z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <FilterIcon />
+        <span className="hidden md:inline">{sortByLabel}</span>
       </button>
 
-      {open && (
+      {isOpen && (
         <div
-          className={`absolute top-[calc(100%+10px)] z-30 min-w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.12)] ${
-            isArabic ? 'left-0 md:left-0' : 'left-0 md:right-0'
-          }`}
-          role="menu"
+          className="fixed inset-0 z-[300] bg-black/35"
+          onClick={() => setIsOpen(false)}
         >
-          {options.map((option) => {
-            const isActive = selectedSort === option.value
+          <div
+            dir={isArabic ? 'rtl' : 'ltr'}
+            onClick={(e) => e.stopPropagation()}
+            className="
+              absolute left-0 right-0 bottom-0 top-[38%] flex flex-col
+              rounded-t-[28px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]
+              sm:left-1/2 sm:right-auto sm:top-8 sm:bottom-auto sm:h-[min(760px,calc(100vh-64px))] sm:w-[min(92vw,620px)] sm:-translate-x-1/2 sm:overflow-hidden sm:rounded-[28px]
+            "
+          >
+            <div className="relative flex h-[72px] shrink-0 items-center justify-center border-b border-[#ebebeb] px-5 sm:h-[76px] sm:px-6">
+              <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222]">
+                {sortByLabel}
+              </h3>
 
-            return (
-              <Link
-                key={option.value}
-                href={option.href}
-                className={`flex items-center justify-between px-4 py-3 text-[15px] transition ${
-                  isActive
-                    ? 'bg-gray-50 font-semibold text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className={`absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-[#222222] transition hover:bg-[#f7f7f7] ${
+                  isArabic ? 'left-5 sm:left-6' : 'right-5 sm:right-6'
                 }`}
-                role="menuitem"
-                onClick={() => setOpen(false)}
+                aria-label={isArabic ? 'إغلاق' : 'Close'}
               >
-                <span>{option.label}</span>
+                <CloseIcon />
+              </button>
+            </div>
 
-                <span
-                  className={
-                    isActive ? 'opacity-100 text-gray-900' : 'opacity-0'
-                  }
+            <div className="px-5 py-6 sm:flex-1 sm:overflow-y-auto sm:px-7 sm:py-7">
+              <section className="border-b border-[#ebebeb] pb-7">
+                <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
+                  {genderTitle}
+                </h4>
+
+                <div className="grid grid-cols-2 gap-4 sm:max-w-[360px]">
+                  {groupedOptions.gender.map((option) => (
+                    <GenderCard
+                      key={option.value}
+                      option={option}
+                      isActive={option.value === tempSelectedGender}
+                      onSelect={() =>
+                        setTempSelectedGender(option.value as GenderValue)
+                      }
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="pt-7">
+                <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
+                  {sortSectionTitle}
+                </h4>
+
+                <div className="rounded-[22px] border border-[#dddddd] bg-white p-[6px]">
+                  <div className="grid grid-cols-3 gap-[6px]">
+                    {groupedOptions.sortBy.map((option) => {
+                      const isActive = option.value === tempSelectedSortOption
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setTempSelectedSortOption(option.value as SortValue)
+                          }
+                          className={`flex min-h-[54px] items-center justify-center rounded-[18px] border-2 px-2 text-center text-[13px] font-medium leading-snug transition sm:h-[54px] sm:px-3 sm:text-[14px] ${
+                            isActive
+                              ? 'border-[#222222] bg-white text-[#222222]'
+                              : 'border-transparent bg-white text-[#222222] hover:bg-[#f7f7f7]'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="mt-auto shrink-0 border-t border-[#ececec] bg-[#fbfbfb] px-5 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] sm:px-7 sm:py-5">
+              <div className="flex items-center justify-between gap-3 sm:gap-4">
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-[14px] font-semibold text-[#8d8d8d] transition hover:text-[#0A46FF] sm:text-[15px]"
                 >
-                  <CheckIcon />
-                </span>
-              </Link>
-            )
-          })}
+                  {clearAllLabel}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShowResults}
+                  className="inline-flex h-[54px] min-w-[170px] items-center justify-center rounded-[16px] bg-[#0A46FF] px-5 text-[14px] font-semibold text-white transition hover:bg-[#0838cc] sm:h-[56px] sm:min-w-[210px] sm:px-6 sm:text-[15px]"
+                >
+                  {showResultsLabel}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

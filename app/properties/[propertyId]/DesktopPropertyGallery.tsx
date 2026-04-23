@@ -131,7 +131,10 @@ export default function DesktopPropertyGallery({
   }
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      document.body.classList.remove('desktop-gallery-open')
+      return
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeModal()
@@ -153,10 +156,12 @@ export default function DesktopPropertyGallery({
 
     const originalOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    document.body.classList.add('desktop-gallery-open')
     window.addEventListener('keydown', handleKeyDown)
 
     return () => {
       document.body.style.overflow = originalOverflow
+      document.body.classList.remove('desktop-gallery-open')
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isOpen, isArabic, normalizedImages.all.length])
@@ -244,7 +249,7 @@ export default function DesktopPropertyGallery({
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-[2px]"
           onClick={closeModal}
         >
           <div

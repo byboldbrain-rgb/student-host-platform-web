@@ -2,17 +2,16 @@ import Link from 'next/link'
 import { createClient } from '@/src/lib/supabase/server'
 import { requirePropertyReviewerAccess } from '@/src/lib/admin-auth'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
-import {
-  approvePropertyAction,
-  rejectPropertyAction,
-  archivePropertyAction,
-} from './actions'
+import { approvePropertyAction, rejectPropertyAction } from './actions'
 
 const primaryButtonClass =
-  'inline-flex items-center justify-center rounded-[18px] border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.25)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_14px_30px_rgba(37,99,235,0.35)]'
+  'inline-flex min-h-[52px] items-center justify-center rounded-full border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_12px_26px_rgba(37,99,235,0.28)]'
 
 const secondaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-[18px] border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-[#222222] shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-[1px] hover:border-gray-400 hover:bg-[#fafafa] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]'
+  'inline-flex min-h-[52px] items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition-all duration-200 hover:border-slate-400 hover:bg-slate-50'
+
+const inputClass =
+  'w-full rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
 
 type PropertyImage = {
   image_url?: string | null
@@ -40,8 +39,11 @@ function formatDate(value?: string | null) {
 
   try {
     return new Intl.DateTimeFormat('en-GB', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     }).format(new Date(value))
   } catch {
     return value
@@ -68,30 +70,7 @@ function getRentalDurationLabel(value?: string | null) {
   return ''
 }
 
-function getAvailabilityBadgeClass(value?: string | null) {
-  const normalized = (value || '').toLowerCase()
 
-  if (normalized === 'reserved') {
-    return 'border-amber-200 bg-amber-50 text-amber-700'
-  }
-
-  if (normalized === 'available') {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  }
-
-  if (normalized === 'unavailable') {
-    return 'border-rose-200 bg-rose-50 text-rose-700'
-  }
-
-  return 'border-slate-200 bg-slate-50 text-slate-700'
-}
-
-function getStatusLabel(value?: string | null) {
-  if (!value) return 'Unknown'
-  return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-}
 
 function getPropertyImage(property: ReviewProperty) {
   const images = Array.isArray(property.property_images)
@@ -103,7 +82,123 @@ function getPropertyImage(property: ReviewProperty) {
   return (
     images.find((image) => image.is_cover)?.image_url ||
     images[0]?.image_url ||
-    'https://via.placeholder.com/1200x800?text=No+Image'
+    null
+  )
+}
+
+function BrandLogo() {
+  return (
+    <Link href="/admin" className="navienty-logo" aria-label="Navienty admin home">
+      <img
+        src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+        alt="Navienty icon"
+        className="navienty-logo-icon"
+      />
+      <span className="navienty-logo-text-wrap">
+        <img
+          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
+          alt="Navienty"
+          className="navienty-logo-text"
+        />
+      </span>
+    </Link>
+  )
+}
+
+function MobileBottomNavItem({
+  href,
+  label,
+  isPrimary = false,
+}: {
+  href: string
+  label: string
+  isPrimary?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={[
+        'flex min-h-[52px] items-center justify-center rounded-2xl px-3 text-center text-[11px] font-semibold leading-tight transition-all duration-200',
+        isPrimary
+          ? 'border border-blue-600 bg-blue-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]'
+          : 'border border-gray-200 bg-white text-[#222222] shadow-[0_4px_14px_rgba(15,23,42,0.05)]',
+      ].join(' ')}
+    >
+      {label}
+    </Link>
+  )
+}
+
+function GridIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-4 w-4 text-white"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function PropertyImagePlaceholder() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200">
+      <div className="flex flex-col items-center justify-center text-slate-500">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 shadow-sm">
+          <GridIcon />
+        </div>
+        <p className="text-sm font-medium">No image available</p>
+      </div>
+    </div>
+  )
+}
+
+function ReviewCardCover({
+  property,
+  propertyTitle,
+}: {
+  property: ReviewProperty
+  propertyTitle: string
+}) {
+  const propertyImage = getPropertyImage(property)
+
+  return (
+    <div className="relative h-56 overflow-hidden bg-slate-100">
+      {propertyImage ? (
+        <img
+          src={propertyImage}
+          alt={propertyTitle}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <PropertyImagePlaceholder />
+      )}
+
+      <div className="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-4"></div>
+    </div>
   )
 }
 
@@ -141,253 +236,342 @@ export default async function ReviewPage() {
   const typedProperties = (properties || []) as ReviewProperty[]
 
   return (
-    <main className="min-h-screen bg-[#fbfbfb] text-gray-700">
-      <header className="sticky top-0 z-40 h-[130px] border-b border-gray-200/80 bg-[#F5F7F9] backdrop-blur">
-        <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-4 px-4 md:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <Link href="/properties">
-              <img
-                src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
-                alt="Navienty"
-                className="w-[130px]"
-              />
-            </Link>
+    <>
+      <style>{`
+        .navienty-logo {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          text-decoration: none;
+          overflow: visible;
+          transform: none;
+          margin-top: -10px;
+        }
+
+        .navienty-logo-icon {
+          width: 56px;
+          height: 56px;
+          object-fit: contain;
+          flex-shrink: 0;
+          display: block;
+        }
+
+        .navienty-logo-text-wrap {
+          max-width: 0;
+          opacity: 0;
+          overflow: hidden;
+          transform: translateX(-6px);
+          transition:
+            max-width 0.35s ease,
+            opacity 0.25s ease,
+            transform 0.35s ease;
+          display: flex;
+          align-items: center;
+        }
+
+        .navienty-logo:hover .navienty-logo-text-wrap,
+        .navienty-logo:focus-visible .navienty-logo-text-wrap {
+          max-width: 120px;
+          opacity: 1;
+          transform: translateX(0);
+        }
+
+        .navienty-logo-text {
+          width: 112px;
+          min-width: 112px;
+          height: auto;
+          object-fit: contain;
+          display: block;
+          transform: translateY(-2px);
+        }
+
+        .desktop-header-nav-button {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #20212a;
+          text-decoration: none;
+          font-size: 15px;
+          line-height: 1;
+          border: none;
+          background: none;
+          font-weight: 600;
+          font-family: 'Poppins', sans-serif;
+          padding: 8px 0;
+          transition: color 0.3s ease;
+        }
+
+        .desktop-header-nav-button::before {
+          margin-left: auto;
+        }
+
+        .desktop-header-nav-button::after,
+        .desktop-header-nav-button::before {
+          content: '';
+          width: 0%;
+          height: 2px;
+          background: #000000;
+          display: block;
+          transition: 0.5s;
+          position: absolute;
+          left: 0;
+        }
+
+        .desktop-header-nav-button::before {
+          top: 0;
+        }
+
+        .desktop-header-nav-button::after {
+          bottom: 0;
+        }
+
+        .desktop-header-nav-button:hover::after,
+        .desktop-header-nav-button:hover::before,
+        .desktop-header-nav-button:focus-visible::after,
+        .desktop-header-nav-button:focus-visible::before {
+          width: 100%;
+        }
+
+        .desktop-header-nav-button-active {
+          color: #054aff;
+        }
+
+        .desktop-header-nav-button-inactive {
+          color: #20212a;
+        }
+
+        .desktop-header-nav-button-inactive:hover,
+        .desktop-header-nav-button-inactive:focus-visible {
+          color: #054aff;
+        }
+
+        .property-preview-button {
+          display: inline-flex;
+          width: 100%;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border-radius: 9999px;
+          background-color: #155dfc;
+          padding: 12px 16px;
+          font-size: 14px;
+          font-weight: 600;
+          color: #ffffff !important;
+          text-decoration: none;
+          transition:
+            background-color 0.2s ease,
+            transform 0.2s ease,
+            box-shadow 0.2s ease;
+        }
+
+        .property-preview-button:hover,
+        .property-preview-button:focus-visible {
+          background-color: #0f4fe0;
+          color: #ffffff !important;
+        }
+
+        .property-preview-button svg {
+          color: #ffffff !important;
+        }
+
+        @media (max-width: 768px) {
+          .navienty-logo {
+            transform: none;
+            margin-top: 0;
+          }
+
+          .navienty-logo-icon {
+            width: 42px;
+            height: 42px;
+          }
+
+          .navienty-logo-text-wrap {
+            display: none;
+          }
+
+          .mobile-header-inner {
+            justify-content: center !important;
+          }
+        }
+      `}</style>
+
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef4ff,_#f8fafc_45%,_#f8fafc_100%)] pb-28 text-slate-700 md:pb-0">
+        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+          <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+            <BrandLogo />
+
+            <div className="hidden items-center gap-6 md:flex">
+              <Link
+                href="/admin/properties/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add Property
+              </Link>
+
+              <Link
+                href="/admin/cities/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add City
+              </Link>
+
+              <Link
+                href="/admin/universities/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add University
+              </Link>
+
+              <Link
+                href="/admin/brokers/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add Broker
+              </Link>
+
+              <Link
+                href="/admin/properties/review"
+                className="desktop-header-nav-button desktop-header-nav-button-active"
+              >
+                Review Queue
+              </Link>
+
+              <Link
+                href="/admin/properties/admins"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Property Admins
+              </Link>
+
+              <AdminLogoutButton />
+            </div>
+
+            <div className="md:hidden">
+              <AdminLogoutButton />
+            </div>
           </div>
+        </header>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Link href="/admin/properties/new" className={primaryButtonClass}>
-              Add Property
-            </Link>
+        <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8 lg:px-8">
+          {typedProperties.length > 0 ? (
+            <section className="rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+              <div className="p-4 md:p-6">
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 2xl:grid-cols-3">
+                  {typedProperties.map((property) => {
+                    const propertyTitle =
+                      property.title_en || property.title_ar || 'Untitled Property'
 
-            <Link href="/admin/properties/review" className={secondaryButtonClass}>
-              Review Queue
-            </Link>
+                    const propertyAddress =
+                      property.address_en || property.address_ar || 'No address provided'
 
-            <Link href="/admin/properties/admins" className={secondaryButtonClass}>
-              Property Admins
-            </Link>
+                    return (
+                      <div
+                        key={property.id}
+                        className="group overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(15,23,42,0.10)]"
+                      >
+                        <ReviewCardCover
+                          property={property}
+                          propertyTitle={propertyTitle}
+                        />
 
-            <AdminLogoutButton />
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#111827]">
-              Review Queue
-            </h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Review submitted properties and decide whether to publish, reject,
-              or archive them.
-            </p>
-          </div>
-
-          <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
-            Pending: {typedProperties.length}
-          </div>
-        </div>
-
-        {typedProperties.length > 0 ? (
-          <div className="grid gap-6">
-            {typedProperties.map((property) => {
-              const propertyTitle =
-                property.title_en || property.title_ar || 'Untitled Property'
-
-              const propertyAddress =
-                property.address_en || property.address_ar || 'No address provided'
-
-              const propertyImage = getPropertyImage(property)
-
-              return (
-                <section
-                  key={property.id}
-                  className="overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
-                >
-                  <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
-                    <div className="relative min-h-[240px] bg-gray-100">
-                      <img
-                        src={propertyImage}
-                        alt={propertyTitle}
-                        className="h-full w-full object-cover"
-                      />
-
-                      <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-white/95 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm">
-                          {getStatusLabel(property.admin_status)}
-                        </span>
-
-                        <span
-                          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${getAvailabilityBadgeClass(
-                            property.availability_status
-                          )}`}
-                        >
-                          {getStatusLabel(property.availability_status)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-5 md:p-6 lg:p-7">
-                      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="min-w-0">
-                          <h2 className="text-2xl font-semibold tracking-tight text-[#111827]">
+                        <div className="p-5">
+                          <h2 className="line-clamp-2 text-lg font-semibold text-slate-900">
                             {propertyTitle}
                           </h2>
 
-                          <p className="mt-2 break-all text-sm text-gray-500">
-                            Property ID: {property.property_id}
-                          </p>
+                          <div className="mt-5">
+                            <Link
+                              href={`/admin/properties/review/${property.property_id}`}
+                              className="property-preview-button"
+                            >
+                              <EyeIcon />
+                              <span className="text-white">Preview Full Property</span>
+                            </Link>
+                          </div>
 
-                          <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">
-                            {propertyAddress}
-                          </p>
+                          <div className="mt-5 grid grid-cols-2 gap-3">
+                            <form action={approvePropertyAction} className="w-full">
+                              <input type="hidden" name="property_id" value={property.id} />
+
+                              <button
+                                type="submit"
+                                className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-700 hover:bg-emerald-700"
+                              >
+                                Approve
+                              </button>
+                            </form>
+
+                            <form action={rejectPropertyAction} className="w-full">
+                              <input type="hidden" name="property_id" value={property.id} />
+
+                              <button
+                                type="submit"
+                                className="inline-flex w-full items-center justify-center rounded-full border border-red-600 bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:border-red-700 hover:bg-red-700"
+                              >
+                                Reject
+                              </button>
+                            </form>
+                          </div>
                         </div>
-
-                        <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:min-w-[340px]">
-                          <div className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3">
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                              Price
-                            </div>
-                            <div className="mt-1 text-base font-semibold text-[#111827]">
-                              {formatPrice(property.price_egp)}
-                              <span className="ml-1 text-sm font-medium text-gray-500">
-                                {getRentalDurationLabel(property.rental_duration)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3">
-                            <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                              Submitted At
-                            </div>
-                            <div className="mt-1 text-sm font-semibold text-[#111827]">
-                              {formatDate(property.created_at)}
-                            </div>
-                          </div>
-                        </div>
                       </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-[32px] border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                <GridIcon />
+              </div>
 
-                      <div className="mb-5">
-                        <Link
-                          href={`/admin/properties/review/${property.property_id}`}
-                          className="inline-flex items-center justify-center rounded-[18px] border border-indigo-200 bg-indigo-50 px-5 py-3 text-sm font-semibold text-indigo-700 shadow-[0_8px_20px_rgba(79,70,229,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-indigo-100"
-                        >
-                          Preview Full Property
-                        </Link>
-                      </div>
-
-                      <div className="grid gap-4 lg:grid-cols-3">
-                        <form
-                          action={approvePropertyAction}
-                          className="rounded-[24px] border border-emerald-200 bg-emerald-50/50 p-4"
-                        >
-                          <input type="hidden" name="property_id" value={property.id} />
-
-                          <div className="mb-3">
-                            <h3 className="text-sm font-semibold text-emerald-800">
-                              Approve & Publish
-                            </h3>
-                            <p className="mt-1 text-xs leading-5 text-emerald-700/80">
-                              This will publish the property on the platform and make it visible to users.
-                            </p>
-                          </div>
-
-                          <textarea
-                            name="review_notes"
-                            rows={5}
-                            placeholder="Optional review notes..."
-                            className="w-full rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-emerald-400"
-                          />
-
-                          <button
-                            type="submit"
-                            className="mt-4 inline-flex w-full items-center justify-center rounded-[18px] bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.22)] transition hover:bg-emerald-700"
-                          >
-                            Approve & Publish
-                          </button>
-                        </form>
-
-                        <form
-                          action={rejectPropertyAction}
-                          className="rounded-[24px] border border-rose-200 bg-rose-50/50 p-4"
-                        >
-                          <input type="hidden" name="property_id" value={property.id} />
-
-                          <div className="mb-3">
-                            <h3 className="text-sm font-semibold text-rose-800">
-                              Reject
-                            </h3>
-                            <p className="mt-1 text-xs leading-5 text-rose-700/80">
-                              Reject this submission. It will not be visible on the platform.
-                            </p>
-                          </div>
-
-                          <textarea
-                            name="review_notes"
-                            rows={5}
-                            placeholder="Why was this property rejected?"
-                            className="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-rose-400"
-                          />
-
-                          <button
-                            type="submit"
-                            className="mt-4 inline-flex w-full items-center justify-center rounded-[18px] bg-rose-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(225,29,72,0.20)] transition hover:bg-rose-700"
-                          >
-                            Reject Property
-                          </button>
-                        </form>
-
-                        <form
-                          action={archivePropertyAction}
-                          className="rounded-[24px] border border-slate-200 bg-slate-50 p-4"
-                        >
-                          <input type="hidden" name="property_id" value={property.id} />
-
-                          <div className="mb-3">
-                            <h3 className="text-sm font-semibold text-slate-800">
-                              Archive
-                            </h3>
-                            <p className="mt-1 text-xs leading-5 text-slate-600">
-                              Move this property out of the active review flow without publishing it.
-                            </p>
-                          </div>
-
-                          <textarea
-                            name="review_notes"
-                            rows={5}
-                            placeholder="Optional archive notes..."
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-slate-400"
-                          />
-
-                          <button
-                            type="submit"
-                            className="mt-4 inline-flex w-full items-center justify-center rounded-[18px] bg-slate-800 px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition hover:bg-slate-900"
-                          >
-                            Archive Property
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="rounded-[28px] border border-dashed border-gray-300 bg-white px-6 py-24 text-center shadow-sm">
-            <div className="mx-auto max-w-xl">
-              <h2 className="text-2xl font-semibold text-[#111827]">
+              <h2 className="text-lg font-semibold text-slate-900">
                 No properties pending review
               </h2>
-              <p className="mt-3 text-sm leading-6 text-gray-500">
+
+              <p className="mt-2 text-sm text-slate-500">
                 Once brokers or users submit new properties, they will appear here
-                for approval, rejection, or archiving.
+                for approval or rejection.
               </p>
-            </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <Link href="/admin/properties/new" className={primaryButtonClass}>
+                  Add Property
+                </Link>
+
+                <Link href="/admin/properties" className={secondaryButtonClass}>
+                  Back to Properties
+                </Link>
+              </div>
+            </section>
+          )}
+        </section>
+
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+          <div className="mx-auto grid max-w-[640px] grid-cols-3 gap-2">
+            <MobileBottomNavItem
+              href="/admin/properties/new"
+              label="Add Property"
+            />
+            <MobileBottomNavItem href="/admin/cities/new" label="Add City" />
+            <MobileBottomNavItem
+              href="/admin/universities/new"
+              label="Add University"
+            />
+            <MobileBottomNavItem href="/admin/brokers/new" label="Add Broker" />
+            <MobileBottomNavItem
+              href="/admin/properties/review"
+              label="Review Queue"
+              isPrimary
+            />
+            <MobileBottomNavItem
+              href="/admin/properties/admins"
+              label="Property Admins"
+            />
           </div>
-        )}
-      </div>
-    </main>
+        </nav>
+      </main>
+    </>
   )
 }

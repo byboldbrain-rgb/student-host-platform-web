@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import { signInUser } from '@/src/lib/supabase/user-auth'
+import MobileBottomNav from './components/MobileBottomNav'
+import './components/mobile-bottom-nav.css'
 
 const squadaOne = Squada_One({
   subsets: ['latin'],
@@ -49,13 +51,13 @@ export default function LoginPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-white text-gray-700 relative">
-      <header className="border-b border-gray-200 bg-[#f7f7f7] sticky top-0 md:static z-40 shadow-sm md:shadow-none h-20">
-        <div className="mx-auto max-w-[1920px] px-4 h-full">
-          <div className="flex items-center justify-center h-full">
+    <main className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0">
+      <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm md:static md:shadow-none">
+        <div className="mx-auto h-full max-w-[1920px] px-4">
+          <div className="flex h-full items-center justify-center">
             <Link
               href="/properties"
-              className="flex items-center justify-center overflow-hidden h-full"
+              className="flex h-full items-center justify-center overflow-hidden"
             >
               <img
                 src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
@@ -73,8 +75,8 @@ export default function LoginPage() {
         </div>
       </header>
 
-      <section className="flex min-h-[calc(100vh-120px)] items-center justify-center px-6 py-10 bg-[#fcfcfd]">
-        <div className="w-full flex justify-center">
+      <section className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#fcfcfd] px-6 py-10 md:min-h-[calc(100vh-120px)]">
+        <div className="flex w-full justify-center">
           <form onSubmit={handleSubmit} className="form">
             <div id="login-area">
               <p>LOGIN</p>
@@ -184,7 +186,7 @@ export default function LoginPage() {
         </div>
       </section>
 
-      <footer className="footer-esaf">
+      <footer className="footer-esaf hidden md:block">
         <div className="footer-esaf-container">
           <div className="footer-esaf-top">
             <div className="footer-esaf-top-left">
@@ -226,6 +228,12 @@ export default function LoginPage() {
           </div>
         </div>
       </footer>
+
+      <MobileBottomNav
+        active="login"
+        accountHref="/login"
+        accountLabel="Log in"
+      />
 
       <style jsx>{`
         .form {

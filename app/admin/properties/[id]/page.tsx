@@ -127,10 +127,12 @@ export default async function EditPropertyPage({ params }: PageProps) {
         private_bathroom,
         status,
         sort_order,
+        is_active,
         room_beds (
           id,
           status,
-          price_egp
+          price_egp,
+          is_active
         ),
         room_sellable_options:property_room_sellable_options (
           id,
@@ -147,6 +149,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
         )
       `)
       .eq('property_id_ref', id)
+      .eq('is_active', true)
       .order('sort_order'),
   ])
 
@@ -174,12 +177,35 @@ export default async function EditPropertyPage({ params }: PageProps) {
     ? brokersRes.data ?? []
     : (brokersRes.data ?? []).filter((broker) => broker.id === admin.broker_id)
 
+  const activeRooms = (roomsRes.data ?? []).map((room: any) => ({
+    ...room,
+    room_beds: Array.isArray(room.room_beds)
+      ? room.room_beds.filter(
+          (bed: any) => bed && bed.is_active !== false && bed.status !== 'inactive'
+        )
+      : [],
+    room_sellable_options: Array.isArray(room.room_sellable_options)
+      ? room.room_sellable_options.filter(
+          (option: any) => option && option.is_active !== false
+        )
+      : [],
+  }))
+
+  const syncedProperty = {
+    ...property,
+    bedrooms_count: activeRooms.length,
+    beds_count: activeRooms.reduce((sum: number, room: any) => {
+      const roomBedsCount = Array.isArray(room.room_beds) ? room.room_beds.length : 0
+      return sum + roomBedsCount
+    }, 0),
+  }
+
   return (
     <div className="p-6">
       <h1 className="mb-6 text-2xl font-bold">Edit Property</h1>
 
       <EditPropertyForm
-        property={property}
+        property={syncedProperty}
         cities={citiesRes.data ?? []}
         universities={universitiesRes.data ?? []}
         brokers={brokers}
@@ -196,7 +222,9 @@ export default async function EditPropertyPage({ params }: PageProps) {
         selectedBillTypeIds={(propertyBillsRes.data ?? []).map(
           (x: any) => x.bill_type_id
         )}
+
         rooms={roomsRes.data ?? []}
+        rooms={activeRooms}
         bookingRequests={[]}
         canChangeBroker={isSuperAdmin(admin)}
         canChangeAdminStatus={isSuperAdmin(admin)}

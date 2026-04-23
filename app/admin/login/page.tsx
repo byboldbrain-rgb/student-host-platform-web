@@ -378,6 +378,18 @@ async function getDefaultAdminRoute(
     return allowedPath || '/admin/services/co-working-spaces/booking-requests'
   }
 
+  if (admin.role === 'community_super_admin') {
+    return '/admin/community/posts'
+  }
+
+  if (admin.role === 'community_editor') {
+    return '/admin/community/posts'
+  }
+
+  if (admin.role === 'community_hr') {
+    return '/admin/community/join-requests'
+  }
+
   if (admin.department === 'student_activities') {
     return '/admin/services/student-activities'
   }
@@ -396,6 +408,10 @@ async function getDefaultAdminRoute(
 
   if (admin.department === 'co_working_spaces') {
     return '/admin/services/co-working-spaces'
+  }
+
+  if (admin.department === 'community') {
+    return '/admin/community/posts'
   }
 
   if (admin.department === 'services') {

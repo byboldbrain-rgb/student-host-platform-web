@@ -266,6 +266,18 @@ async function getDefaultAdminRoute(
     return allowedPath || '/admin/unauthorized'
   }
 
+  if (admin.role === 'community_super_admin') {
+    return '/admin/community/posts'
+  }
+
+  if (admin.role === 'community_editor') {
+    return '/admin/community/posts'
+  }
+
+  if (admin.role === 'community_hr') {
+    return '/admin/community/join-requests'
+  }
+
   if (admin.department === 'student_activities') {
     return '/admin/services/student-activities'
   }
@@ -280,6 +292,10 @@ async function getDefaultAdminRoute(
 
   if (admin.department === 'university_supplies') {
     return '/admin/services/university-supplies'
+  }
+
+  if (admin.department === 'community') {
+    return '/admin/community/posts'
   }
 
   if (admin.department === 'services') {
@@ -528,6 +544,40 @@ export async function middleware(request: NextRequest) {
 
     const isAllowedPath =
       pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  if (adminUser.role === 'community_editor') {
+    const allowedPath = '/admin/community/posts'
+    const isAllowedPath =
+      pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  if (adminUser.role === 'community_hr') {
+    const allowedPath = '/admin/community/join-requests'
+    const isAllowedPath =
+      pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  if (adminUser.role === 'community_super_admin') {
+    const isAllowedPath = pathname.startsWith('/admin/community')
 
     if (!isAllowedPath) {
       const url = request.nextUrl.clone()

@@ -15,15 +15,6 @@ import {
 } from '../actions'
 import PropertyGalleryEditor from './PropertyGalleryEditor'
 
-const primaryButtonClass =
-  'inline-flex items-center justify-center rounded-[20px] border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_14px_34px_rgba(37,99,235,0.28)]'
-
-const secondaryButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-[20px] border border-[#c7c7c7] bg-white px-5 py-3 text-sm font-semibold text-[#1f2937] shadow-[0_8px_22px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-[1px] hover:border-[#b8b8b8] hover:bg-[#f7f7f7] hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]'
-
-const backButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-[20px] border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_14px_34px_rgba(37,99,235,0.28)]'
-
 const hiddenSaveButtonClass = 'hidden'
 
 type PropertyImage = {
@@ -90,14 +81,7 @@ type Amenity = {
   id: string
   name_en?: string | null
   name_ar?: string | null
-  is_active?: boolean | null
-  sort_order?: number | null
-}
-
-type Facility = {
-  id: number
-  name_en?: string | null
-  name_ar?: string | null
+  icon_url?: string | null
   is_active?: boolean | null
   sort_order?: number | null
 }
@@ -106,6 +90,7 @@ type BillType = {
   id: number
   name_en?: string | null
   name_ar?: string | null
+  icon_url?: string | null
   is_active?: boolean | null
   sort_order?: number | null
 }
@@ -241,35 +226,6 @@ async function approveAndSaveAllPropertyAction(formData: FormData) {
 
     if (insertAmenitiesError) {
       throw new Error(`Failed to save amenities: ${insertAmenitiesError.message}`)
-    }
-  }
-
-  const selectedFacilityIds = formData
-    .getAll('facility_ids')
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value))
-
-  const { error: deleteFacilitiesError } = await supabase
-    .from('property_facilities')
-    .delete()
-    .eq('property_id_ref', propertyDbId)
-
-  if (deleteFacilitiesError) {
-    throw new Error(`Failed to reset facilities: ${deleteFacilitiesError.message}`)
-  }
-
-  if (selectedFacilityIds.length > 0) {
-    const facilityRows = selectedFacilityIds.map((facilityId) => ({
-      property_id_ref: propertyDbId,
-      facility_id: facilityId,
-    }))
-
-    const { error: insertFacilitiesError } = await supabase
-      .from('property_facilities')
-      .insert(facilityRows)
-
-    if (insertFacilitiesError) {
-      throw new Error(`Failed to save facilities: ${insertFacilitiesError.message}`)
     }
   }
 
@@ -480,6 +436,49 @@ async function rejectPropertyAndBackAction(formData: FormData) {
   redirect('/admin/properties/review')
 }
 
+function BrandLogo() {
+  return (
+    <Link href="/admin" className="navienty-logo" aria-label="Navienty admin home">
+      <img
+        src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+        alt="Navienty icon"
+        className="navienty-logo-icon"
+      />
+      <span className="navienty-logo-text-wrap">
+        <img
+          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
+          alt="Navienty"
+          className="navienty-logo-text"
+        />
+      </span>
+    </Link>
+  )
+}
+
+function MobileBottomNavItem({
+  href,
+  label,
+  isPrimary = false,
+}: {
+  href: string
+  label: string
+  isPrimary?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={[
+        'flex min-h-[52px] items-center justify-center rounded-2xl px-3 text-center text-[11px] font-semibold leading-tight transition-all duration-200',
+        isPrimary
+          ? 'border border-blue-600 bg-blue-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)]'
+          : 'border border-gray-200 bg-white text-[#222222] shadow-[0_4px_14px_rgba(15,23,42,0.05)]',
+      ].join(' ')}
+    >
+      {label}
+    </Link>
+  )
+}
+
 function StatusBadge({
   label,
   className,
@@ -489,45 +488,55 @@ function StatusBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold ${className}`}
+      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${className}`}
     >
       {label}
     </span>
   )
 }
 
-function SectionCard({
+function ReviewStepHeader({
+  title,
+  subtitle,
+}: {
+  title: string
+  subtitle?: string
+}) {
+  return (
+    <div className="flex items-end justify-between gap-4">
+      <div>
+        <h2 className="text-[32px] font-bold tracking-tight text-[#1a1a1a] md:text-[36px]">
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className="mt-2 text-sm text-[#6b7280]">{subtitle}</p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function ReviewSection({
   title,
   subtitle,
   children,
-  action,
 }: {
   title: string
   subtitle?: string
   children: ReactNode
-  action?: ReactNode
 }) {
   return (
-    <section className="rounded-[30px] border border-gray-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] md:p-7">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h3 className="text-[22px] font-semibold tracking-tight text-[#111827]">
-            {title}
-          </h3>
-          {subtitle ? (
-            <p className="mt-1 text-sm leading-6 text-gray-500">{subtitle}</p>
-          ) : null}
-        </div>
-
-        {action ? <div className="shrink-0">{action}</div> : null}
+    <div className="rounded-md border border-[#e7e7e7] bg-white p-4 shadow-sm md:p-5">
+      <div className="mb-5">
+        <h3 className="text-[18px] font-bold text-[#162033]">{title}</h3>
+        {subtitle ? <p className="mt-1 text-sm text-[#687385]">{subtitle}</p> : null}
       </div>
-
-      <div className="mt-6">{children}</div>
-    </section>
+      {children}
+    </div>
   )
 }
 
-function MetricCard({
+function ReviewStatCard({
   label,
   value,
 }: {
@@ -535,13 +544,9 @@ function MetricCard({
   value: string
 }) {
   return (
-    <div className="rounded-[26px] border border-gray-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.05)]">
-      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-gray-500">
-        {label}
-      </div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight text-[#111827]">
-        {value}
-      </div>
+    <div className="rounded-md border border-[#ececec] p-3">
+      <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">{label}</p>
+      <p className="mt-1 font-semibold text-[#1a1a1a]">{value}</p>
     </div>
   )
 }
@@ -561,13 +566,13 @@ function Input({
 }) {
   return (
     <label className="block">
-      <div className="mb-2 text-sm font-medium text-[#111827]">{label}</div>
+      <div className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">{label}</div>
       <input
         name={name}
         type={type}
         defaultValue={defaultValue ?? ''}
         placeholder={placeholder}
-        className="w-full rounded-[18px] border border-gray-200 bg-white px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+        className="w-full rounded-md border border-[#cfcfcf] px-3 py-2.5 text-sm outline-none transition focus:border-[#0071c2]"
       />
     </label>
   )
@@ -586,11 +591,11 @@ function Select({
 }) {
   return (
     <label className="block">
-      <div className="mb-2 text-sm font-medium text-[#111827]">{label}</div>
+      <div className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">{label}</div>
       <select
         name={name}
         defaultValue={defaultValue === null || defaultValue === undefined ? '' : String(defaultValue)}
-        className="w-full rounded-[18px] border border-gray-200 bg-white px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+        className="w-full rounded-md border border-[#cfcfcf] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#0071c2]"
       >
         <option value="">Select</option>
         {options.map((option) => (
@@ -618,13 +623,13 @@ function TextArea({
 }) {
   return (
     <label className="block">
-      <div className="mb-2 text-sm font-medium text-[#111827]">{label}</div>
+      <div className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">{label}</div>
       <textarea
         name={name}
         defaultValue={defaultValue ?? ''}
         rows={rows}
         placeholder={placeholder}
-        className="w-full rounded-[18px] border border-gray-200 bg-white px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+        className="w-full rounded-md border border-[#cfcfcf] px-3 py-2.5 text-sm outline-none transition focus:border-[#0071c2]"
       />
     </label>
   )
@@ -638,26 +643,56 @@ function CheckboxGroup({
 }: {
   title: string
   name: string
-  items: { value: string; label: string }[]
+  items: { value: string; label: string; iconUrl?: string | null }[]
   selectedValues: string[]
 }) {
   return (
     <div>
-      <div className="mb-3 text-sm font-medium text-[#111827]">{title}</div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mb-4 text-sm font-medium text-[#1a1a1a]">{title}</div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => (
           <label
             key={`${name}-${item.value}`}
-            className="flex items-center gap-3 rounded-[18px] border border-gray-200 bg-[#fafafa] px-4 py-3 text-sm text-[#111827]"
+            className="group relative block cursor-pointer"
+            htmlFor={`${name}-${item.value}`}
           >
             <input
+              id={`${name}-${item.value}`}
               type="checkbox"
               name={name}
               value={item.value}
               defaultChecked={selectedValues.includes(item.value)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="peer sr-only"
             />
-            <span>{item.label}</span>
+
+            <div className="flex min-h-[76px] items-center gap-3 rounded-2xl border border-[#e6ebf2] bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-[1px] hover:border-[#bdd7f4] hover:shadow-md peer-checked:border-[#0b66c3] peer-checked:bg-[#f3f9ff] peer-checked:shadow-[0_0_0_3px_rgba(11,102,195,0.08)]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#dbe4f0] bg-white shadow-sm">
+                {item.iconUrl ? (
+                  <img
+                    src={item.iconUrl}
+                    alt={item.label}
+                    className="h-6 w-6 object-contain"
+                  />
+                ) : (
+                  <span className="text-xs font-bold text-[#0b66c3]">
+                    {item.label
+                      .split(' ')
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((part) => part[0]?.toUpperCase())
+                      .join('') || '•'}
+                  </span>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[#162033]">{item.label}</p>
+              </div>
+
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#ccd7e4] bg-white text-transparent transition peer-checked:border-[#0b66c3] peer-checked:bg-[#0b66c3] peer-checked:text-white">
+                ✓
+              </div>
+            </div>
           </label>
         ))}
       </div>
@@ -703,24 +738,17 @@ export default async function PropertyReviewPreviewPage({
 
   const [
     propertyAmenitiesRes,
-    propertyFacilitiesRes,
     propertyBillsRes,
     roomTypesRes,
     allCitiesRes,
     allUniversitiesRes,
     allBrokersRes,
     allAmenitiesRes,
-    allFacilitiesRes,
     allBillTypesRes,
   ] = await Promise.all([
     supabase
       .from('property_amenities')
       .select('amenity_id')
-      .eq('property_id_ref', typedProperty.id),
-
-    supabase
-      .from('property_facilities')
-      .select('facility_id')
       .eq('property_id_ref', typedProperty.id),
 
     supabase
@@ -768,21 +796,14 @@ export default async function PropertyReviewPreviewPage({
 
     supabase
       .from('amenities')
-      .select('id, name_en, name_ar, sort_order, is_active')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .order('name_en', { ascending: true }),
-
-    supabase
-      .from('facilities')
-      .select('id, name_en, name_ar, sort_order, is_active')
+      .select('id, name_en, name_ar, icon_url, sort_order, is_active')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .order('name_en', { ascending: true }),
 
     supabase
       .from('bill_types')
-      .select('id, name_en, name_ar, sort_order, is_active')
+      .select('id, name_en, name_ar, icon_url, sort_order, is_active')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .order('name_en', { ascending: true }),
@@ -793,15 +814,10 @@ export default async function PropertyReviewPreviewPage({
   const allUniversities = (allUniversitiesRes?.data || []) as University[]
   const allBrokers = (allBrokersRes?.data || []) as Broker[]
   const allAmenities = (allAmenitiesRes?.data || []) as Amenity[]
-  const allFacilities = (allFacilitiesRes?.data || []) as Facility[]
   const allBillTypes = (allBillTypesRes?.data || []) as BillType[]
 
   const amenityIds = (propertyAmenitiesRes.data || [])
     .map((item: { amenity_id: string }) => item.amenity_id)
-    .filter(Boolean)
-
-  const facilityIds = (propertyFacilitiesRes.data || [])
-    .map((item: { facility_id: number }) => String(item.facility_id))
     .filter(Boolean)
 
   const billTypeIds = (propertyBillsRes.data || [])
@@ -814,394 +830,718 @@ export default async function PropertyReviewPreviewPage({
       )
     : []
 
+  const cityLabel =
+    allCities.find((item) => item.id === typedProperty.city_id)?.name_en ||
+    allCities.find((item) => item.id === typedProperty.city_id)?.name_ar ||
+    '—'
+
+  const universityLabel =
+    allUniversities.find((item) => item.id === typedProperty.university_id)?.name_en ||
+    allUniversities.find((item) => item.id === typedProperty.university_id)?.name_ar ||
+    '—'
+
+  const brokerLabel =
+    allBrokers.find((item) => item.id === typedProperty.broker_id)?.full_name ||
+    allBrokers.find((item) => item.id === typedProperty.broker_id)?.company_name ||
+    '—'
+
   return (
-    <main className="min-h-screen bg-[#fbfbfb] text-gray-700">
-      <header className="sticky top-0 z-40 border-b border-[#f5f7f9] bg-[#f5f7f9]">
-        <div className="mx-auto flex min-h-[104px] max-w-[1600px] items-center justify-between gap-4 px-4 md:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <Link href="/properties">
-              <img
-                src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
-                alt="Navienty"
-                className="w-[130px]"
-              />
-            </Link>
+    <>
+      <style>{`
+        .navienty-logo {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          text-decoration: none;
+          overflow: visible;
+          transform: none;
+          margin-top: -10px;
+        }
+
+        .navienty-logo-icon {
+          width: 56px;
+          height: 56px;
+          object-fit: contain;
+          flex-shrink: 0;
+          display: block;
+        }
+
+        .navienty-logo-text-wrap {
+          max-width: 0;
+          opacity: 0;
+          overflow: hidden;
+          transform: translateX(-6px);
+          transition:
+            max-width 0.35s ease,
+            opacity 0.25s ease,
+            transform 0.35s ease;
+          display: flex;
+          align-items: center;
+        }
+
+        .navienty-logo:hover .navienty-logo-text-wrap,
+        .navienty-logo:focus-visible .navienty-logo-text-wrap {
+          max-width: 120px;
+          opacity: 1;
+          transform: translateX(0);
+        }
+
+        .navienty-logo-text {
+          width: 112px;
+          min-width: 112px;
+          height: auto;
+          object-fit: contain;
+          display: block;
+          transform: translateY(-2px);
+        }
+
+        .desktop-header-nav-button {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #20212a;
+          text-decoration: none;
+          font-size: 15px;
+          line-height: 1;
+          border: none;
+          background: none;
+          font-weight: 600;
+          font-family: 'Poppins', sans-serif;
+          padding: 8px 0;
+          transition: color 0.3s ease;
+        }
+
+        .desktop-header-nav-button::before {
+          margin-left: auto;
+        }
+
+        .desktop-header-nav-button::after,
+        .desktop-header-nav-button::before {
+          content: '';
+          width: 0%;
+          height: 2px;
+          background: #000000;
+          display: block;
+          transition: 0.5s;
+          position: absolute;
+          left: 0;
+        }
+
+        .desktop-header-nav-button::before {
+          top: 0;
+        }
+
+        .desktop-header-nav-button::after {
+          bottom: 0;
+        }
+
+        .desktop-header-nav-button:hover::after,
+        .desktop-header-nav-button:hover::before,
+        .desktop-header-nav-button:focus-visible::after,
+        .desktop-header-nav-button:focus-visible::before {
+          width: 100%;
+        }
+
+        .desktop-header-nav-button-active {
+          color: #054aff;
+        }
+
+        .desktop-header-nav-button-inactive {
+          color: #20212a;
+        }
+
+        .desktop-header-nav-button-inactive:hover,
+        .desktop-header-nav-button-inactive:focus-visible {
+          color: #054aff;
+        }
+
+        @media (max-width: 768px) {
+          .navienty-logo {
+            transform: none;
+            margin-top: 0;
+          }
+
+          .navienty-logo-icon {
+            width: 42px;
+            height: 42px;
+          }
+
+          .navienty-logo-text-wrap {
+            display: none;
+          }
+
+          .mobile-header-inner {
+            justify-content: center !important;
+          }
+        }
+      `}</style>
+
+      <main className="min-h-screen bg-[#f2f2f2] pb-28 text-slate-700 md:pb-0">
+        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+          <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+            <BrandLogo />
+
+            <div className="hidden items-center gap-6 md:flex">
+              <Link
+                href="/admin/properties/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add Property
+              </Link>
+
+              <Link
+                href="/admin/cities/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add City
+              </Link>
+
+              <Link
+                href="/admin/universities/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add University
+              </Link>
+
+              <Link
+                href="/admin/brokers/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Add Broker
+              </Link>
+
+              <Link
+                href="/admin/properties/review"
+                className="desktop-header-nav-button desktop-header-nav-button-active"
+              >
+                Review Queue
+              </Link>
+
+              <Link
+                href="/admin/properties/admins"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Property Admins
+              </Link>
+
+              <AdminLogoutButton />
+            </div>
+
+            <div className="md:hidden">
+              <AdminLogoutButton />
+            </div>
           </div>
+        </header>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Link href="/admin/properties/new" className={primaryButtonClass}>
-              Add Property
-            </Link>
-
-            <Link href="/admin/properties/review" className={secondaryButtonClass}>
-              Review Queue
-            </Link>
-
-            <Link href="/admin/properties/admins" className={secondaryButtonClass}>
-              Property Admins
-            </Link>
-
-            <AdminLogoutButton />
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
         <form action={approveAndSaveAllPropertyAction} encType="multipart/form-data">
           <input type="hidden" name="property_db_id" value={typedProperty.id} />
           <input type="hidden" name="property_route_id" value={typedProperty.property_id} />
           <input type="hidden" name="property_id" value={typedProperty.id} />
 
-          <section className="overflow-hidden rounded-[34px] border border-gray-200 bg-gradient-to-br from-white via-white to-blue-50/50 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] md:p-7">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-4xl self-start">
-                <Link href="/admin/properties/review" className={backButtonClass}>
-                  <span>Back to Review Queue</span>
-                </Link>
-
-                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#111827] md:text-[42px]">
-                  Property Preview &amp; Edit
-                </h1>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 xl:w-[560px] xl:self-start">
-                <MetricCard
-                  label="Property ID"
-                  value={typedProperty.property_id || '—'}
-                />
-                <MetricCard
-                  label="Current Price"
-                  value={formatPrice(typedProperty.price_egp)}
-                />
-              </div>
-            </div>
-          </section>
-
-          <div className="mt-8 space-y-6">
-            <SectionCard title="Property Gallery">
-              <PropertyGalleryEditor
-                initialImages={sortedPropertyImages}
-                saveButtonClass={hiddenSaveButtonClass}
-              />
-            </SectionCard>
-
-            <SectionCard
-              title="Basic Property Info"
-            >
-              <div className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <Input label="Title EN" name="title_en" defaultValue={typedProperty.title_en} />
-                  <Input label="Title AR" name="title_ar" defaultValue={typedProperty.title_ar} />
-                  <Input
-                    label="Price EGP"
-                    name="price_egp"
-                    type="number"
-                    defaultValue={typedProperty.price_egp}
+          <main className="px-4 py-8 md:px-6 md:py-10 xl:px-8">
+            <div className="mx-auto w-full max-w-[1600px]">
+              <div className="space-y-8">
+                <section>
+                  <ReviewStepHeader
+                    title="Review Property"
+                    subtitle=""
                   />
-                  <Select
-                    label="Rental Duration"
-                    name="rental_duration"
-                    defaultValue={typedProperty.rental_duration}
-                    options={[
-                      { value: 'daily', label: 'Daily' },
-                      { value: 'monthly', label: 'Monthly' },
-                    ]}
-                  />
-                  <Select
-                    label="Availability Status"
-                    name="availability_status"
-                    defaultValue={typedProperty.availability_status}
-                    options={[
-                      { value: 'available', label: 'Available' },
-                      { value: 'reserved', label: 'Reserved' },
-                    ]}
-                  />
-                  <Select
-                    label="Admin Status"
-                    name="admin_status"
-                    defaultValue={typedProperty.admin_status}
-                    options={[
-                      { value: 'draft', label: 'Draft' },
-                      { value: 'pending_review', label: 'Pending Review' },
-                      { value: 'published', label: 'Published' },
-                      { value: 'rejected', label: 'Rejected' },
-                      { value: 'archived', label: 'Archived' },
-                    ]}
-                  />
-                  <Input
-                    label="Bedrooms"
-                    name="bedrooms_count"
-                    type="number"
-                    defaultValue={typedProperty.bedrooms_count}
-                  />
-                  <Input
-                    label="Bathrooms"
-                    name="bathrooms_count"
-                    type="number"
-                    defaultValue={typedProperty.bathrooms_count}
-                  />
-                  <Input
-                    label="Beds"
-                    name="beds_count"
-                    type="number"
-                    defaultValue={typedProperty.beds_count}
-                  />
-                  <Input
-                    label="Guests"
-                    name="guests_count"
-                    type="number"
-                    defaultValue={typedProperty.guests_count}
-                  />
-                  <Select
-                    label="Gender"
-                    name="gender"
-                    defaultValue={typedProperty.gender}
-                    options={[
-                      { value: 'boys', label: 'Boys' },
-                      { value: 'girls', label: 'Girls' },
-                    ]}
-                  />
-                  <Select
-                    label="Smoking Policy"
-                    name="smoking_policy"
-                    defaultValue={typedProperty.smoking_policy}
-                    options={[
-                      { value: 'smoking_allowed', label: 'Smoking Allowed' },
-                      { value: 'non_smoking', label: 'Non Smoking' },
-                    ]}
-                  />
-                </div>
-              </div>
-            </SectionCard>
 
-            <SectionCard
-              title="Descriptions"
-            >
-              <div className="grid gap-4 lg:grid-cols-2">
-                <TextArea
-                  label="English Description"
-                  name="description_en"
-                  rows={8}
-                  defaultValue={typedProperty.description_en}
-                />
-                <TextArea
-                  label="Arabic Description"
-                  name="description_ar"
-                  rows={8}
-                  defaultValue={typedProperty.description_ar}
-                />
-              </div>
-            </SectionCard>
+                  <div className="mt-6 rounded-md border border-[#e7e7e7] bg-white p-4 shadow-sm md:p-5">
+                    <h2 className="mb-3 text-lg font-semibold text-[#1a1a1a]">
+                      Review Summary
+                    </h2>
 
-            <SectionCard
-              title="Location & Broker Details"
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <Input
-                  label="Address EN"
-                  name="address_en"
-                  defaultValue={typedProperty.address_en}
-                />
-                <Input
-                  label="Address AR"
-                  name="address_ar"
-                  defaultValue={typedProperty.address_ar}
-                />
-                <Select
-                  label="City"
-                  name="city_id"
-                  defaultValue={typedProperty.city_id}
-                  options={allCities.map((item) => ({
-                    value: item.id,
-                    label: item.name_en || item.name_ar || item.id,
-                  }))}
-                />
-                <Select
-                  label="University"
-                  name="university_id"
-                  defaultValue={typedProperty.university_id}
-                  options={allUniversities.map((item) => ({
-                    value: item.id,
-                    label: item.name_en || item.name_ar || item.id,
-                  }))}
-                />
-                <Select
-                  label="Broker"
-                  name="broker_id"
-                  defaultValue={typedProperty.broker_id}
-                  options={allBrokers.map((item) => ({
-                    value: item.id,
-                    label: item.full_name || item.company_name || item.id,
-                  }))}
-                />
-              </div>
-            </SectionCard>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <ReviewStatCard
+                        label="Property Code"
+                        value={typedProperty.property_id || '—'}
+                      />
+                      <ReviewStatCard
+                        label="Title EN"
+                        value={typedProperty.title_en || '—'}
+                      />
+                      <ReviewStatCard label="City" value={cityLabel} />
+                      <ReviewStatCard label="University" value={universityLabel} />
+                      <ReviewStatCard label="Broker" value={brokerLabel} />
+                      <ReviewStatCard
+                        label="Admin Status"
+                        value={getStatusLabel(typedProperty.admin_status)}
+                      />
+                      <ReviewStatCard
+                        label="Availability"
+                        value={getStatusLabel(typedProperty.availability_status)}
+                      />
+                      <ReviewStatCard
+                        label="Rental Duration"
+                        value={getStatusLabel(typedProperty.rental_duration)}
+                      />
+                      <ReviewStatCard
+                        label="Price"
+                        value={formatPrice(typedProperty.price_egp)}
+                      />
+                      <ReviewStatCard
+                        label="Bedrooms"
+                        value={String(typedProperty.bedrooms_count ?? 0)}
+                      />
+                      <ReviewStatCard
+                        label="Bathrooms"
+                        value={String(typedProperty.bathrooms_count ?? 0)}
+                      />
+                      <ReviewStatCard
+                        label="Beds"
+                        value={String(typedProperty.beds_count ?? 0)}
+                      />
+                      <ReviewStatCard
+                        label="Guests"
+                        value={String(typedProperty.guests_count ?? 0)}
+                      />
+                      <ReviewStatCard
+                        label="Gender"
+                        value={getStatusLabel(typedProperty.gender)}
+                      />
+                      <ReviewStatCard
+                        label="Smoking Policy"
+                        value={getStatusLabel(typedProperty.smoking_policy)}
+                      />
+                      <ReviewStatCard
+                        label="Images"
+                        value={String(sortedPropertyImages.length)}
+                      />
+                    </div>
+                  </div>
+                </section>
 
-            <SectionCard
-              title="Amenities"
-            >
-              <CheckboxGroup
-                title="Select Amenities"
-                name="amenity_ids"
-                items={allAmenities.map((item) => ({
-                  value: item.id,
-                  label: item.name_en || item.name_ar || item.id,
-                }))}
-                selectedValues={amenityIds}
-              />
-            </SectionCard>
+                <section>
+                  <ReviewStepHeader
+                    title="Photos"
+                    subtitle=""
+                  />
 
-            <SectionCard
-              title="Facilities"
-            >
-              <CheckboxGroup
-                title="Select Facilities"
-                name="facility_ids"
-                items={allFacilities.map((item) => ({
-                  value: String(item.id),
-                  label: item.name_en || item.name_ar || String(item.id),
-                }))}
-                selectedValues={facilityIds}
-              />
-            </SectionCard>
+                  <div className="mt-6">
+                    <ReviewSection title="Property Gallery">
+                      <PropertyGalleryEditor
+                        initialImages={sortedPropertyImages}
+                        saveButtonClass={hiddenSaveButtonClass}
+                      />
+                    </ReviewSection>
+                  </div>
+                </section>
 
-            <SectionCard
-              title="Bills Included"
-            >
-              <CheckboxGroup
-                title="Select Included Bills"
-                name="bill_type_ids"
-                items={allBillTypes.map((item) => ({
-                  value: String(item.id),
-                  label: item.name_en || item.name_ar || String(item.id),
-                }))}
-                selectedValues={billTypeIds}
-              />
-            </SectionCard>
+                <section>
+                  <ReviewStepHeader
+                    title="Basic Info"
+                    subtitle=""
+                  />
 
-            <SectionCard
-              title="Room Types"
-            >
-              {roomTypes.length > 0 ? (
-                <div className="space-y-6">
-                  {roomTypes.map((room, index) => (
-                    <div
-                      key={room.id}
-                      className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-5"
-                    >
-                      <input type="hidden" name="room_type_ids" value={room.id} />
+                  <div className="mt-6 space-y-6">
+                    <ReviewSection title="Basic Property Info">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <Input
+                            label="Title EN"
+                            name="title_en"
+                            defaultValue={typedProperty.title_en}
+                          />
+                        </div>
 
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="text-lg font-semibold text-[#111827]">
-                              {room.name_en || room.name_ar || `Room ${index + 1}`}
-                            </h4>
+                        <div className="md:col-span-2">
+                          <Input
+                            label="Title AR"
+                            name="title_ar"
+                            defaultValue={typedProperty.title_ar}
+                          />
+                        </div>
 
-                            <StatusBadge
-                              label={getStatusLabel(room.room_type_code)}
-                              className="border-slate-200 bg-white text-slate-700"
-                            />
-                          </div>
+                        <div className="md:col-span-2">
+                          <TextArea
+                            label="Description EN"
+                            name="description_en"
+                            rows={4}
+                            defaultValue={typedProperty.description_en}
+                          />
+                        </div>
 
-                          <p className="mt-2 text-sm text-gray-500">
-                            Current price: {formatPrice(room.price_egp)}
-                          </p>
+                        <div className="md:col-span-2">
+                          <TextArea
+                            label="Description AR"
+                            name="description_ar"
+                            rows={4}
+                            defaultValue={typedProperty.description_ar}
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <Input
+                            label="Address EN"
+                            name="address_en"
+                            defaultValue={typedProperty.address_en}
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <Input
+                            label="Address AR"
+                            name="address_ar"
+                            defaultValue={typedProperty.address_ar}
+                          />
                         </div>
                       </div>
+                    </ReviewSection>
 
-                      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <Select
-                          label="Room Type Code"
-                          name={`room_type_code_${room.id}`}
-                          defaultValue={room.room_type_code}
-                          options={[
-                            { value: 'single', label: 'Single' },
-                            { value: 'double', label: 'Double' },
-                            { value: 'triple', label: 'Triple' },
-                          ]}
-                        />
-                        <Input
-                          label="Room Name EN"
-                          name={`room_name_en_${room.id}`}
-                          defaultValue={room.name_en}
-                        />
-                        <Input
-                          label="Room Name AR"
-                          name={`room_name_ar_${room.id}`}
-                          defaultValue={room.name_ar}
-                        />
-                        <Input
-                          label="Price EGP"
-                          name={`room_price_egp_${room.id}`}
-                          type="number"
-                          defaultValue={room.price_egp}
-                        />
-                        <Select
-                          label="Rental Duration"
-                          name={`room_rental_duration_${room.id}`}
-                          defaultValue={room.rental_duration}
-                          options={[
-                            { value: 'daily', label: 'Daily' },
-                            { value: 'monthly', label: 'Monthly' },
-                          ]}
-                        />
-                      </div>
+                    <ReviewSection title="Location & Broker">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                          <Select
+                            label="City"
+                            name="city_id"
+                            defaultValue={typedProperty.city_id}
+                            options={allCities.map((item) => ({
+                              value: item.id,
+                              label: item.name_en || item.name_ar || item.id,
+                            }))}
+                          />
+                        </div>
 
-                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                        <TextArea
-                          label="English Description"
-                          name={`room_description_en_${room.id}`}
-                          rows={5}
-                          defaultValue={room.description_en}
-                        />
-                        <TextArea
-                          label="Arabic Description"
-                          name={`room_description_ar_${room.id}`}
-                          rows={5}
-                          defaultValue={room.description_ar}
-                        />
+                        <div>
+                          <Select
+                            label="University"
+                            name="university_id"
+                            defaultValue={typedProperty.university_id}
+                            options={allUniversities.map((item) => ({
+                              value: item.id,
+                              label: item.name_en || item.name_ar || item.id,
+                            }))}
+                          />
+                        </div>
+
+                        <div>
+                          <Select
+                            label="Broker"
+                            name="broker_id"
+                            defaultValue={typedProperty.broker_id}
+                            options={allBrokers.map((item) => ({
+                              value: item.id,
+                              label: item.full_name || item.company_name || item.id,
+                            }))}
+                          />
+                        </div>
+
+                        <div>
+                          <Select
+                            label="Gender"
+                            name="gender"
+                            defaultValue={typedProperty.gender}
+                            options={[
+                              { value: 'boys', label: 'Boys' },
+                              { value: 'girls', label: 'Girls' },
+                            ]}
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <Select
+                            label="Rental Duration"
+                            name="rental_duration"
+                            defaultValue={typedProperty.rental_duration}
+                            options={[
+                              { value: 'monthly', label: 'Monthly' },
+                              { value: 'daily', label: 'Daily' },
+                            ]}
+                          />
+                        </div>
                       </div>
+                    </ReviewSection>
+                  </div>
+                </section>
+
+                <section>
+                  <ReviewStepHeader
+                    title="Property Details"
+                    subtitle=""
+                  />
+
+                  <div className="mt-6">
+                    <ReviewSection title="Property Details">
+                      <div className="space-y-10">
+                        <div>
+                          <Input
+                            label="Full Apartment Price (EGP)"
+                            name="price_egp"
+                            type="number"
+                            defaultValue={typedProperty.price_egp}
+                            placeholder="Example: 9000"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+                          <Input
+                            label="Bedrooms"
+                            name="bedrooms_count"
+                            type="number"
+                            defaultValue={typedProperty.bedrooms_count}
+                          />
+                          <Input
+                            label="Bathrooms"
+                            name="bathrooms_count"
+                            type="number"
+                            defaultValue={typedProperty.bathrooms_count}
+                          />
+                          <Input
+                            label="Beds"
+                            name="beds_count"
+                            type="number"
+                            defaultValue={typedProperty.beds_count}
+                          />
+                          <Input
+                            label="Guests"
+                            name="guests_count"
+                            type="number"
+                            defaultValue={typedProperty.guests_count}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <Select
+                            label="Availability Status"
+                            name="availability_status"
+                            defaultValue={typedProperty.availability_status}
+                            options={[
+                              { value: 'available', label: 'Available' },
+                              { value: 'reserved', label: 'Reserved' },
+                            ]}
+                          />
+                          <Select
+                            label="Smoking Policy"
+                            name="smoking_policy"
+                            defaultValue={typedProperty.smoking_policy}
+                            options={[
+                              { value: 'smoking_allowed', label: 'Smoking Allowed' },
+                              { value: 'non_smoking', label: 'Non Smoking' },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                    </ReviewSection>
+                  </div>
+                </section>
+
+                <section>
+                  <ReviewStepHeader
+                    title="Property Featured"
+                    subtitle=""
+                  />
+
+                  <div className="mt-6 space-y-6">
+                    <ReviewSection
+                      title="Amenities"
+                      subtitle=""
+                    >
+                      <CheckboxGroup
+                        title="Select Amenities"
+                        name="amenity_ids"
+                        items={allAmenities.map((item) => ({
+                          value: item.id,
+                          label: item.name_en || item.name_ar || item.id,
+                          iconUrl: item.icon_url,
+                        }))}
+                        selectedValues={amenityIds}
+                      />
+                    </ReviewSection>
+
+                    <ReviewSection
+                      title="Bills Included"
+                      subtitle=""
+                    >
+                      <CheckboxGroup
+                        title="Select Included Bills"
+                        name="bill_type_ids"
+                        items={allBillTypes.map((item) => ({
+                          value: String(item.id),
+                          label: item.name_en || item.name_ar || String(item.id),
+                          iconUrl: item.icon_url,
+                        }))}
+                        selectedValues={billTypeIds}
+                      />
+                    </ReviewSection>
+                  </div>
+                </section>
+
+                <section>
+                  <ReviewStepHeader
+                    title="Rooms & Pricing"
+                    subtitle=""
+                  />
+
+                  <div className="mt-6">
+                    <ReviewSection title="Room Types">
+                      {roomTypes.length > 0 ? (
+                        <div className="space-y-5">
+                          {roomTypes.map((room, index) => (
+                            <div
+                              key={room.id}
+                              className="rounded-md border border-[#e5e7eb] bg-white p-5 shadow-sm"
+                            >
+                              <input type="hidden" name="room_type_ids" value={room.id} />
+
+                              <div className="mb-5 flex items-start justify-between gap-4">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="text-[22px] font-bold text-[#1a1a1a]">
+                                      {room.name_en || room.name_ar || `Room ${index + 1}`}
+                                    </h3>
+
+                                    <StatusBadge
+                                      label={getStatusLabel(room.room_type_code)}
+                                      className="border-[#dbeafe] bg-[#f0f7ff] text-[#0f3f75]"
+                                    />
+                                  </div>
+
+                                  <p className="mt-1 text-sm text-[#6b7280]">
+                                    Current price: {formatPrice(room.price_egp)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="md:col-span-2">
+                                  <Input
+                                    label="Room Name EN"
+                                    name={`room_name_en_${room.id}`}
+                                    defaultValue={room.name_en}
+                                  />
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <Input
+                                    label="Room Name AR"
+                                    name={`room_name_ar_${room.id}`}
+                                    defaultValue={room.name_ar}
+                                  />
+                                </div>
+
+                                <div>
+                                  <Select
+                                    label="Room Type Code"
+                                    name={`room_type_code_${room.id}`}
+                                    defaultValue={room.room_type_code}
+                                    options={[
+                                      { value: 'single', label: 'Single' },
+                                      { value: 'double', label: 'Double' },
+                                      { value: 'triple', label: 'Triple' },
+                                      { value: 'quad', label: 'Quad' },
+                                      { value: 'custom', label: 'Custom' },
+                                    ]}
+                                  />
+                                </div>
+
+                                <div>
+                                  <Select
+                                    label="Rental Duration"
+                                    name={`room_rental_duration_${room.id}`}
+                                    defaultValue={room.rental_duration}
+                                    options={[
+                                      { value: 'monthly', label: 'Monthly' },
+                                      { value: 'daily', label: 'Daily' },
+                                    ]}
+                                  />
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <Input
+                                    label="Price EGP"
+                                    name={`room_price_egp_${room.id}`}
+                                    type="number"
+                                    defaultValue={room.price_egp}
+                                  />
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <TextArea
+                                    label="English Description"
+                                    name={`room_description_en_${room.id}`}
+                                    rows={4}
+                                    defaultValue={room.description_en}
+                                  />
+                                </div>
+
+                                <div className="md:col-span-2">
+                                  <TextArea
+                                    label="Arabic Description"
+                                    name={`room_description_ar_${room.id}`}
+                                    rows={4}
+                                    defaultValue={room.description_ar}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#6b7280]">
+                          No room types added for this property.
+                        </p>
+                      )}
+                    </ReviewSection>
+                  </div>
+                </section>
+
+                <section>
+                  <ReviewStepHeader
+                    title="Publish"
+                    subtitle=""
+                  />
+
+                  <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-white p-4 shadow-sm md:p-5">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Link
+                        href="/admin/properties/review"
+                        className="inline-flex h-[46px] items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-5 text-sm font-medium text-[#1a1a1a] transition hover:bg-[#f9fafb]"
+                      >
+                        Back to Queue
+                      </Link>
+
+                      <button
+                        type="submit"
+                        className="inline-flex h-[46px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3]"
+                      >
+                        Approve &amp; Publish
+                      </button>
+
+                      <button
+                        type="submit"
+                        formAction={rejectPropertyAndBackAction}
+                        className="inline-flex h-[46px] items-center justify-center rounded-xl border border-[#e0a8a8] bg-[#fff2f2] px-6 text-sm font-semibold text-[#b42318] transition hover:bg-[#ffe8e8]"
+                      >
+                        Reject Property
+                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">
-                  No room types added for this property.
-                </p>
-              )}
-            </SectionCard>
-
-            <section className="rounded-[30px] border border-gray-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] md:p-7">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h3 className="text-[22px] font-semibold tracking-tight text-[#111827]">
-                    Property Actions
-                  </h3>
-                  
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <button
-                    type="submit"
-                    className="inline-flex min-w-[220px] items-center justify-center rounded-[20px] border border-emerald-600 bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.18)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-emerald-700"
-                  >
-                    Approve &amp; Publish
-                  </button>
-
-                  <button
-                    type="submit"
-                    formAction={rejectPropertyAndBackAction}
-                    className="inline-flex min-w-[220px] items-center justify-center rounded-[20px] border border-rose-600 bg-rose-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(225,29,72,0.18)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-rose-700"
-                  >
-                    Reject Property
-                  </button>
-                </div>
+                  </div>
+                </section>
               </div>
-            </section>
-          </div>
+            </div>
+          </main>
         </form>
-      </div>
-    </main>
+
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+          <div className="mx-auto grid max-w-[640px] grid-cols-3 gap-2">
+            <MobileBottomNavItem href="/admin/properties/new" label="Add Property" />
+            <MobileBottomNavItem href="/admin/cities/new" label="Add City" />
+            <MobileBottomNavItem href="/admin/universities/new" label="Add University" />
+            <MobileBottomNavItem href="/admin/brokers/new" label="Add Broker" />
+            <MobileBottomNavItem
+              href="/admin/properties/review"
+              label="Review Queue"
+              isPrimary
+            />
+            <MobileBottomNavItem
+              href="/admin/properties/admins"
+              label="Property Admins"
+            />
+          </div>
+        </nav>
+      </main>
+    </>
   )
 }

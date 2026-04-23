@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Navienty | Stays',
+  title: 'Stays | Navienty',
 }
 
 export default function PropertiesLayout({

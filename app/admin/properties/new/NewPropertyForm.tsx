@@ -34,18 +34,21 @@ type Amenity = {
   id: string
   name_en: string
   name_ar: string
-}
-
-type Facility = {
-  id: number
-  name_en: string
-  name_ar: string
+  icon_key?: string | null
+  icon_url?: string | null
+  category_en?: string | null
+  category_ar?: string | null
+  sort_order?: number
+  is_active?: boolean
 }
 
 type BillType = {
   id: number
   name_en: string
   name_ar: string
+  icon_url?: string | null
+  sort_order?: number
+  is_active?: boolean
 }
 
 type RoomForm = {
@@ -74,7 +77,6 @@ type Props = {
   brokers: Broker[]
   brokerUniversities: BrokerUniversity[]
   amenities: Amenity[]
-  facilities: Facility[]
   billTypes: BillType[]
 }
 
@@ -91,6 +93,12 @@ type RoomOptionCode = 'single_room' | 'double_room' | 'triple_room'
 type EnabledRoomOption = {
   code: RoomOptionCode
   price: string
+}
+
+type AmenityCategoryGroup = {
+  key: string
+  title: string
+  items: Amenity[]
 }
 
 function generatePropertyCode() {
@@ -371,7 +379,6 @@ function getRoomValidationMessage(room: RoomForm) {
   const bedsCount = getBedsCountNumber(room.beds_count)
 
   if (room.room_name.trim() === '') return 'Room name EN is required.'
-  if (room.room_name_ar.trim() === '') return 'Room name AR is required.'
   if (room.room_type.trim() === '') return 'Room type is required.'
   if (room.rental_duration.trim() === '') return 'Room rental duration is required.'
   if (!isValidPositiveInt(room.beds_count)) return 'Beds count must be at least 1.'
@@ -410,13 +417,140 @@ function getRoomValidationMessage(room: RoomForm) {
   return ''
 }
 
+function getInitials(label: string) {
+  return label
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+}
+
+function IconThumb({
+  label,
+  iconUrl,
+}: {
+  label: string
+  iconUrl?: string | null
+}) {
+  if (iconUrl) {
+    return (
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#dbe4f0] bg-white shadow-sm">
+        <img
+          src={iconUrl}
+          alt={label}
+          className="h-6 w-6 object-contain"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#e8f1ff] to-[#f5f9ff] text-sm font-bold text-[#0b66c3] shadow-sm">
+      {getInitials(label) || '•'}
+    </div>
+  )
+}
+
+function FeatureSelectableCard({
+  inputId,
+  inputName,
+  inputValue,
+  title,
+  iconUrl,
+}: {
+  inputId: string
+  inputName: string
+  inputValue: string | number
+  title: string
+  iconUrl?: string | null
+}) {
+  return (
+    <label
+      htmlFor={inputId}
+      className="group relative block cursor-pointer"
+    >
+      <input
+        id={inputId}
+        type="checkbox"
+        name={inputName}
+        value={String(inputValue)}
+        className="peer sr-only"
+      />
+
+      <div className="flex min-h-[88px] items-center gap-3 rounded-2xl border border-[#e6ebf2] bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-[1px] hover:border-[#bdd7f4] hover:shadow-md peer-checked:border-[#0b66c3] peer-checked:bg-[#f3f9ff] peer-checked:shadow-[0_0_0_3px_rgba(11,102,195,0.08)]">
+        <IconThumb label={title} iconUrl={iconUrl} />
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-[#162033]">
+            {title}
+          </p>
+        </div>
+
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#ccd7e4] bg-white text-transparent transition peer-checked:border-[#0b66c3] peer-checked:bg-[#0b66c3] peer-checked:text-white">
+          ✓
+        </div>
+      </div>
+    </label>
+  )
+}
+
+function FeatureSection({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-3xl border border-[#e6ebf2] bg-white p-5 shadow-sm md:p-6">
+      <div className="mb-5 flex flex-col gap-1">
+        <h3 className="text-[18px] font-bold text-[#162033]">{title}</h3>
+        {subtitle && <p className="text-sm text-[#687385]">{subtitle}</p>}
+      </div>
+
+      {children}
+    </div>
+  )
+}
+
+function BrandLogo() {
+  return (
+    <Link href="/properties" className="navienty-logo" aria-label="Navienty admin home">
+      <img
+        src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+        alt="Navienty icon"
+        className="navienty-logo-icon"
+      />
+      <span className="navienty-logo-text-wrap">
+        <img
+          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
+          alt="Navienty"
+          className="navienty-logo-text"
+        />
+      </span>
+    </Link>
+  )
+}
+
+function NotificationBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+
+  return (
+    <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-[5px] text-[10px] font-bold leading-none text-white shadow-md">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
 export default function NewPropertyForm({
   cities,
   universities,
   brokers,
   brokerUniversities,
   amenities,
-  facilities,
   billTypes,
 }: Props) {
   const router = useRouter()
@@ -427,11 +561,8 @@ export default function NewPropertyForm({
 
   const [propertyCode, setPropertyCode] = useState('')
   const [titleEn, setTitleEn] = useState('')
-  const [titleAr, setTitleAr] = useState('')
   const [descriptionEn, setDescriptionEn] = useState('')
-  const [descriptionAr, setDescriptionAr] = useState('')
   const [addressEn, setAddressEn] = useState('')
-  const [addressAr, setAddressAr] = useState('')
 
   const [cityId, setCityId] = useState('')
   const [universityId, setUniversityId] = useState('')
@@ -446,7 +577,6 @@ export default function NewPropertyForm({
   const [bedsCount, setBedsCount] = useState('0')
   const [guestsCount, setGuestsCount] = useState('0')
   const [gender, setGender] = useState('')
-  const [smokingPolicy, setSmokingPolicy] = useState('')
 
   const [imageFiles, setImageFiles] = useState<ImageFileItem[]>([])
   const [coverIndex, setCoverIndex] = useState(0)
@@ -456,7 +586,7 @@ export default function NewPropertyForm({
     {
       ...initialRoom,
       room_name: 'Bedroom 1',
-      room_name_ar: 'غرفة نوم 1',
+      room_name_ar: 'Bedroom 1',
       beds_count: '1',
       single_room_enabled: true,
     },
@@ -500,6 +630,43 @@ export default function NewPropertyForm({
 
     return brokers.filter((broker) => allowedBrokerIds.has(broker.id))
   }, [universityId, brokerUniversities, brokers])
+
+  const activeAmenities = useMemo(() => {
+    return [...amenities]
+      .filter((item) => item.is_active !== false)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [amenities])
+
+  const amenityCategoryGroups = useMemo<AmenityCategoryGroup[]>(() => {
+    const groupMap = new Map<string, AmenityCategoryGroup>()
+
+    activeAmenities.forEach((item) => {
+      const rawCategory =
+        item.category_en?.trim() ||
+        item.category_ar?.trim() ||
+        'Other Amenities'
+
+      if (!groupMap.has(rawCategory)) {
+        groupMap.set(rawCategory, {
+          key: rawCategory,
+          title: rawCategory,
+          items: [],
+        })
+      }
+
+      groupMap.get(rawCategory)!.items.push(item)
+    })
+
+    return Array.from(groupMap.values()).sort((a, b) =>
+      a.title.localeCompare(b.title)
+    )
+  }, [activeAmenities])
+
+  const activeBillTypes = useMemo(() => {
+    return [...billTypes]
+      .filter((item) => item.is_active !== false)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }, [billTypes])
 
   const totalBedsFromRooms = useMemo(() => {
     return rooms.reduce((sum, room) => {
@@ -586,7 +753,7 @@ export default function NewPropertyForm({
       {
         ...initialRoom,
         room_name: `Bedroom ${nextNumber}`,
-        room_name_ar: `غرفة نوم ${nextNumber}`,
+        room_name_ar: `Bedroom ${nextNumber}`,
         beds_count: '1',
         single_room_enabled: true,
       },
@@ -611,6 +778,10 @@ export default function NewPropertyForm({
               ? normalizeNumberFieldIfNeeded(field, value)
               : value,
         } as RoomForm
+
+        if (field === 'room_name' && typeof value === 'string') {
+          nextRoom.room_name_ar = value
+        }
 
         const beds = getBedsCountNumber(nextRoom.beds_count)
 
@@ -640,7 +811,6 @@ export default function NewPropertyForm({
   const hasInvalidCompletedRoom = rooms.some((room) => {
     const hasAnyValue =
       room.room_name.trim() !== '' ||
-      room.room_name_ar.trim() !== '' ||
       room.room_type.trim() !== '' ||
       room.rental_duration.trim() !== '' ||
       room.beds_count.trim() !== '' ||
@@ -661,13 +831,10 @@ export default function NewPropertyForm({
         if (
           !propertyCode.trim() ||
           !titleEn.trim() ||
-          !titleAr.trim() ||
           !descriptionEn.trim() ||
-          !descriptionAr.trim() ||
-          !addressEn.trim() ||
-          !addressAr.trim()
+          !addressEn.trim()
         ) {
-          return 'Please complete all Property Details fields.'
+          return 'Please complete Property Code, Title EN, Description EN, and Address EN.'
         }
         return ''
 
@@ -780,11 +947,11 @@ export default function NewPropertyForm({
 
     formData.set('property_id', propertyCode)
     formData.set('title_en', titleEn)
-    formData.set('title_ar', titleAr)
+    formData.set('title_ar', titleEn)
     formData.set('description_en', descriptionEn)
-    formData.set('description_ar', descriptionAr)
+    formData.set('description_ar', descriptionEn)
     formData.set('address_en', addressEn)
-    formData.set('address_ar', addressAr)
+    formData.set('address_ar', addressEn)
     formData.set('city_id', cityId)
     formData.set('university_id', universityId)
     formData.set('broker_id', brokerId)
@@ -795,7 +962,7 @@ export default function NewPropertyForm({
     formData.set('bathrooms_count', normalizeNumberString(bathroomsCount))
     formData.set('beds_count', normalizeNumberString(bedsCount))
     formData.set('guests_count', normalizeNumberString(guestsCount))
-    formData.set('smoking_policy', smokingPolicy)
+    formData.set('smoking_policy', '')
 
     formData.delete('room_name')
     formData.delete('room_name_ar')
@@ -812,7 +979,7 @@ export default function NewPropertyForm({
 
     rooms.forEach((room) => {
       formData.append('room_name', room.room_name)
-      formData.append('room_name_ar', room.room_name_ar)
+      formData.append('room_name_ar', room.room_name)
       formData.append('room_type', room.room_type)
       formData.append('room_rental_duration', room.rental_duration)
       formData.append('room_beds_count', normalizeNumberString(room.beds_count))
@@ -861,11 +1028,8 @@ export default function NewPropertyForm({
     const basicFieldsComplete = [
       'property_id',
       'title_en',
-      'title_ar',
       'description_en',
-      'description_ar',
       'address_en',
-      'address_ar',
       'city_id',
       'university_id',
       'broker_id',
@@ -933,14 +1097,144 @@ export default function NewPropertyForm({
       }}
       className="min-h-screen bg-[#f2f2f2]"
     >
+      <style>{`
+        .navienty-logo {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          text-decoration: none;
+          overflow: visible;
+          transform: none;
+          margin-top: -10px;
+        }
+
+        .navienty-logo-icon {
+          width: 56px;
+          height: 56px;
+          object-fit: contain;
+          flex-shrink: 0;
+          display: block;
+        }
+
+        .navienty-logo-text-wrap {
+          max-width: 0;
+          opacity: 0;
+          overflow: hidden;
+          transform: translateX(-6px);
+          transition:
+            max-width 0.35s ease,
+            opacity 0.25s ease,
+            transform 0.35s ease;
+          display: flex;
+          align-items: center;
+        }
+
+        .navienty-logo:hover .navienty-logo-text-wrap,
+        .navienty-logo:focus-visible .navienty-logo-text-wrap {
+          max-width: 120px;
+          opacity: 1;
+          transform: translateX(0);
+        }
+
+        .navienty-logo-text {
+          width: 112px;
+          min-width: 112px;
+          height: auto;
+          object-fit: contain;
+          display: block;
+          transform: translateY(-2px);
+        }
+
+        .desktop-header-nav-button {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #20212a;
+          text-decoration: none;
+          font-size: 15px;
+          line-height: 1;
+          border: none;
+          background: none;
+          font-weight: 600;
+          font-family: 'Poppins', sans-serif;
+          padding: 8px 0;
+          transition: color 0.3s ease;
+        }
+
+        .desktop-header-nav-button::before {
+          margin-left: auto;
+        }
+
+        .desktop-header-nav-button::after,
+        .desktop-header-nav-button::before {
+          content: '';
+          width: 0%;
+          height: 2px;
+          background: #000000;
+          display: block;
+          transition: 0.5s;
+          position: absolute;
+          left: 0;
+        }
+
+        .desktop-header-nav-button::before {
+          top: 0;
+        }
+
+        .desktop-header-nav-button::after {
+          bottom: 0;
+        }
+
+        .desktop-header-nav-button:hover::after,
+        .desktop-header-nav-button:hover::before,
+        .desktop-header-nav-button:focus-visible::after,
+        .desktop-header-nav-button:focus-visible::before {
+          width: 100%;
+        }
+
+        .desktop-header-nav-button-active {
+          color: #054aff;
+        }
+
+        .desktop-header-nav-button-inactive {
+          color: #20212a;
+        }
+
+        .desktop-header-nav-button-inactive:hover,
+        .desktop-header-nav-button-inactive:focus-visible {
+          color: #054aff;
+        }
+
+        @media (max-width: 768px) {
+          .navienty-logo {
+            transform: none;
+            margin-top: 0;
+          }
+
+          .navienty-logo-icon {
+            width: 42px;
+            height: 42px;
+          }
+
+          .navienty-logo-text-wrap {
+            display: none;
+          }
+
+          .mobile-header-inner {
+            justify-content: center !important;
+          }
+        }
+      `}</style>
+
       <input type="hidden" name="admin_status" value="draft" />
       <input type="hidden" name="property_id" value={propertyCode} />
       <input type="hidden" name="title_en" value={titleEn} />
-      <input type="hidden" name="title_ar" value={titleAr} />
+      <input type="hidden" name="title_ar" value={titleEn} />
       <input type="hidden" name="description_en" value={descriptionEn} />
-      <input type="hidden" name="description_ar" value={descriptionAr} />
+      <input type="hidden" name="description_ar" value={descriptionEn} />
       <input type="hidden" name="address_en" value={addressEn} />
-      <input type="hidden" name="address_ar" value={addressAr} />
+      <input type="hidden" name="address_ar" value={addressEn} />
       <input type="hidden" name="city_id" value={cityId} />
       <input type="hidden" name="university_id" value={universityId} />
       <input type="hidden" name="broker_id" value={brokerId} />
@@ -955,28 +1249,20 @@ export default function NewPropertyForm({
       <input type="hidden" name="bathrooms_count" value={bathroomsCount} />
       <input type="hidden" name="beds_count" value={bedsCount} />
       <input type="hidden" name="guests_count" value={guestsCount} />
-      <input type="hidden" name="smoking_policy" value={smokingPolicy} />
+      <input type="hidden" name="smoking_policy" value="" />
 
-      <header className="border-b border-[#e9eef3] bg-[#f5f7f9]">
-        <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between gap-4 px-4 md:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <Link href="/properties">
-              <img
-                src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
-                alt="Navienty"
-                className="h-[140px] w-auto object-contain"
-              />
-            </Link>
-          </div>
+      <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+        <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+          <BrandLogo />
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="hidden items-center gap-6 md:flex">
             <AdminLogoutButton />
           </div>
         </div>
       </header>
 
       <div className="border-b border-[#e4e4e4] bg-[#f7f7f7]">
-        <div className="mx-auto max-w-[1200px] px-4 md:px-6">
+        <div className="mx-auto w-full max-w-[1600px] px-6 md:px-8 xl:px-10">
           <div className="flex flex-wrap items-center justify-between gap-4 py-5">
             {DISPLAY_STEPS.map((step) => {
               const status = getDisplayStepStatus(step)
@@ -1024,9 +1310,9 @@ export default function NewPropertyForm({
         </div>
       </div>
 
-      <main className="px-4 py-8 md:px-8 md:py-10">
-        <div className="mx-auto max-w-[1100px]">
-          <div className="max-w-[1000px]">
+      <main className="px-4 py-8 md:px-6 md:py-10 xl:px-8">
+        <div className="mx-auto w-full max-w-[1600px]">
+          <div className="w-full">
             <section className={currentStep === 1 ? 'block' : 'hidden'}>
               <div className="flex items-end justify-between gap-4">
                 <div>
@@ -1050,7 +1336,7 @@ export default function NewPropertyForm({
                     />
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
                       Title EN
                     </label>
@@ -1062,19 +1348,7 @@ export default function NewPropertyForm({
                     />
                   </div>
 
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-                      Title AR
-                    </label>
-                    <input
-                      value={titleAr}
-                      onChange={(e) => setTitleAr(e.target.value)}
-                      placeholder="Title AR"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
                       Description EN
                     </label>
@@ -1087,20 +1361,7 @@ export default function NewPropertyForm({
                     />
                   </div>
 
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-                      Description AR
-                    </label>
-                    <textarea
-                      value={descriptionAr}
-                      onChange={(e) => setDescriptionAr(e.target.value)}
-                      placeholder="Description AR"
-                      rows={4}
-                      className="w-full rounded-md border border-[#cfcfcf] px-3 py-2.5 text-sm outline-none transition focus:border-[#0071c2]"
-                    />
-                  </div>
-
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
                       Address EN
                     </label>
@@ -1108,18 +1369,6 @@ export default function NewPropertyForm({
                       value={addressEn}
                       onChange={(e) => setAddressEn(e.target.value)}
                       placeholder="Address EN"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-                      Address AR
-                    </label>
-                    <input
-                      value={addressAr}
-                      onChange={(e) => setAddressAr(e.target.value)}
-                      placeholder="Address AR"
                       className={inputClass}
                     />
                   </div>
@@ -1508,7 +1757,7 @@ export default function NewPropertyForm({
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                          <div>
+                          <div className="md:col-span-2">
                             <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
                               Room Name EN
                             </label>
@@ -1518,20 +1767,6 @@ export default function NewPropertyForm({
                                 updateRoom(index, 'room_name', e.target.value)
                               }
                               placeholder="Room Name EN"
-                              className={inputClass}
-                            />
-                          </div>
-
-                          <div>
-                            <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-                              Room Name AR
-                            </label>
-                            <input
-                              value={room.room_name_ar}
-                              onChange={(e) =>
-                                updateRoom(index, 'room_name_ar', e.target.value)
-                              }
-                              placeholder="Room Name AR"
                               className={inputClass}
                             />
                           </div>
@@ -1675,86 +1910,53 @@ export default function NewPropertyForm({
             </section>
 
             <section className={currentStep === 6 ? 'block' : 'hidden'}>
-              <h1 className="text-[32px] font-bold tracking-tight text-[#1a1a1a] md:text-[36px]">
-                Property Featured
-              </h1>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <h1 className="text-[32px] font-bold tracking-tight text-[#1a1a1a] md:text-[36px]">
+                    Property Featured
+                  </h1>
+                </div>
+              </div>
 
               <div className="mt-6 space-y-6">
-                <div className="rounded-md border border-[#e7e7e7] bg-white p-4 shadow-sm md:p-5">
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-[#1a1a1a]">
-                        Amenities
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                        {amenities.map((item) => (
-                          <label key={item.id} className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              name="amenity_ids"
-                              value={item.id}
-                              className="h-4 w-4"
-                            />
-                            <span className="text-sm">{item.name_en}</span>
-                          </label>
-                        ))}
-                      </div>
+                {amenityCategoryGroups.map((group) => (
+                  <FeatureSection
+                    key={group.key}
+                    title={group.title}
+                    subtitle={`${group.items.length} item${group.items.length === 1 ? '' : 's'}`}
+                  >
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {group.items.map((item) => (
+                        <FeatureSelectableCard
+                          key={item.id}
+                          inputId={`amenity-${item.id}`}
+                          inputName="amenity_ids"
+                          inputValue={item.id}
+                          title={item.name_en}
+                          iconUrl={item.icon_url}
+                        />
+                      ))}
                     </div>
+                  </FeatureSection>
+                ))}
 
-                    <div>
-                      <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-[#1a1a1a]">
-                        Facilities
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                        {facilities.map((item) => (
-                          <label key={item.id} className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              name="facility_ids"
-                              value={item.id}
-                              className="h-4 w-4"
-                            />
-                            <span className="text-sm">{item.name_en}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-[#1a1a1a]">
-                        Bills Included
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                        {billTypes.map((item) => (
-                          <label key={item.id} className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              name="bill_type_ids"
-                              value={item.id}
-                              className="h-4 w-4"
-                            />
-                            <span className="text-sm">{item.name_en}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-[#1a1a1a]">
-                        Smoking Policy
-                      </h3>
-                      <select
-                        value={smokingPolicy}
-                        onChange={(e) => setSmokingPolicy(e.target.value)}
-                        className={selectClass}
-                      >
-                        <option value="">Select Smoking Policy</option>
-                        <option value="smoking_allowed">Smoking Allowed</option>
-                        <option value="non_smoking">Non Smoking</option>
-                      </select>
-                    </div>
+                <FeatureSection
+                  title="Bills Included"
+                  subtitle="Select the bills already included in the property price."
+                >
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {activeBillTypes.map((item) => (
+                      <FeatureSelectableCard
+                        key={item.id}
+                        inputId={`bill-type-${item.id}`}
+                        inputName="bill_type_ids"
+                        inputValue={item.id}
+                        title={item.name_en}
+                        iconUrl={item.icon_url}
+                      />
+                    ))}
                   </div>
-                </div>
+                </FeatureSection>
               </div>
             </section>
 
@@ -1780,13 +1982,6 @@ export default function NewPropertyForm({
                         Title EN
                       </p>
                       <p className="mt-1 font-semibold">{titleEn || '-'}</p>
-                    </div>
-
-                    <div className="rounded-md border border-[#ececec] p-3">
-                      <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
-                        Title AR
-                      </p>
-                      <p className="mt-1 font-semibold">{titleAr || '-'}</p>
                     </div>
 
                     <div className="rounded-md border border-[#ececec] p-3">
@@ -1896,13 +2091,6 @@ export default function NewPropertyForm({
                       </p>
                       <p className="mt-1 font-semibold">{rooms.length}</p>
                     </div>
-
-                    <div className="rounded-md border border-[#ececec] p-3">
-                      <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
-                        Smoking Policy
-                      </p>
-                      <p className="mt-1 font-semibold">{smokingPolicy || '-'}</p>
-                    </div>
                   </div>
 
                   {rooms.length > 0 && (
@@ -1941,9 +2129,6 @@ export default function NewPropertyForm({
                               <p className="font-semibold text-[#1a1a1a]">
                                 {room.room_name || `Room ${index + 1}`}
                               </p>
-                              <p className="text-sm text-[#6b7280]">
-                                {room.room_name_ar || '-'}
-                              </p>
                               <p className="mt-2 text-sm text-[#6b7280]">
                                 Type: {room.room_type} | Duration: {room.rental_duration} | Beds:{' '}
                                 {room.beds_count || '0'}
@@ -1963,25 +2148,29 @@ export default function NewPropertyForm({
             </section>
           </div>
 
-          {stepError && (
-            <div className="mt-6 max-w-[1000px] rounded-md border border-[#f1c86b] bg-[#fff8e7] p-3 text-sm text-[#8a6400]">
-              {stepError}
-            </div>
-          )}
+          <div className="mt-8 rounded-2xl border border-[#e5e7eb] bg-white p-4 shadow-sm md:p-5">
+            {(stepError || errorMessage) && (
+              <div className="mb-4 space-y-3">
+                {stepError && (
+                  <div className="rounded-xl border border-[#f1c86b] bg-[#fff8e7] px-4 py-3 text-sm font-medium text-[#8a6400]">
+                    {stepError}
+                  </div>
+                )}
 
-          {errorMessage && (
-            <div className="mt-6 max-w-[1000px] rounded-md border border-[#e0a8a8] bg-[#fff2f2] p-3 text-sm text-[#b42318]">
-              {errorMessage}
-            </div>
-          )}
+                {errorMessage && (
+                  <div className="rounded-xl border border-[#e0a8a8] bg-[#fff2f2] px-4 py-3 text-sm font-medium text-[#b42318]">
+                    {errorMessage}
+                  </div>
+                )}
+              </div>
+            )}
 
-          <div className="mt-8 max-w-[1000px]">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={goBack}
                 disabled={currentStep === 1 || isPending}
-                className="rounded-md border border-[#cfcfcf] bg-white px-5 py-2.5 text-sm font-medium text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-[46px] items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-5 text-sm font-medium text-[#1a1a1a] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Back
               </button>
@@ -1991,7 +2180,7 @@ export default function NewPropertyForm({
                   type="button"
                   onClick={goNext}
                   disabled={isPending}
-                  className="rounded-md bg-[#0071c2] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005fa3] disabled:opacity-50"
+                  className="inline-flex h-[46px] min-w-[140px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Continue
                 </button>
@@ -2000,7 +2189,7 @@ export default function NewPropertyForm({
                   type="button"
                   onClick={submitProperty}
                   disabled={isPending || !propertyCode}
-                  className="rounded-md bg-[#0071c2] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005fa3] disabled:opacity-50"
+                  className="inline-flex h-[46px] min-w-[160px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isPending ? 'Saving...' : 'Save Property'}
                 </button>

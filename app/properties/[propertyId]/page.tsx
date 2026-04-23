@@ -200,6 +200,12 @@ type RoomOccupancyState = {
   blocksEntireProperty: boolean
 }
 
+type MenuFooterLink = {
+  label: string
+  href: string
+  isEmail?: boolean
+}
+
 const SUPPORTED_CURRENCIES = [
   'EGP',
   'USD',
@@ -305,7 +311,7 @@ const TRANSLATIONS = {
     logIn: 'Log in',
     close: 'Close',
     login: 'Log in or sign up',
-    join: 'Join our community',
+    join: 'Community',
     facebook: 'Facebook',
     instagram: 'Instagram',
     linkedIn: 'LinkedIn',
@@ -776,8 +782,19 @@ function BrokerContactCard({
   const cleanedPhone = cleanPhone(brokerPhone || '')
   const cleanedWhatsapp = cleanPhone(brokerWhatsapp || '')
 
+  const flipId = `broker-card-flip-${brokerName
+    .replace(/\s+/g, '-')
+    .toLowerCase()}`
+
   return (
-    <div className="broker-card-scene">
+    <div className="broker-card-scene" tabIndex={0}>
+      <input
+        id={flipId}
+        type="checkbox"
+        className="broker-card-toggle sr-only"
+        aria-label={t.brokerCardTitle}
+      />
+
       <div className="broker-card-inner">
         <div
           className="broker-card-face broker-card-front"
@@ -805,34 +822,32 @@ function BrokerContactCard({
             </div>
 
             <div
-  className={`absolute top-1/2 ${
-    isArabic ? 'right-4 text-right' : 'right-4 text-left'
-  } transform -translate-y-1/2`}
->
-  <div className="flex flex-col gap-3">
+              className={`absolute top-1/2 ${
+                isArabic ? 'right-4 text-right' : 'right-4 text-left'
+              } transform -translate-y-1/2`}
+            >
+              <div className="flex flex-col gap-3">
+                {cleanedPhone && (
+                  <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
+                    <PhoneIcon />
+                    <span className="font-semibold text-sm text-gray-800">
+                      {cleanedPhone}
+                    </span>
+                  </div>
+                )}
 
-    {/* Phone */}
-    {cleanedPhone && (
-      <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
-        <PhoneIcon />
-        <span className="font-semibold text-sm text-gray-800">
-          {cleanedPhone}
-        </span>
-      </div>
-    )}
+                {cleanedWhatsapp && (
+                  <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
+                    <WhatsAppIcon />
+                    <span className="font-semibold text-sm text-gray-800">
+                      {cleanedWhatsapp}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
 
-    {/* WhatsApp */}
-    {cleanedWhatsapp && (
-      <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
-        <WhatsAppIcon />
-        <span className="font-semibold text-sm text-gray-800">
-          {cleanedWhatsapp}
-        </span>
-      </div>
-    )}
-
-  </div>
-</div>
+            
           </div>
         </div>
 
@@ -854,6 +869,8 @@ function BrokerContactCard({
                 isArabic ? 'broker-card-back-actions--rtl' : ''
               }`}
             ></div>
+
+            
           </div>
         </div>
       </div>
@@ -1129,75 +1146,75 @@ export default async function PropertyPage({
   let offers: PropertyOfferItem[] = []
 
   const [
-  allAmenitiesResponse,
-  allFacilitiesResponse,
-  allBillTypesResponse,
-  propertyAmenitiesResponse,
-  propertyFacilitiesResponse,
-  propertyBillsResponse,
-] = await Promise.all([
-  supabase
-    .from('amenities')
-    .select(`
-      id,
-      name_en,
-      name_ar,
-      icon_key,
-      icon_url,
-      category_en,
-      category_ar,
-      sort_order,
-      is_active
-    `)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true }),
+    allAmenitiesResponse,
+    allFacilitiesResponse,
+    allBillTypesResponse,
+    propertyAmenitiesResponse,
+    propertyFacilitiesResponse,
+    propertyBillsResponse,
+  ] = await Promise.all([
+    supabase
+      .from('amenities')
+      .select(`
+        id,
+        name_en,
+        name_ar,
+        icon_key,
+        icon_url,
+        category_en,
+        category_ar,
+        sort_order,
+        is_active
+      `)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
 
-  supabase
-    .from('facilities')
-    .select(`
-      id,
-      code,
-      name_en,
-      name_ar,
-      icon_url,
-      sort_order,
-      is_active
-    `)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true }),
+    supabase
+      .from('facilities')
+      .select(`
+        id,
+        code,
+        name_en,
+        name_ar,
+        icon_url,
+        sort_order,
+        is_active
+      `)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
 
-  supabase
-    .from('bill_types')
-    .select(`
-      id,
-      code,
-      name_en,
-      name_ar,
-      icon_url,
-      sort_order,
-      is_active
-    `)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true }),
+    supabase
+      .from('bill_types')
+      .select(`
+        id,
+        code,
+        name_en,
+        name_ar,
+        icon_url,
+        sort_order,
+        is_active
+      `)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
 
-  supabase
-    .from('property_amenities')
-    .select('amenity_id')
-    .eq('property_id_ref', typedProperty.id),
+    supabase
+      .from('property_amenities')
+      .select('amenity_id')
+      .eq('property_id_ref', typedProperty.id),
 
-  supabase
-    .from('property_facilities')
-    .select('facility_id')
-    .eq('property_id_ref', typedProperty.id),
+    supabase
+      .from('property_facilities')
+      .select('facility_id')
+      .eq('property_id_ref', typedProperty.id),
 
-  supabase
-    .from('property_bill_includes')
-    .select('bill_type_id')
-    .eq('property_id_ref', typedProperty.id),
-])
+    supabase
+      .from('property_bill_includes')
+      .select('bill_type_id')
+      .eq('property_id_ref', typedProperty.id),
+  ])
 
   const propertyAmenityIds = new Set(
     (propertyAmenitiesResponse.data || []).map((row: any) =>
@@ -1416,7 +1433,12 @@ export default async function PropertyPage({
   }
 
   const primaryMenuLinks = [
-    { label: t.login, href: buildSimpleNavLink('/login') },
+    {
+      label: isSignedIn ? t.account : t.login,
+      href: isSignedIn
+        ? buildSimpleNavLink('/account')
+        : buildSimpleNavLink('/login'),
+    },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
 
@@ -1430,6 +1452,11 @@ export default async function PropertyPage({
     { label: t.aboutUs, href: buildSimpleNavLink('/about') },
     { label: t.board, href: buildSimpleNavLink('/board') },
     { label: t.contact, href: buildSimpleNavLink('/contact') },
+  ]
+
+  const menuFooterLinks: MenuFooterLink[] = [
+    ...footerQuickLinks,
+    { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
   ]
 
   const mobileAccountHref = isSignedIn
@@ -1632,12 +1659,19 @@ export default async function PropertyPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0"
+      className="relative min-h-screen bg-white pb-32 text-gray-700 md:pb-0"
     >
       <input
         id="nav-menu-toggle"
         type="checkbox"
         className="peer sr-only"
+        aria-hidden="true"
+      />
+
+      <input
+        id="mobile-rooms-toggle"
+        type="checkbox"
+        className="mobile-rooms-toggle sr-only"
         aria-hidden="true"
       />
 
@@ -1806,6 +1840,13 @@ export default async function PropertyPage({
           font-weight: 600;
           text-decoration: none;
           letter-spacing: -0.02em;
+          z-index: 5;
+        }
+
+        .mega-menu-close--rtl {
+          right: auto;
+          left: 0;
+          flex-direction: row-reverse;
         }
 
         .mega-menu-close-line {
@@ -1830,21 +1871,6 @@ export default async function PropertyPage({
           height: auto;
           object-fit: contain;
           display: block;
-        }
-
-        .mega-menu-investors {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-size: 18px;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .mega-menu-investors:hover {
-          opacity: 0.88;
         }
 
         .mega-menu-body {
@@ -1935,38 +1961,48 @@ export default async function PropertyPage({
           opacity: 0.9;
         }
 
-        .property-id-pill {
-          display: inline-flex;
-          align-items: center;
+        .mega-menu-footer-links {
+          position: absolute;
+          right: 56px;
+          bottom: 12px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
           gap: 10px;
-          background: linear-gradient(145deg, #0a5cff, #054aff);
-          border-radius: 9999px;
-          box-shadow:
-            inset 4px 4px 10px rgba(0, 0, 0, 0.25),
-            inset -4px -4px 10px rgba(255, 255, 255, 0.15),
-            4px 4px 12px rgba(0, 0, 0, 0.15);
-          color: white;
-          border: 2px solid #054aff;
-          padding: 12px 22px;
-          transition: all 0.2s ease-in-out;
+          max-width: 240px;
+          text-align: right;
         }
 
-        .property-id-pill:hover {
-          box-shadow:
-            inset 2px 2px 5px #bcbcbc,
-            inset -2px -2px 5px #ffffff,
-            2px 2px 5px #bcbcbc,
-            -2px -2px 5px #ffffff;
+        .mega-menu-footer-links--rtl {
+          right: auto;
+          left: 56px;
+          align-items: flex-start;
+          text-align: left;
         }
 
-        .property-id-pill__label {
-          color: rgba(255, 255, 255, 0.85);
-          font-weight: 600;
+        .mega-menu-footer-link {
+          color: rgba(242, 234, 216, 0.88);
+          text-decoration: none;
+          font-size: 18px;
+          line-height: 1.35;
+          font-weight: 500;
+          letter-spacing: -0.02em;
+          transition:
+            opacity 0.2s ease,
+            transform 0.2s ease,
+            color 0.2s ease;
         }
 
-        .property-id-pill__value {
-          color: #ffffff;
-          font-weight: 700;
+        .mega-menu-footer-link:hover {
+          opacity: 1;
+          color: var(--menu-cream);
+          transform: translateX(-2px);
+        }
+
+        .mega-menu-footer-link--email {
+          margin-top: 8px;
+          opacity: 0.76;
+          font-size: 16px;
         }
 
         .mobile-bottom-nav {
@@ -2010,8 +2046,17 @@ export default async function PropertyPage({
           color: #111827;
         }
 
+        .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image {
+          filter: grayscale(1) brightness(0.2);
+        }
+
         .mobile-bottom-nav__item--active {
           color: #054aff;
+        }
+
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
         }
 
         .mobile-bottom-nav__icon {
@@ -2020,11 +2065,161 @@ export default async function PropertyPage({
           display: block;
         }
 
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.55);
+          transition: filter 0.2s ease;
+        }
+
         .mobile-bottom-nav__label {
           font-size: 11px;
           line-height: 1;
           font-weight: 500;
           letter-spacing: 0.01em;
+        }
+
+        .mobile-rooms-cta {
+          position: fixed;
+          left: 16px;
+          right: 16px;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 82px);
+          z-index: 121;
+          display: none;
+        }
+
+        .mobile-rooms-cta__button {
+          width: 100%;
+          min-height: 52px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          border-radius: 999px;
+          background: #054aff;
+          color: #ffffff;
+          box-shadow: 0 16px 34px rgba(5, 74, 255, 0.28);
+          padding: 14px 20px;
+          font-size: 15px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+          cursor: pointer;
+          transition:
+            transform 0.2s ease,
+            opacity 0.2s ease,
+            background 0.2s ease;
+        }
+
+        .mobile-rooms-cta__button:hover {
+          transform: translateY(-1px);
+          background: #043be0;
+        }
+
+        .mobile-rooms-cta__icon {
+          width: 20px;
+          height: 20px;
+          transition: transform 0.25s ease;
+        }
+
+        .mobile-rooms-toggle:checked ~ .mobile-rooms-cta .mobile-rooms-cta__icon {
+          transform: rotate(180deg);
+        }
+
+        .mobile-rooms-sheet {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 130;
+          display: none;
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
+          transition:
+            opacity 0.25s ease,
+            visibility 0.25s ease;
+        }
+
+        .mobile-rooms-sheet__backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.32);
+          opacity: 0;
+          transition: opacity 0.25s ease;
+        }
+
+        .mobile-rooms-sheet__panel {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          max-height: min(74vh, 720px);
+          background: #ffffff;
+          border-top-left-radius: 28px;
+          border-top-right-radius: 28px;
+          box-shadow: 0 -20px 54px rgba(15, 23, 42, 0.18);
+          transform: translateY(100%);
+          transition: transform 0.28s ease;
+          overflow: hidden;
+          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+        }
+
+        .mobile-rooms-sheet__handle {
+          width: 52px;
+          height: 5px;
+          background: #cbd5e1;
+          border-radius: 999px;
+          margin: 12px auto 10px;
+        }
+
+        .mobile-rooms-sheet__header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 0 18px 14px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .mobile-rooms-sheet__title {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.02em;
+        }
+
+        .mobile-rooms-sheet__close {
+          min-width: 86px;
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: #f1f5f9;
+          color: #0f172a;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .mobile-rooms-sheet__body {
+          max-height: calc(min(74vh, 720px) - 72px);
+          overflow-y: auto;
+          padding: 16px 16px 0;
+        }
+
+        .mobile-rooms-toggle:checked ~ .mobile-rooms-sheet {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
+        }
+
+        .mobile-rooms-toggle:checked ~ .mobile-rooms-sheet .mobile-rooms-sheet__backdrop {
+          opacity: 1;
+        }
+
+        .mobile-rooms-toggle:checked ~ .mobile-rooms-sheet .mobile-rooms-sheet__panel {
+          transform: translateY(0);
         }
 
         .footer-esaf {
@@ -2159,8 +2354,15 @@ export default async function PropertyPage({
         }
 
         .broker-card-scene {
+          position: relative;
           width: 100%;
           perspective: 1400px;
+        }
+
+        .broker-card-toggle {
+          position: absolute;
+          opacity: 0;
+          pointer-events: none;
         }
 
         .broker-card-inner {
@@ -2169,10 +2371,12 @@ export default async function PropertyPage({
           aspect-ratio: 1.58 / 1;
           transform-style: preserve-3d;
           transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+          will-change: transform;
         }
 
         .broker-card-scene:hover .broker-card-inner,
-        .broker-card-scene:focus-within .broker-card-inner {
+        .broker-card-scene:focus-within .broker-card-inner,
+        .broker-card-toggle:checked + .broker-card-inner {
           transform: rotateY(180deg);
         }
 
@@ -2398,6 +2602,47 @@ export default async function PropertyPage({
           color: rgba(17, 24, 39, 0.62);
         }
 
+        .broker-card-flip-btn {
+          position: absolute;
+          left: 16px;
+          bottom: 16px;
+          z-index: 5;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 38px;
+          padding: 10px 14px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.92);
+          color: #111827;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+          cursor: pointer;
+          user-select: none;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          transition:
+            transform 0.2s ease,
+            opacity 0.2s ease,
+            background 0.2s ease;
+        }
+
+        .broker-card-flip-btn:hover {
+          transform: translateY(-1px);
+          background: rgba(255, 255, 255, 1);
+        }
+
+        .broker-card-flip-btn--rtl {
+          left: auto;
+          right: 16px;
+        }
+
+        .broker-card-flip-btn--back {
+          bottom: 16px;
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -2429,6 +2674,11 @@ export default async function PropertyPage({
             gap: 12px;
           }
 
+          .mega-menu-close--rtl {
+            right: auto;
+            left: 0;
+          }
+
           .mega-menu-close-line {
             width: 34px;
           }
@@ -2442,10 +2692,6 @@ export default async function PropertyPage({
             height: 74px;
           }
 
-          .mega-menu-investors {
-            font-size: 16px;
-          }
-
           .mega-menu-body {
             display: flex;
             align-items: center;
@@ -2454,7 +2700,7 @@ export default async function PropertyPage({
             padding-top: 160px;
             padding-left: 0;
             padding-right: 0;
-            padding-bottom: 140px;
+            padding-bottom: 180px;
           }
 
           .mega-menu-left {
@@ -2491,6 +2737,25 @@ export default async function PropertyPage({
           .mega-menu-small-link {
             font-size: 24px;
           }
+
+          .mega-menu-footer-links {
+            right: 24px;
+            bottom: 12px;
+            max-width: 220px;
+          }
+
+          .mega-menu-footer-links--rtl {
+            right: auto;
+            left: 24px;
+          }
+
+          .mega-menu-footer-link {
+            font-size: 16px;
+          }
+
+          .mega-menu-footer-link--email {
+            font-size: 15px;
+          }
         }
 
         @media (max-width: 768px) {
@@ -2499,18 +2764,40 @@ export default async function PropertyPage({
             display: none !important;
           }
 
-          .mobile-bottom-nav {
+          .mobile-bottom-nav,
+          .mobile-rooms-cta,
+          .mobile-rooms-sheet {
             display: block;
           }
 
-          .property-id-pill {
-            padding: 11px 18px;
+          .mega-menu-body {
+            padding-bottom: 220px;
+          }
+
+          .mega-menu-footer-links {
+            left: 24px;
+            right: 24px;
+            bottom: 76px;
+            align-items: flex-start;
+            text-align: left;
+            max-width: none;
             gap: 8px;
           }
 
-          .property-id-pill__label,
-          .property-id-pill__value {
-            font-size: 13px;
+          .mega-menu-footer-links--rtl {
+            left: 24px;
+            right: 24px;
+            align-items: flex-end;
+            text-align: right;
+          }
+
+          .mega-menu-footer-link {
+            font-size: 16px;
+          }
+
+          .mega-menu-footer-link--email {
+            margin-top: 6px;
+            font-size: 14px;
           }
 
           .footer-esaf-container {
@@ -2561,20 +2848,16 @@ export default async function PropertyPage({
             font-size: 14px;
           }
 
-          .broker-card-scene:hover .broker-card-inner,
-          .broker-card-scene:focus-within .broker-card-inner {
-            transform: none;
-          }
-
           .broker-card-scene {
-            perspective: none;
+            perspective: 1000px;
           }
 
           .broker-card-inner {
             aspect-ratio: 1.52 / 1;
           }
 
-          .broker-card-front-overlay {
+          .broker-card-front-overlay,
+          .broker-card-back-overlay {
             padding: 16px;
           }
 
@@ -2617,6 +2900,18 @@ export default async function PropertyPage({
           .broker-contact-info-value {
             font-size: 13px;
           }
+
+          .broker-card-flip-btn {
+            min-height: 34px;
+            padding: 8px 12px;
+            font-size: 11px;
+          }
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+          .broker-card-flip-btn {
+            display: none;
+          }
         }
       `}</style>
 
@@ -2631,7 +2926,8 @@ export default async function PropertyPage({
           <div className="mega-menu-top">
             <label
               htmlFor="nav-menu-toggle"
-              className="mega-menu-overlay"
+              className={`mega-menu-close ${isArabic ? 'mega-menu-close--rtl' : ''}`}
+              aria-label="Close menu"
             >
               <span className="mega-menu-close-line" />
               <span>{t.close}</span>
@@ -2679,6 +2975,32 @@ export default async function PropertyPage({
                 ))}
               </div>
             </div>
+
+            <div
+              className={`mega-menu-footer-links ${
+                isArabic ? 'mega-menu-footer-links--rtl' : ''
+              }`}
+            >
+              {menuFooterLinks.map((item) =>
+                item.isEmail ? (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className="mega-menu-footer-link mega-menu-footer-link--email"
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="mega-menu-footer-link"
+                  >
+                    {item.label}
+                  </Link>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -2698,15 +3020,6 @@ export default async function PropertyPage({
               <h1 className="text-[22px] font-bold leading-8 tracking-tight text-slate-950">
                 {propertyTitle}
               </h1>
-
-              <div className="mt-3 flex justify-center">
-                <div className="property-id-pill">
-                  <span className="property-id-pill__label">{t.propertyId}:</span>
-                  <span className="property-id-pill__value">
-                    {typedProperty.property_id}
-                  </span>
-                </div>
-              </div>
 
               {addressText && (
                 <div className="mt-3 flex items-center justify-center gap-3 text-center text-[18px] leading-7 font-medium text-slate-700">
@@ -2741,79 +3054,6 @@ export default async function PropertyPage({
               sectionClassName="mt-6 border-b border-slate-200 pb-8 px-1 sm:px-2"
               showAllButtonClassName="inline-flex h-11 items-center justify-center rounded-[18px] bg-[#054aff] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#043be0]"
             />
-
-            <section className="pt-6">
-              <div className="mb-4 flex items-center justify-center gap-3">
-                <h2 className="w-full text-center text-[24px] font-bold tracking-tight text-slate-950">
-                  {t.availableRooms}
-                </h2>
-              </div>
-
-              <div className="space-y-4">
-                {optionCards.map((option) => {
-                  const formattedPrice = formatConvertedPrice({
-                    priceEgp: option.price,
-                    currency: selectedCurrency,
-                    exchangeRateFromEgp,
-                    locale,
-                  })
-
-                  return (
-                    <div
-                      key={option.code}
-                      className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]"
-                    >
-                      <div className="p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-[20px] font-bold leading-7 tracking-tight text-slate-900">
-                                {option.label}
-                              </h3>
-                            </div>
-                          </div>
-
-                          {formattedPrice && (
-                            <div className="shrink-0 text-right">
-                              <p className="text-[28px] font-bold leading-none text-[#054aff]">
-                                {formattedPrice}
-                              </p>
-                              <p className="mt-1 text-[14px] text-slate-600">
-                                {typedProperty.rental_duration === 'daily'
-                                  ? t.perDay
-                                  : t.perMonth}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="p-4 pt-0">
-                        {!option.isBooked ? (
-                          <PropertyEnquireButton
-                            propertyId={typedProperty.id}
-                            requestedOptionCode={option.code}
-                            requestedOptionLabel={option.label}
-                            isSignedIn={isSignedIn}
-                            loginRedirectUrl={loginRedirectUrl}
-                            label={t.enquire}
-                            className="inline-flex min-h-[50px] w-full items-center justify-center rounded-full bg-[#054aff] px-5 text-[16px] font-semibold text-white transition hover:opacity-95"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="inline-flex min-h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-5 text-[16px] font-semibold text-slate-500"
-                          >
-                            {t.booked}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
 
             {similarProperties.length > 0 && (
               <section className="px-5 pb-6 pt-6">
@@ -2932,15 +3172,6 @@ export default async function PropertyPage({
               <h1 className="text-xl font-bold tracking-tight text-slate-950 md:text-[22px] lg:text-[26px]">
                 {propertyTitle}
               </h1>
-
-              <div className="mt-3">
-                <div className="property-id-pill">
-                  <span className="property-id-pill__label">{t.propertyId}:</span>
-                  <span className="property-id-pill__value">
-                    {typedProperty.property_id}
-                  </span>
-                </div>
-              </div>
 
               {addressText && (
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[14px] text-slate-700 md:text-[15px]">
@@ -3186,7 +3417,7 @@ export default async function PropertyPage({
         </div>
       </div>
 
-      <footer className="footer-esaf">
+      <footer className="footer-esaf hidden md:block">
         <div className="footer-esaf-container">
           <div className="footer-esaf-top">
             <div className="footer-esaf-top-left">
@@ -3224,6 +3455,116 @@ export default async function PropertyPage({
         </div>
       </footer>
 
+      <div className="mobile-rooms-cta md:hidden">
+        <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-cta__button">
+          <span>{t.availableRooms}</span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            className="mobile-rooms-cta__icon"
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </label>
+      </div>
+
+      <div className="mobile-rooms-sheet md:hidden">
+        <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-sheet__backdrop" />
+
+        <div className="mobile-rooms-sheet__panel">
+          <div className="mobile-rooms-sheet__handle" />
+
+          <div className="mobile-rooms-sheet__header">
+            <h2 className="mobile-rooms-sheet__title">{t.availableRooms}</h2>
+            <label
+              htmlFor="mobile-rooms-toggle"
+              className="mobile-rooms-sheet__close"
+            >
+              {t.close}
+            </label>
+          </div>
+
+          <div className="mobile-rooms-sheet__body">
+            <div className="space-y-4 pb-4">
+              {optionCards.length > 0 ? (
+                optionCards.map((option) => {
+                  const formattedPrice = formatConvertedPrice({
+                    priceEgp: option.price,
+                    currency: selectedCurrency,
+                    exchangeRateFromEgp,
+                    locale,
+                  })
+
+                  return (
+                    <div
+                      key={option.code}
+                      className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]"
+                    >
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-[20px] font-bold leading-7 tracking-tight text-slate-900">
+                                {option.label}
+                              </h3>
+                            </div>
+                          </div>
+
+                          {formattedPrice && (
+                            <div className="shrink-0 text-right">
+                              <p className="text-[28px] font-bold leading-none text-[#054aff]">
+                                {formattedPrice}
+                              </p>
+                              <p className="mt-1 text-[14px] text-slate-600">
+                                {typedProperty.rental_duration === 'daily'
+                                  ? t.perDay
+                                  : t.perMonth}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-4 pt-0">
+                        {!option.isBooked ? (
+                          <PropertyEnquireButton
+                            propertyId={typedProperty.id}
+                            requestedOptionCode={option.code}
+                            requestedOptionLabel={option.label}
+                            isSignedIn={isSignedIn}
+                            loginRedirectUrl={loginRedirectUrl}
+                            label={t.enquire}
+                            className="inline-flex min-h-[50px] w-full items-center justify-center rounded-full bg-[#054aff] px-5 text-[16px] font-semibold text-white transition hover:opacity-95"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="inline-flex min-h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-5 text-[16px] font-semibold text-slate-500"
+                          >
+                            {t.booked}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-5 text-center text-[15px] font-medium text-slate-600">
+                  {t.noRooms}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
         <div className="mobile-bottom-nav__inner">
           <Link
@@ -3252,20 +3593,11 @@ export default async function PropertyPage({
             href={buildSimpleNavLink('/community')}
             className="mobile-bottom-nav__item"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.9}
-              stroke="currentColor"
-              className="mobile-bottom-nav__icon"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 20.25s-6.75-4.35-9-8.25C1.2 8.7 3.3 4.5 7.5 4.5c2.1 0 3.45 1.2 4.5 2.55 1.05-1.35 2.4-2.55 4.5-2.55 4.2 0 6.3 4.2 4.5 7.5-2.25 3.9-9 8.25-9 8.25Z"
-              />
-            </svg>
+            <img
+              src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
+              alt="Community"
+              className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+            />
             <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 

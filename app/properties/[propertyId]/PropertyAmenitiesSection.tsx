@@ -94,7 +94,7 @@ function resolveIconKey(item: AmenityItem) {
 function AmenityIcon({
   iconKey,
   iconUrl,
-  className = 'h-6 w-6',
+  className = 'h-8 w-8',
 }: {
   iconKey?: string | null
   iconUrl?: string | null
@@ -116,7 +116,7 @@ function AmenityIcon({
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
-    strokeWidth: 1.8,
+    strokeWidth: 2.2,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
   }
@@ -491,27 +491,28 @@ function AmenityRow({
   isAvailable?: boolean
   isSidebar?: boolean
 }) {
+  const iconSizeClass = isSidebar ? 'h-8 w-8 object-contain' : 'h-10 w-10 object-contain'
+  const textClass = isSidebar ? 'text-[16px] leading-6' : 'text-[18px] leading-7'
+
   return (
     <div
       className={`${
-        isSidebar ? 'flex items-center gap-3' : 'flex items-center gap-4'
+        isSidebar ? 'flex items-center gap-3.5' : 'flex items-center gap-4.5'
       } ${isAvailable ? 'text-slate-900' : 'text-slate-500'}`}
     >
-      <div className="relative flex shrink-0 items-center justify-center">
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
         <AmenityIcon
           iconKey={iconKey}
           iconUrl={iconUrl}
-          className={isSidebar ? 'h-5 w-5 object-contain' : 'h-6 w-6 object-contain'}
+          className={iconSizeClass}
         />
         {!isAvailable && (
-          <span className="pointer-events-none absolute left-[-3px] top-1/2 h-[2px] w-[calc(100%+6px)] -translate-y-1/2 rotate-[-18deg] bg-black" />
+          <span className="pointer-events-none absolute left-[-4px] top-1/2 h-[2px] w-[calc(100%+8px)] -translate-y-1/2 rotate-[-18deg] bg-black" />
         )}
       </div>
 
-      <div className="relative inline-block">
-        <span className={isSidebar ? 'text-[15px] leading-6' : 'text-[18px] leading-7'}>
-          {label}
-        </span>
+      <div className="relative inline-block min-w-0">
+        <span className={textClass}>{label}</span>
         {!isAvailable && (
           <span className="pointer-events-none absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-black" />
         )}
@@ -630,8 +631,17 @@ export default function PropertyAmenitiesSection({
     const originalOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+
     return () => {
       document.body.style.overflow = originalOverflow
+      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [open])
 
@@ -700,48 +710,53 @@ export default function PropertyAmenitiesSection({
       </section>
 
       {open && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-4 py-6">
+        <div
+          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 px-4 py-4 sm:items-center sm:py-6"
+          onClick={() => setOpen(false)}
+        >
           <div
-            className="relative max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[32px] bg-white shadow-2xl"
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
             dir={isArabic ? 'rtl' : 'ltr'}
+            onClick={(event) => event.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className={`absolute top-6 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 ${
-                isArabic ? 'right-6' : 'left-6'
-              }`}
-              aria-label="Close"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+            <div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur sm:px-8">
+              <div />
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
+                aria-label="Close"
               >
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                >
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
 
-            <div className="max-h-[90vh] overflow-y-auto px-8 pb-10 pt-24 sm:px-10">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-5 sm:px-8 sm:pb-10 sm:pt-6">
               <h2 className="text-[28px] font-bold tracking-tight text-slate-950">
                 {title}
               </h2>
 
-              <div className="mt-10 space-y-10">
+              <div className="mt-8 space-y-10 sm:mt-10">
                 {groupedItems.map(([category, categoryItems]) => (
                   <div key={category}>
                     <h3 className="text-[20px] font-semibold text-slate-950">
                       {category}
                     </h3>
 
-                    <div className="mt-6 divide-y divide-slate-200">
+                    <div className="mt-5 divide-y divide-slate-200">
                       {categoryItems.map((item) => {
                         const label = getDisplayLabel(item, isArabic)
 
                         return (
-                          <div key={item.id} className="py-6">
+                          <div key={item.id} className="py-5">
                             <AmenityRow
                               label={label}
                               iconKey={item.icon_key}

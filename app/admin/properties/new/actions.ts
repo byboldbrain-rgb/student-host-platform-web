@@ -2,10 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/src/lib/supabase/admin'
-import {
-  requirePropertyCreatorAccess,
-  isSuperAdmin,
-} from '@/src/lib/admin-auth'
+import { requirePropertyCreatorAccess } from '@/src/lib/admin-auth'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 
@@ -86,9 +83,9 @@ export async function createPropertyAction(formData: FormData) {
 
   const property_id = String(formData.get('property_id') || '').trim()
   const title_en = String(formData.get('title_en') || '').trim()
-  const title_ar = String(formData.get('title_ar') || '').trim()
+  const rawTitleAr = String(formData.get('title_ar') || '').trim()
   const description_en = String(formData.get('description_en') || '').trim()
-  const description_ar = String(formData.get('description_ar') || '').trim()
+  const rawDescriptionAr = String(formData.get('description_ar') || '').trim()
   const city_id = String(formData.get('city_id') || '').trim()
   const university_id = String(formData.get('university_id') || '').trim()
   const submittedBrokerId = String(formData.get('broker_id') || '').trim()
@@ -99,6 +96,13 @@ export async function createPropertyAction(formData: FormData) {
   const gender = String(formData.get('gender') || '').trim() || null
   const smoking_policy =
     String(formData.get('smoking_policy') || '').trim() || null
+
+  // Fallbacks لو حقول العربي اتشالت من الواجهة
+  const title_ar = rawTitleAr || title_en
+  const description_ar = rawDescriptionAr || description_en
+  const address_en = String(formData.get('address_en') || '').trim() || null
+  const rawAddressAr = String(formData.get('address_ar') || '').trim()
+  const address_ar = rawAddressAr || address_en
 
   // لو الحساب مربوط بـ broker نستخدمه تلقائيًا
   // لو مش مربوط، نستخدم الـ broker المختار من الفورم
@@ -163,7 +167,7 @@ export async function createPropertyAction(formData: FormData) {
 
   const roomRows = roomNames
     .map((room_name, index) => {
-      const room_name_ar = roomNameArs[index] || ''
+      const room_name_ar_input = roomNameArs[index] || ''
       const room_type = roomTypes[index] || 'custom'
       const rawBedsCount = roomBedsCounts[index] || '1'
 
@@ -178,7 +182,7 @@ export async function createPropertyAction(formData: FormData) {
 
       const hasAnyValue =
         room_name ||
-        room_name_ar ||
+        room_name_ar_input ||
         rawBedsCount ||
         singleEnabled ||
         doubleEnabled ||
@@ -198,7 +202,11 @@ export async function createPropertyAction(formData: FormData) {
 
       const enabled_options: RoomSellableOptionInput[] = []
 
-      if (singleEnabled && !Number.isNaN(parsedSinglePrice) && parsedSinglePrice > 0) {
+      if (
+        singleEnabled &&
+        !Number.isNaN(parsedSinglePrice) &&
+        parsedSinglePrice > 0
+      ) {
         enabled_options.push({
           code: 'single_room',
           name_en: 'Single Room',
@@ -212,7 +220,11 @@ export async function createPropertyAction(formData: FormData) {
         })
       }
 
-      if (doubleEnabled && !Number.isNaN(parsedDoublePrice) && parsedDoublePrice > 0) {
+      if (
+        doubleEnabled &&
+        !Number.isNaN(parsedDoublePrice) &&
+        parsedDoublePrice > 0
+      ) {
         enabled_options.push({
           code: 'double_room',
           name_en: 'Double Room',
@@ -226,7 +238,11 @@ export async function createPropertyAction(formData: FormData) {
         })
       }
 
-      if (tripleEnabled && !Number.isNaN(parsedTriplePrice) && parsedTriplePrice > 0) {
+      if (
+        tripleEnabled &&
+        !Number.isNaN(parsedTriplePrice) &&
+        parsedTriplePrice > 0
+      ) {
         enabled_options.push({
           code: 'triple_room',
           name_en: 'Triple Room',
@@ -240,9 +256,12 @@ export async function createPropertyAction(formData: FormData) {
         })
       }
 
+      const normalizedRoomName = room_name || `Room ${index + 1}`
+      const normalizedRoomNameAr = room_name_ar_input || normalizedRoomName
+
       return {
-        room_name: room_name || `Room ${index + 1}`,
-        room_name_ar: room_name_ar || null,
+        room_name: normalizedRoomName,
+        room_name_ar: normalizedRoomNameAr,
         room_type: ['single', 'double', 'triple', 'quad', 'custom'].includes(
           room_type
         )
@@ -263,10 +282,6 @@ export async function createPropertyAction(formData: FormData) {
       throw new Error('Each room must have a room name in English')
     }
 
-    if (!(room.room_name_ar?.trim() || '')) {
-      throw new Error('Each room must have a room name in Arabic')
-    }
-
     if (room.enabled_options.length === 0) {
       throw new Error(
         `Room "${room.room_name}" must have at least one enabled booking option`
@@ -283,12 +298,16 @@ export async function createPropertyAction(formData: FormData) {
   }
 
   if (admin_status === 'pending_review') {
-    if (!title_en || !title_ar) {
-      throw new Error('Both Arabic and English titles are required')
+    if (!title_en) {
+      throw new Error('English title is required')
     }
 
-    if (!description_en || !description_ar) {
-      throw new Error('Both Arabic and English descriptions are required')
+    if (!description_en) {
+      throw new Error('English description is required')
+    }
+
+    if (!address_en) {
+      throw new Error('English address is required')
     }
 
     if (!city_id) throw new Error('City is required')
@@ -306,7 +325,6 @@ export async function createPropertyAction(formData: FormData) {
     const hasValidRoom = roomRows.some(
       (room) =>
         room.room_name.trim() !== '' &&
-        (room.room_name_ar?.trim() || '') !== '' &&
         room.beds_count > 0 &&
         room.enabled_options.length > 0
     )
@@ -330,8 +348,8 @@ export async function createPropertyAction(formData: FormData) {
     price_egp,
     rental_duration,
     availability_status: 'available',
-    address_en: String(formData.get('address_en') || '').trim() || null,
-    address_ar: String(formData.get('address_ar') || '').trim() || null,
+    address_en,
+    address_ar,
     bedrooms_count: toNumberOrDefault(formData.get('bedrooms_count'), 0),
     bathrooms_count: toNumberOrDefault(formData.get('bathrooms_count'), 0),
     beds_count: toNumberOrDefault(formData.get('beds_count'), 0),

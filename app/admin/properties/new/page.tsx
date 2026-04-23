@@ -16,7 +16,6 @@ export default async function NewPropertyPage() {
     brokersRes,
     brokerUniversitiesRes,
     amenitiesRes,
-    facilitiesRes,
     billTypesRes,
   ] = await Promise.all([
     supabase.from('cities').select('id, name_en, name_ar').order('name_en'),
@@ -33,26 +32,23 @@ export default async function NewPropertyPage() {
       .select('broker_id, university_id'),
     supabase
       .from('amenities')
-      .select('id, name_en, name_ar')
+      .select(
+        'id, name_en, name_ar, icon_key, icon_url, category_en, category_ar, sort_order, is_active'
+      )
       .eq('is_active', true)
-      .order('sort_order'),
-    supabase
-      .from('facilities')
-      .select('id, name_en, name_ar')
-      .eq('is_active', true)
-      .order('sort_order'),
+      .order('sort_order', { ascending: true })
+      .order('name_en', { ascending: true }),
     supabase
       .from('bill_types')
-      .select('id, name_en, name_ar')
+      .select('id, name_en, name_ar, icon_url, sort_order, is_active')
       .eq('is_active', true)
-      .order('sort_order'),
+      .order('sort_order', { ascending: true })
+      .order('name_en', { ascending: true }),
   ])
 
   let brokers = brokersRes.data ?? []
   let brokerUniversities = brokerUniversitiesRes.data ?? []
 
-  // لو الحساب مربوط بـ broker واحد فقط نقيّد الاختيارات عليه
-  // أما لو admin.broker_id = null فنعرض كل الـ brokers بشكل طبيعي
   if (!isSuperAdmin(admin) && admin.broker_id) {
     brokers = brokers.filter((b) => b.id === admin.broker_id)
 
@@ -70,7 +66,6 @@ export default async function NewPropertyPage() {
           brokers={brokers}
           brokerUniversities={brokerUniversities}
           amenities={amenitiesRes.data ?? []}
-          facilities={facilitiesRes.data ?? []}
           billTypes={billTypesRes.data ?? []}
         />
       </div>
