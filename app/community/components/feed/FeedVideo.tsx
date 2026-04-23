@@ -412,7 +412,7 @@ export default function FeedVideo({
       ref={rootRef}
       className={cx("relative h-full w-full overflow-hidden bg-black", className)}
       onClick={handleSurfaceTap}
-      aria-label={alt}
+      aria-label={alt ?? undefined}
     >
       {shouldLoadSource ? (
         <video
@@ -436,7 +436,7 @@ export default function FeedVideo({
       ) : poster ? (
         <img
           src={poster}
-          alt={alt}
+          alt={alt ?? "Video poster"}
           className="h-full w-full object-cover"
           loading="lazy"
         />
