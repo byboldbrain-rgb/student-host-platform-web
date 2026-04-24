@@ -46,14 +46,18 @@ type MenuFooterLink = {
 }
 
 function formatMoney(value?: number | null) {
-  return `${Number(value ?? 0).toFixed(2)} جنيه`
+  return `${Number(value ?? 0).toFixed(2)} EGP`
 }
 
 function formatDate(value?: string | null) {
   if (!value) return '-'
 
   try {
-    return new Date(value).toLocaleDateString('ar-EG')
+    return new Date(value).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
   } catch {
     return value
   }
@@ -67,6 +71,13 @@ export default function AccountReservationsPage() {
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isSignedIn, setIsSignedIn] = useState(false)
+
+  const defaultLanguage = 'en'
+  const defaultCurrency = 'EGP'
+  const propertiesHref = `/properties?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const communityHref = `/community?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const accountHref = `/account?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const loginHref = `/login?lang=${defaultLanguage}&currency=${defaultCurrency}`
 
   useEffect(() => {
     async function loadAuthAndReservations() {
@@ -115,9 +126,9 @@ export default function AccountReservationsPage() {
   const primaryMenuLinks = [
     {
       label: isSignedIn ? 'Account' : 'Log in or sign up',
-      href: isSignedIn ? '/account' : '/login',
+      href: isSignedIn ? accountHref : loginHref,
     },
-    { label: 'Community', href: '/community/join' },
+    { label: 'Community', href: communityHref },
   ]
 
   const menuFooterLinks: MenuFooterLink[] = [
@@ -564,10 +575,21 @@ export default function AccountReservationsPage() {
           color: #054aff;
         }
 
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
+        }
+
         .mobile-bottom-nav__icon {
           width: 22px;
           height: 22px;
           display: block;
+        }
+
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.55);
+          transition: filter 0.2s ease;
         }
 
         .mobile-bottom-nav__label {
@@ -770,7 +792,7 @@ export default function AccountReservationsPage() {
         <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <Link
-              href="/properties?lang=en&currency=EGP"
+              href={propertiesHref}
               className="navienty-logo mt-2"
               aria-label="Navienty home"
               onClick={() => setMenuOpen(false)}
@@ -824,7 +846,7 @@ export default function AccountReservationsPage() {
 
               <div className="mega-menu-logo">
                 <Link
-                  href="/properties?lang=en&currency=EGP"
+                  href={propertiesHref}
                   aria-label="Navienty home"
                   onClick={() => setMenuOpen(false)}
                 >
@@ -898,8 +920,8 @@ export default function AccountReservationsPage() {
         </div>
 
         <main
-          dir="rtl"
-          className="min-h-screen bg-[linear-gradient(180deg,#f5f7fb_0%,#f7f7f8_40%,#f3f6ff_100%)] px-4 py-6 text-[#20212a] sm:px-6 lg:px-8"
+          dir="ltr"
+          className="min-h-screen bg-[linear-gradient(180deg,#f5f7fb_0%,#f7f7f8_40%,#f3f6ff_100%)] px-4 py-6 text-left text-[#20212a] sm:px-6 lg:px-8"
         >
           <div className="mx-auto max-w-6xl">
             <section className="relative overflow-hidden rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_10px_35px_rgba(0,0,0,0.05)] sm:p-6 lg:p-8">
@@ -909,7 +931,7 @@ export default function AccountReservationsPage() {
               </div>
 
               <div className="relative z-10">
-                <section className="relative overflow-hidden rounded-[30px] border border-[#dbe5ff] bg-gradient-to-l from-[#08152f] via-[#0b1f46] to-[#123a8f] p-5 text-white shadow-[0_16px_40px_rgba(8,21,47,0.18)] sm:p-6 lg:p-7">
+                <section className="relative overflow-hidden rounded-[30px] border border-[#dbe5ff] bg-gradient-to-r from-[#08152f] via-[#0b1f46] to-[#123a8f] p-5 text-white shadow-[0_16px_40px_rgba(8,21,47,0.18)] sm:p-6 lg:p-7">
                   <div className="pointer-events-none absolute inset-0">
                     <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
                     <div className="absolute bottom-0 right-0 h-32 w-32 rounded-full bg-[#6ea8ff]/20 blur-2xl" />
@@ -918,7 +940,7 @@ export default function AccountReservationsPage() {
 
                   <div className="max-w-2xl">
                     <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-white sm:text-3xl lg:text-[2.2rem]">
-                      حجوزاتي
+                      My Reservations
                     </h1>
                   </div>
                 </section>
@@ -969,18 +991,19 @@ export default function AccountReservationsPage() {
                       </div>
 
                       <h2 className="mt-5 text-xl font-extrabold text-gray-900">
-                        لا توجد حجوزات حتى الآن
+                        No reservations yet
                       </h2>
                       <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-gray-500">
-                        بمجرد إنشاء أول حجز، ستظهر هنا تفاصيل العقار وتاريخ الإنشاء وإجمالي الحجز.
+                        Once you create your first reservation, the property details, creation
+                        date, and total reservation amount will appear here.
                       </p>
 
                       <div className="mt-6">
                         <Link
-                          href="/account"
+                          href={accountHref}
                           className="inline-flex items-center justify-center rounded-full bg-[#054aff] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#003fd9]"
                         >
-                          العودة إلى لوحة الحساب
+                          Back to Account Dashboard
                         </Link>
                       </div>
                     </div>
@@ -1003,11 +1026,11 @@ export default function AccountReservationsPage() {
                             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                               <div className="min-w-0">
                                 <h2 className="text-xl font-extrabold tracking-tight text-gray-900 sm:text-2xl">
-                                  {property?.title_ar || property?.title_en || 'عقار'}
+                                  {property?.title_en || property?.title_ar || 'Property'}
                                 </h2>
 
                                 <p className="mt-2 text-sm text-gray-500">
-                                  تاريخ الإنشاء:{' '}
+                                  Created on:{' '}
                                   <span className="font-semibold text-gray-700">
                                     {formatDate(reservation.created_at)}
                                   </span>
@@ -1016,7 +1039,9 @@ export default function AccountReservationsPage() {
 
                               <div className="xl:min-w-[180px] xl:max-w-[220px]">
                                 <div className="rounded-[22px] border border-[#dbe5ff] bg-[#f3f6ff] p-4">
-                                  <p className="text-xs font-medium text-[#4d5b7c]">إجمالي الحجز</p>
+                                  <p className="text-xs font-medium text-[#4d5b7c]">
+                                    Total Reservation
+                                  </p>
                                   <p className="mt-2 text-sm font-extrabold text-[#0b1f46] sm:text-[15px]">
                                     {formatMoney(totalPrice)}
                                   </p>
@@ -1072,7 +1097,7 @@ export default function AccountReservationsPage() {
 
         <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
           <div className="mobile-bottom-nav__inner">
-            <Link href="/properties" className="mobile-bottom-nav__item">
+            <Link href={propertiesHref} className="mobile-bottom-nav__item">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -1084,29 +1109,20 @@ export default function AccountReservationsPage() {
                 <circle cx="11" cy="11" r="6.5" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 16l4 4" />
               </svg>
-              <span className="mobile-bottom-nav__label">Explore</span>
+              <span className="mobile-bottom-nav__label">Search</span>
             </Link>
 
-            <Link href="/community" className="mobile-bottom-nav__item">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.9}
-                stroke="currentColor"
-                className="mobile-bottom-nav__icon"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 20.25s-6.75-4.35-9-8.25C1.2 8.7 3.3 4.5 7.5 4.5c2.1 0 3.45 1.2 4.5 2.55 1.05-1.35 2.4-2.55 4.5-2.55 4.2 0 6.3 4.2 4.5 7.5-2.25 3.9-9 8.25-9 8.25Z"
-                />
-              </svg>
+            <Link href={communityHref} className="mobile-bottom-nav__item">
+              <img
+                src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
+                alt="Community"
+                className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+              />
               <span className="mobile-bottom-nav__label">Community</span>
             </Link>
 
             <Link
-              href="/account"
+              href={accountHref}
               className="mobile-bottom-nav__item mobile-bottom-nav__item--active"
             >
               <svg

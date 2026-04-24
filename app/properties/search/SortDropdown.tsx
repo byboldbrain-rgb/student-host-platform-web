@@ -252,17 +252,22 @@ export default function SortDropdown({
       : null
   }, [groupedOptions.sortBy, searchParams, selectedSort])
 
-  const [tempSelectedGender, setTempSelectedGender] = useState<GenderValue | null>(
-    (currentGenderOption?.value as GenderValue | null) ?? null
-  )
-  const [tempSelectedSortOption, setTempSelectedSortOption] = useState<SortValue | null>(
-    (currentSortOption?.value as SortValue | null) ?? null
-  )
+  const [tempSelectedGender, setTempSelectedGender] =
+    useState<GenderValue | null>(
+      (currentGenderOption?.value as GenderValue | null) ?? null
+    )
+
+  const [tempSelectedSortOption, setTempSelectedSortOption] =
+    useState<SortValue | null>(
+      (currentSortOption?.value as SortValue | null) ?? null
+    )
 
   useEffect(() => {
     if (!isOpen) return
 
-    setTempSelectedGender((currentGenderOption?.value as GenderValue | null) ?? null)
+    setTempSelectedGender(
+      (currentGenderOption?.value as GenderValue | null) ?? null
+    )
     setTempSelectedSortOption(
       (currentSortOption?.value as SortValue | null) ?? null
     )
@@ -292,8 +297,9 @@ export default function SortDropdown({
     null
 
   const selectedSortOption =
-    groupedOptions.sortBy.find((option) => option.value === tempSelectedSortOption) ??
-    null
+    groupedOptions.sortBy.find(
+      (option) => option.value === tempSelectedSortOption
+    ) ?? null
 
   const handleClearAll = () => {
     setTempSelectedGender(null)
@@ -337,9 +343,9 @@ export default function SortDropdown({
             dir={isArabic ? 'rtl' : 'ltr'}
             onClick={(e) => e.stopPropagation()}
             className="
-              absolute left-0 right-0 bottom-0 top-[38%] flex flex-col
-              rounded-t-[28px] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]
-              sm:left-1/2 sm:right-auto sm:top-8 sm:bottom-auto sm:h-[min(760px,calc(100vh-64px))] sm:w-[min(92vw,620px)] sm:-translate-x-1/2 sm:overflow-hidden sm:rounded-[28px]
+              absolute left-0 right-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] top-auto flex max-h-[calc(100dvh-96px)] flex-col overflow-hidden
+              rounded-t-[28px] bg-white shadow-[0_-12px_50px_rgba(0,0,0,0.20)]
+              sm:left-1/2 sm:right-auto sm:top-8 sm:bottom-auto sm:h-[min(760px,calc(100vh-64px))] sm:max-h-none sm:w-[min(92vw,620px)] sm:-translate-x-1/2 sm:rounded-[28px]
             "
           >
             <div className="relative flex h-[72px] shrink-0 items-center justify-center border-b border-[#ebebeb] px-5 sm:h-[76px] sm:px-6">
@@ -359,7 +365,7 @@ export default function SortDropdown({
               </button>
             </div>
 
-            <div className="px-5 py-6 sm:flex-1 sm:overflow-y-auto sm:px-7 sm:py-7">
+            <div className="overflow-y-auto px-5 py-6 sm:flex-1 sm:px-7 sm:py-7">
               <section className="border-b border-[#ebebeb] pb-7">
                 <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
                   {genderTitle}
@@ -411,7 +417,7 @@ export default function SortDropdown({
               </section>
             </div>
 
-            <div className="mt-auto shrink-0 border-t border-[#ececec] bg-[#fbfbfb] px-5 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] sm:px-7 sm:py-5">
+            <div className="shrink-0 border-t border-[#ececec] bg-[#fbfbfb] px-5 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] sm:mt-auto sm:px-7 sm:py-5">
               <div className="flex items-center justify-between gap-3 sm:gap-4">
                 <button
                   type="button"

@@ -61,12 +61,19 @@ export default async function AccountWalletPage() {
 
   const currentYear = new Date().getFullYear()
 
+  const defaultLanguage = 'en'
+  const defaultCurrency = 'EGP'
+  const propertiesHref = `/properties?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const communityHref = `/community?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const accountHref = `/account?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const loginHref = `/login?lang=${defaultLanguage}&currency=${defaultCurrency}`
+
   const primaryMenuLinks = [
     {
       label: isSignedIn ? 'Account' : 'Log in or sign up',
-      href: isSignedIn ? '/account' : '/login',
+      href: isSignedIn ? accountHref : loginHref,
     },
-    { label: 'Community', href: '/community/join' },
+    { label: 'Community', href: communityHref },
   ]
 
   const menuFooterLinks: MenuFooterLink[] = [
@@ -508,10 +515,21 @@ export default async function AccountWalletPage() {
           color: #054aff;
         }
 
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
+        }
+
         .mobile-bottom-nav__icon {
           width: 22px;
           height: 22px;
           display: block;
+        }
+
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.55);
+          transition: filter 0.2s ease;
         }
 
         .mobile-bottom-nav__label {
@@ -716,7 +734,7 @@ export default async function AccountWalletPage() {
         <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <Link
-              href="/properties?lang=en&currency=EGP"
+              href={propertiesHref}
               className="navienty-logo mt-2"
               aria-label="Navienty home"
             >
@@ -752,7 +770,7 @@ export default async function AccountWalletPage() {
               </label>
 
               <div className="mega-menu-logo">
-                <Link href="/properties?lang=en&currency=EGP" aria-label="Navienty home">
+                <Link href={propertiesHref} aria-label="Navienty home">
                   <img
                     src="https://i.ibb.co/5gYVYQSR/Navienty-1.jpg"
                     alt="Navienty"
@@ -828,10 +846,7 @@ export default async function AccountWalletPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h2 className="text-xl font-extrabold text-gray-900">New Deposit Request</h2>
-                      <p className="mt-2 text-sm leading-7 text-gray-600">
-                        Choose the appropriate payment method, then upload the receipt to submit
-                        your deposit request for admin review.
-                      </p>
+                      
                     </div>
                   </div>
 
@@ -955,7 +970,7 @@ export default async function AccountWalletPage() {
 
         <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
           <div className="mobile-bottom-nav__inner">
-            <Link href="/properties" className="mobile-bottom-nav__item">
+            <Link href={propertiesHref} className="mobile-bottom-nav__item">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -967,29 +982,20 @@ export default async function AccountWalletPage() {
                 <circle cx="11" cy="11" r="6.5" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 16l4 4" />
               </svg>
-              <span className="mobile-bottom-nav__label">Explore</span>
+              <span className="mobile-bottom-nav__label">Search</span>
             </Link>
 
-            <Link href="/community" className="mobile-bottom-nav__item">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.9}
-                stroke="currentColor"
-                className="mobile-bottom-nav__icon"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 20.25s-6.75-4.35-9-8.25C1.2 8.7 3.3 4.5 7.5 4.5c2.1 0 3.45 1.2 4.5 2.55 1.05-1.35 2.4-2.55 4.5-2.55 4.2 0 6.3 4.2 4.5 7.5-2.25 3.9-9 8.25-9 8.25Z"
-                />
-              </svg>
+            <Link href={communityHref} className="mobile-bottom-nav__item">
+              <img
+                src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
+                alt="Community"
+                className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+              />
               <span className="mobile-bottom-nav__label">Community</span>
             </Link>
 
             <Link
-              href="/account"
+              href={accountHref}
               className="mobile-bottom-nav__item mobile-bottom-nav__item--active"
             >
               <svg

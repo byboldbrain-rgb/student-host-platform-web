@@ -35,6 +35,25 @@ type PropertyImage = {
   image_url?: string | null
 }
 
+type PropertySellableOption = {
+  code?: string | null
+  option_code?: string | null
+  price_egp?: number | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+}
+
+type PropertyRoomSellableOption = {
+  code?: string | null
+  price_egp?: number | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+}
+
+type PropertyRoom = {
+  property_room_sellable_options?: PropertyRoomSellableOption[] | null
+}
+
 type Property = {
   id: string | number
   property_id: string
@@ -46,6 +65,8 @@ type Property = {
   city_id?: string | number | null
   university_id?: string | number | null
   property_images?: PropertyImage[] | null
+  property_sellable_options?: PropertySellableOption[] | null
+  property_rooms?: PropertyRoom[] | null
 }
 
 const SUPPORTED_CURRENCIES = [
@@ -79,6 +100,15 @@ type MenuFooterLink = {
   href: string
   isEmail?: boolean
 }
+
+const PRICE_PRIORITY = [
+  'triple_room',
+  'double_room',
+  'single_room',
+  'full_apartment',
+] as const
+
+type PricePriorityCode = (typeof PRICE_PRIORITY)[number]
 
 const TRANSLATIONS = {
   en: {
@@ -265,6 +295,73 @@ function getAvailabilityRank(status?: string) {
   return 3
 }
 
+function normalizeOptionCode(value?: string | null) {
+  return value
+    ?.toLowerCase()
+    .trim()
+    .replace(/[-\s]+/g, '_')
+}
+
+function getOptionPriority(code?: string | null) {
+  const normalizedCode = normalizeOptionCode(code)
+
+  const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode)
+
+  return index === -1 ? Number.POSITIVE_INFINITY : index
+}
+
+function isUsablePriceOption(option: {
+  code?: string | null
+  option_code?: string | null
+  price_egp?: number | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+}) {
+  const code = normalizeOptionCode(option.option_code || option.code)
+  const price = Number(option.price_egp)
+
+  return (
+    !!code &&
+    PRICE_PRIORITY.includes(code as PricePriorityCode) &&
+    option.is_active !== false &&
+    !option.deleted_at &&
+    Number.isFinite(price) &&
+    price >= 0
+  )
+}
+
+function getDisplayPriceEgp(property: Property) {
+  const propertyOptions =
+    property.property_sellable_options?.map((option) => ({
+      code: option.option_code || option.code,
+      price_egp: option.price_egp,
+      is_active: option.is_active,
+      deleted_at: option.deleted_at,
+    })) ?? []
+
+  const roomOptions =
+    property.property_rooms?.flatMap((room) =>
+      (room.property_room_sellable_options ?? []).map((option) => ({
+        code: option.code,
+        price_egp: option.price_egp,
+        is_active: option.is_active,
+        deleted_at: option.deleted_at,
+      }))
+    ) ?? []
+
+  const matchedOption = [...propertyOptions, ...roomOptions]
+    .filter(isUsablePriceOption)
+    .sort((a, b) => {
+      const priorityDiff = getOptionPriority(a.code) - getOptionPriority(b.code)
+
+      if (priorityDiff !== 0) return priorityDiff
+
+      return Number(a.price_egp) - Number(b.price_egp)
+    })[0]
+
+  return matchedOption?.price_egp ?? property.price_egp
+}
+
 async function getCurrencyRate(currency: SupportedCurrency) {
   if (currency === 'EGP') return 1
 
@@ -378,7 +475,22 @@ export default async function PropertiesPage({
       availability_status,
       city_id,
       university_id,
-      property_images(image_url)
+      property_images(image_url),
+      property_sellable_options(
+        code,
+        option_code,
+        price_egp,
+        is_active,
+        deleted_at
+      ),
+      property_rooms(
+        property_room_sellable_options(
+          code,
+          price_egp,
+          is_active,
+          deleted_at
+        )
+      )
     `)
     .eq('admin_status', 'published')
     .eq('is_active', true)
@@ -620,48 +732,52 @@ export default async function PropertiesPage({
     )
   }
 
-  const renderPropertyCard = (property: Property) => (
-    <Link
-      key={property.id}
-      href={buildPropertyHref(property.property_id)}
-      className="group block min-w-[220px] max-w-[220px] shrink-0 snap-start md:min-w-[200px] md:max-w-[200px]"
-    >
-      {renderPropertyImage(
-        property,
-        translateAvailabilityStatus(
-          property.availability_status,
-          selectedLanguage
-        )
-      )}
+  const renderPropertyCard = (property: Property) => {
+    const displayPriceEgp = getDisplayPriceEgp(property)
 
-      <div className="mt-3 space-y-1.5 md:mt-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
-            {isArabic ? property.title_ar : property.title_en}
-          </h3>
+    return (
+      <Link
+        key={property.id}
+        href={buildPropertyHref(property.property_id)}
+        className="group block min-w-[220px] max-w-[220px] shrink-0 snap-start md:min-w-[200px] md:max-w-[200px]"
+      >
+        {renderPropertyImage(
+          property,
+          translateAvailabilityStatus(
+            property.availability_status,
+            selectedLanguage
+          )
+        )}
+
+        <div className="mt-3 space-y-1.5 md:mt-4">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
+              {isArabic ? property.title_ar : property.title_en}
+            </h3>
+          </div>
+
+          <p className="truncate text-[13px] capitalize text-slate-500 md:text-[13px]">
+            {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
+            {t.stay}
+          </p>
+
+          <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
+            <span className="font-semibold text-slate-950">
+              {formatPrice(
+                displayPriceEgp,
+                selectedCurrency,
+                selectedLanguage,
+                currencyRate
+              )}
+            </span>{' '}
+            <span className="text-[12px] text-slate-500 md:text-[12px]">
+              / {property.rental_duration === 'daily' ? t.night : t.month}
+            </span>
+          </p>
         </div>
-
-        <p className="truncate text-[13px] capitalize text-slate-500 md:text-[13px]">
-          {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
-          {t.stay}
-        </p>
-
-        <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
-          <span className="font-semibold text-slate-950">
-            {formatPrice(
-              property.price_egp,
-              selectedCurrency,
-              selectedLanguage,
-              currencyRate
-            )}
-          </span>{' '}
-          <span className="text-[12px] text-slate-500 md:text-[12px]">
-            / {property.rental_duration === 'daily' ? t.night : t.month}
-          </span>
-        </p>
-      </div>
-    </Link>
-  )
+      </Link>
+    )
+  }
 
   const primaryMenuLinks = [
     {

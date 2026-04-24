@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '../../../src/lib/supabase/server'
 import PropertiesHeader from '../PropertiesHeader'
 import SortDropdown from './SortDropdown'
+import PropertyImageSlider from './PropertyImageSlider'
 import { Squada_One } from 'next/font/google'
 
 const squadaOne = Squada_One({
@@ -37,6 +38,27 @@ type PropertyImage = {
   image_url?: string | null
 }
 
+type PropertySellableOption = {
+  code?: string | null
+  option_code?: string | null
+  price_egp?: number | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+}
+
+type PropertyRoomSellableOption = {
+  code?: string | null
+  price_egp?: number | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+}
+
+type PropertyRoom = {
+  is_active?: boolean | null
+  deleted_at?: string | null
+  property_room_sellable_options?: PropertyRoomSellableOption[] | null
+}
+
 type Property = {
   id: string | number
   property_id: string
@@ -48,6 +70,8 @@ type Property = {
   city_id?: string | number | null
   university_id?: string | number | null
   property_images?: PropertyImage[] | null
+  property_sellable_options?: PropertySellableOption[] | null
+  property_rooms?: PropertyRoom[] | null
 }
 
 const SUPPORTED_CURRENCIES = [
@@ -88,6 +112,15 @@ type MenuFooterLink = {
   href: string
   isEmail?: boolean
 }
+
+const PRICE_PRIORITY = [
+  'triple_room',
+  'double_room',
+  'single_room',
+  'full_apartment',
+] as const
+
+type PricePriorityCode = (typeof PRICE_PRIORITY)[number]
 
 const TRANSLATIONS = {
   en: {
@@ -275,6 +308,74 @@ function getAvailabilityRank(status?: string) {
   return 3
 }
 
+function normalizeOptionCode(value?: string | null) {
+  return value
+    ?.toLowerCase()
+    .trim()
+    .replace(/[-\s]+/g, '_')
+}
+
+function getOptionPriority(code?: string | null) {
+  const normalizedCode = normalizeOptionCode(code)
+  const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode)
+
+  return index === -1 ? Number.POSITIVE_INFINITY : index
+}
+
+function isUsablePriceOption(option: {
+  code?: string | null
+  option_code?: string | null
+  price_egp?: number | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+}) {
+  const code = normalizeOptionCode(option.option_code || option.code)
+  const price = Number(option.price_egp)
+
+  return (
+    !!code &&
+    PRICE_PRIORITY.includes(code as PricePriorityCode) &&
+    option.is_active !== false &&
+    !option.deleted_at &&
+    Number.isFinite(price) &&
+    price >= 0
+  )
+}
+
+function getDisplayPriceEgp(property: Property) {
+  const propertyOptions =
+    property.property_sellable_options?.map((option) => ({
+      code: option.option_code || option.code,
+      price_egp: option.price_egp,
+      is_active: option.is_active,
+      deleted_at: option.deleted_at,
+    })) ?? []
+
+  const roomOptions =
+    property.property_rooms
+      ?.filter((room) => room.is_active !== false && !room.deleted_at)
+      .flatMap((room) =>
+        (room.property_room_sellable_options ?? []).map((option) => ({
+          code: option.code,
+          price_egp: option.price_egp,
+          is_active: option.is_active,
+          deleted_at: option.deleted_at,
+        }))
+      ) ?? []
+
+  const matchedOption = [...propertyOptions, ...roomOptions]
+    .filter(isUsablePriceOption)
+    .sort((a, b) => {
+      const priorityDiff = getOptionPriority(a.code) - getOptionPriority(b.code)
+
+      if (priorityDiff !== 0) return priorityDiff
+
+      return Number(a.price_egp) - Number(b.price_egp)
+    })[0]
+
+  return matchedOption?.price_egp ?? property.price_egp
+}
+
 async function getCurrencyRate(currency: SupportedCurrency) {
   if (currency === 'EGP') return 1
 
@@ -379,7 +480,7 @@ export default async function SearchResultsPage({
   const PAGE_SIZE = 12
   const currentPage = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
   const from = (currentPage - 1) * PAGE_SIZE
-  const to = from + PAGE_SIZE - 1
+  const to = from + PAGE_SIZE
 
   const supabase = await createClient()
   const {
@@ -400,10 +501,35 @@ export default async function SearchResultsPage({
 
   let query = supabase
     .from('properties')
-    .select(
-      'id, property_id, title_en, title_ar, price_egp, rental_duration, availability_status, city_id, university_id, property_images(image_url)',
-      { count: 'exact' }
-    )
+    .select(`
+      id,
+      property_id,
+      title_en,
+      title_ar,
+      price_egp,
+      rental_duration,
+      availability_status,
+      city_id,
+      university_id,
+      property_images(image_url),
+      property_sellable_options(
+        code,
+        option_code,
+        price_egp,
+        is_active,
+        deleted_at
+      ),
+      property_rooms(
+        is_active,
+        deleted_at,
+        property_room_sellable_options(
+          code,
+          price_egp,
+          is_active,
+          deleted_at
+        )
+      )
+    `)
     .eq('admin_status', 'published')
     .eq('is_active', true)
     .neq('availability_status', 'unavailable')
@@ -418,33 +544,35 @@ export default async function SearchResultsPage({
     query = query.eq('gender', selectedSort)
   }
 
-  if (selectedSort === 'lowest_price') {
-    query = query.order('price_egp', { ascending: true }).order('created_at', {
-      ascending: false,
-    })
-  } else if (selectedSort === 'highest_price') {
-    query = query.order('price_egp', { ascending: false }).order('created_at', {
-      ascending: false,
-    })
-  } else {
-    query = query.order('created_at', { ascending: false })
-  }
+  query = query.order('created_at', { ascending: false })
 
-  const { data: properties, count } = await query.range(from, to)
+  const { data: properties } = await query
 
-  const sortedProperties = (((properties as Property[]) ?? []).sort((a, b) => {
-    const availabilityDiff =
-      getAvailabilityRank(a.availability_status) -
-      getAvailabilityRank(b.availability_status)
+  const allSortedProperties = (((properties as Property[]) ?? []).sort(
+    (a, b) => {
+      const availabilityDiff =
+        getAvailabilityRank(a.availability_status) -
+        getAvailabilityRank(b.availability_status)
 
-    if (availabilityDiff !== 0) return availabilityDiff
+      if (availabilityDiff !== 0) return availabilityDiff
 
-    if (selectedSort === 'lowest_price') return a.price_egp - b.price_egp
-    if (selectedSort === 'highest_price') return b.price_egp - a.price_egp
+      const aDisplayPrice = getDisplayPriceEgp(a)
+      const bDisplayPrice = getDisplayPriceEgp(b)
 
-    return 0
-  }))
+      if (selectedSort === 'lowest_price') {
+        return aDisplayPrice - bDisplayPrice
+      }
 
+      if (selectedSort === 'highest_price') {
+        return bDisplayPrice - aDisplayPrice
+      }
+
+      return 0
+    }
+  ))
+
+  const sortedProperties = allSortedProperties.slice(from, to)
+  const count = allSortedProperties.length
   const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 0
   const visiblePages = buildVisiblePages(currentPage, totalPages)
 
@@ -645,38 +773,11 @@ export default async function SearchResultsPage({
 
     return (
       <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_10px_30px_rgba(15,23,42,0.10)] md:rounded-[28px]">
-        {images.length > 0 ? (
-          <div className="property-media-slider">
-            <div className="property-media-slider__track">
-              {images.map((imageUrl, index) => (
-                <div
-                  key={`${property.id}-${index}`}
-                  className="property-media-slider__slide"
-                >
-                  <img
-                    src={imageUrl}
-                    alt={`${propertyTitle} ${index + 1}`}
-                    draggable={false}
-                    className="h-full w-full object-cover transition duration-700 group-hover/image:scale-[1.04]"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {images.length > 1 && (
-              <div className="property-media-slider__dots">
-                {images.map((_, index) => (
-                  <span
-                    key={`${property.id}-dot-${index}`}
-                    className="property-media-slider__dot"
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 transition duration-700 group-hover/image:scale-[1.03]" />
-        )}
+        <PropertyImageSlider
+          images={images}
+          title={propertyTitle}
+          propertyId={property.id}
+        />
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/20 via-black/5 to-transparent" />
 
@@ -693,48 +794,52 @@ export default async function SearchResultsPage({
     )
   }
 
-  const renderPropertyCard = (property: Property) => (
-    <Link
-      key={property.id}
-      href={buildPropertyHref(property.property_id)}
-      className="group block"
-    >
-      {renderPropertyImage(
-        property,
-        translateAvailabilityStatus(
-          property.availability_status,
-          selectedLanguage
-        )
-      )}
+  const renderPropertyCard = (property: Property) => {
+    const displayPriceEgp = getDisplayPriceEgp(property)
 
-      <div className="mt-3 space-y-1 md:mt-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
-            {isArabic ? property.title_ar : property.title_en}
-          </h3>
+    return (
+      <Link
+        key={property.id}
+        href={buildPropertyHref(property.property_id)}
+        className="group block"
+      >
+        {renderPropertyImage(
+          property,
+          translateAvailabilityStatus(
+            property.availability_status,
+            selectedLanguage
+          )
+        )}
+
+        <div className="mt-3 space-y-1 md:mt-4">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
+              {isArabic ? property.title_ar : property.title_en}
+            </h3>
+          </div>
+
+          <p className="truncate text-[12px] capitalize text-slate-500 md:text-[13px]">
+            {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
+            {t.stay}
+          </p>
+
+          <p className="truncate pt-0.5 text-[13px] md:pt-1 md:text-[14px]">
+            <span className="font-semibold text-slate-950">
+              {formatPrice(
+                displayPriceEgp,
+                selectedCurrency,
+                selectedLanguage,
+                currencyRate
+              )}
+            </span>{' '}
+            <span className="text-[11px] text-slate-500 md:text-[12px]">
+              / {property.rental_duration === 'daily' ? t.night : t.month}
+            </span>
+          </p>
         </div>
-
-        <p className="truncate text-[12px] capitalize text-slate-500 md:text-[13px]">
-          {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
-          {t.stay}
-        </p>
-
-        <p className="truncate pt-0.5 text-[13px] md:pt-1 md:text-[14px]">
-          <span className="font-semibold text-slate-950">
-            {formatPrice(
-              property.price_egp,
-              selectedCurrency,
-              selectedLanguage,
-              currencyRate
-            )}
-          </span>{' '}
-          <span className="text-[11px] text-slate-500 md:text-[12px]">
-            / {property.rental_duration === 'daily' ? t.night : t.month}
-          </span>
-        </p>
-      </div>
-    </Link>
-  )
+      </Link>
+    )
+  }
 
   return (
     <main
@@ -1104,12 +1209,12 @@ export default async function SearchResultsPage({
         }
 
         .property-media-slider__dots {
-          pointer-events: none;
+          pointer-events: auto;
           position: absolute;
           left: 50%;
           bottom: 12px;
-          z-index: 6;
-          display: flex;
+          z-index: 40;
+          display: none;
           align-items: center;
           gap: 6px;
           transform: translateX(-50%);
@@ -1123,18 +1228,34 @@ export default async function SearchResultsPage({
         .property-media-slider__dot {
           width: 6px;
           height: 6px;
+          border: 0;
+          padding: 0;
           border-radius: 999px;
-          background: rgba(255, 255, 255, 0.88);
+          background: rgba(255, 255, 255, 0.65);
           box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
           flex-shrink: 0;
+          cursor: pointer;
+          transition:
+            width 0.2s ease,
+            background 0.2s ease,
+            transform 0.2s ease;
+        }
+
+        .property-media-slider__dot--active {
+          width: 14px;
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .property-media-slider__dot:hover {
+          transform: scale(1.12);
         }
 
         .status-ribbon {
           position: absolute;
-          top: -10px;
-          left: -10px;
-          width: 150px;
-          height: 150px;
+          top: -4px;
+          left: -4px;
+          width: 96px;
+          height: 96px;
           overflow: hidden;
           z-index: 30;
           pointer-events: none;
@@ -1142,21 +1263,21 @@ export default async function SearchResultsPage({
 
         .status-ribbon__inner {
           position: absolute;
-          top: 34px;
-          left: -42px;
-          width: 210px;
-          height: 42px;
+          top: 20px;
+          left: -34px;
+          width: 140px;
+          height: 24px;
           display: flex;
           align-items: center;
           justify-content: center;
           transform: rotate(-45deg);
           color: #ffffff;
-          font-size: 11px;
+          font-size: 8px;
           font-weight: 800;
-          letter-spacing: 0.18em;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
           box-shadow:
-            0 10px 22px rgba(0, 0, 0, 0.28),
+            0 8px 18px rgba(0, 0, 0, 0.24),
             inset 0 1px 0 rgba(255, 255, 255, 0.22);
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
           transition:
@@ -1168,8 +1289,8 @@ export default async function SearchResultsPage({
         .status-ribbon::after {
           content: '';
           position: absolute;
-          width: 12px;
-          height: 12px;
+          width: 10px;
+          height: 10px;
           left: 0;
           bottom: 0;
           z-index: -1;
@@ -1185,7 +1306,7 @@ export default async function SearchResultsPage({
         }
 
         .status-ribbon--available::after {
-          box-shadow: 138px -138px #06664a;
+          box-shadow: 88px -88px #06664a;
           background: linear-gradient(135deg, #0a7a56 0%, #0f5e45 100%);
         }
 
@@ -1199,7 +1320,7 @@ export default async function SearchResultsPage({
         }
 
         .status-ribbon--reserved::after {
-          box-shadow: 138px -138px #8f1239;
+          box-shadow: 88px -88px #8f1239;
           background: linear-gradient(135deg, #9f1239 0%, #7f1d1d 100%);
         }
 
@@ -1478,32 +1599,28 @@ export default async function SearchResultsPage({
           }
 
           .status-ribbon {
-            width: 132px;
-            height: 132px;
-            top: -8px;
-            left: -8px;
+            width: 108px;
+            height: 108px;
+            top: -5px;
+            left: -5px;
           }
 
           .status-ribbon__inner {
-            top: 31px;
-            left: -40px;
-            width: 190px;
-            height: 38px;
-            font-size: 10px;
-            letter-spacing: 0.16em;
-          }
-
-          .status-ribbon--available::after,
-          .status-ribbon--reserved::after {
-            box-shadow: 120px -120px currentColor;
+            top: 24px;
+            left: -35px;
+            width: 155px;
+            height: 30px;
+            font-size: 8px;
+            letter-spacing: 0.14em;
+            border-radius: 2px;
           }
 
           .status-ribbon--available::after {
-            color: #06664a;
+            box-shadow: 100px -100px #06664a;
           }
 
           .status-ribbon--reserved::after {
-            color: #8f1239;
+            box-shadow: 100px -100px #8f1239;
           }
         }
 
@@ -1550,6 +1667,7 @@ export default async function SearchResultsPage({
           }
 
           .property-media-slider__dots {
+            display: flex;
             bottom: 10px;
             gap: 5px;
             padding: 5px 8px;
@@ -1558,6 +1676,35 @@ export default async function SearchResultsPage({
           .property-media-slider__dot {
             width: 5px;
             height: 5px;
+          }
+
+          .property-media-slider__dot--active {
+            width: 13px;
+          }
+
+          .status-ribbon {
+            width: 112px;
+            height: 112px;
+            top: -5px;
+            left: -5px;
+          }
+
+          .status-ribbon__inner {
+            top: 25px;
+            left: -37px;
+            width: 160px;
+            height: 31px;
+            font-size: 8px;
+            letter-spacing: 0.14em;
+            border-radius: 2px;
+          }
+
+          .status-ribbon--available::after {
+            box-shadow: 104px -104px #06664a;
+          }
+
+          .status-ribbon--reserved::after {
+            box-shadow: 104px -104px #8f1239;
           }
         }
       `}</style>

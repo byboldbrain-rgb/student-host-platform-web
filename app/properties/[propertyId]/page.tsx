@@ -693,6 +693,32 @@ function LocationIcon({ className = '' }: { className?: string }) {
   )
 }
 
+function PropertyAddress({
+  address,
+  isArabic,
+  variant = 'default',
+}: {
+  address: string
+  isArabic: boolean
+  variant?: 'default' | 'compact' | 'mobile'
+}) {
+  if (!address) return null
+
+  return (
+    <div
+      className={`property-address property-address--${variant} ${
+        isArabic ? 'property-address--rtl' : ''
+      }`}
+    >
+      <span className="property-address__icon-wrap">
+        <LocationIcon className="property-address__icon" />
+      </span>
+
+      <span className="property-address__text">{address}</span>
+    </div>
+  )
+}
+
 function FullyReservedBadge({
   label = 'Reserved',
   className = '',
@@ -787,7 +813,7 @@ function BrokerContactCard({
     .toLowerCase()}`
 
   return (
-    <div className="broker-card-scene" tabIndex={0}>
+    <div className="broker-card-scene">
       <input
         id={flipId}
         type="checkbox"
@@ -795,85 +821,87 @@ function BrokerContactCard({
         aria-label={t.brokerCardTitle}
       />
 
-      <div className="broker-card-inner">
-        <div
-          className="broker-card-face broker-card-front"
-          style={{
-            backgroundImage: `url(${BROKER_CARD_FRONT_IMAGE})`,
-          }}
-        >
-          <div className="broker-card-front-overlay">
-            <div
-              className={`broker-card-top-info absolute top-3 ${
-                isArabic ? 'right-4 broker-card-top-info--rtl' : 'left-4'
-              }`}
-            >
-              <div className="broker-card-avatar broker-card-avatar--large">
-                <img
-                  src={brokerImage}
-                  alt={brokerName}
-                  className="h-full w-full object-cover"
-                />
+      <label
+        htmlFor={flipId}
+        className="broker-card-click-target"
+        aria-label={t.brokerCardTitle}
+      >
+        <div className="broker-card-inner">
+          <div
+            className="broker-card-face broker-card-front"
+            style={{
+              backgroundImage: `url(${BROKER_CARD_FRONT_IMAGE})`,
+            }}
+          >
+            <div className="broker-card-front-overlay">
+              <div
+                className={`broker-card-top-info absolute top-3 ${
+                  isArabic ? 'right-4 broker-card-top-info--rtl' : 'left-4'
+                }`}
+              >
+                <div className="broker-card-avatar broker-card-avatar--large">
+                  <img
+                    src={brokerImage}
+                    alt={brokerName}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="broker-card-name">{brokerName}</p>
+                </div>
               </div>
 
-              <div className="min-w-0">
-                <p className="broker-card-name">{brokerName}</p>
+              <div
+                className={`absolute top-1/2 ${
+                  isArabic ? 'right-4 text-right' : 'right-4 text-left'
+                } transform -translate-y-1/2`}
+              >
+                <div className="flex flex-col gap-3">
+                  {cleanedPhone && (
+                    <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
+                      <PhoneIcon />
+                      <span className="font-semibold text-sm text-gray-800">
+                        {cleanedPhone}
+                      </span>
+                    </div>
+                  )}
+
+                  {cleanedWhatsapp && (
+                    <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
+                      <WhatsAppIcon />
+                      <span className="font-semibold text-sm text-gray-800">
+                        {cleanedWhatsapp}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          </div>
 
-            <div
-              className={`absolute top-1/2 ${
-                isArabic ? 'right-4 text-right' : 'right-4 text-left'
-              } transform -translate-y-1/2`}
-            >
-              <div className="flex flex-col gap-3">
-                {cleanedPhone && (
-                  <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
-                    <PhoneIcon />
-                    <span className="font-semibold text-sm text-gray-800">
-                      {cleanedPhone}
-                    </span>
-                  </div>
-                )}
+          <div
+            className="broker-card-face broker-card-back"
+            style={{
+              backgroundImage: `url(${BROKER_CARD_BACK_IMAGE})`,
+            }}
+          >
+            <div className="broker-card-back-overlay">
+              <div
+                className={`broker-card-back-top ${
+                  isArabic ? 'broker-card-back-top--rtl' : ''
+                }`}
+              ></div>
 
-                {cleanedWhatsapp && (
-                  <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
-                    <WhatsAppIcon />
-                    <span className="font-semibold text-sm text-gray-800">
-                      {cleanedWhatsapp}
-                    </span>
-                  </div>
-                )}
-              </div>
+              <div
+                className={`broker-card-back-actions ${
+                  isArabic ? 'broker-card-back-actions--rtl' : ''
+                }`}
+              ></div>
             </div>
-
-            
           </div>
         </div>
-
-        <div
-          className="broker-card-face broker-card-back"
-          style={{
-            backgroundImage: `url(${BROKER_CARD_BACK_IMAGE})`,
-          }}
-        >
-          <div className="broker-card-back-overlay">
-            <div
-              className={`broker-card-back-top ${
-                isArabic ? 'broker-card-back-top--rtl' : ''
-              }`}
-            ></div>
-
-            <div
-              className={`broker-card-back-actions ${
-                isArabic ? 'broker-card-back-actions--rtl' : ''
-              }`}
-            ></div>
-
-            
-          </div>
-        </div>
-      </div>
+      </label>
     </div>
   )
 }
@@ -1691,6 +1719,132 @@ export default async function PropertyPage({
           scrollbar-width: none;
         }
 
+        .property-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  width: fit-content;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(248, 250, 252, 0.88);
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 14px 8px 10px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.property-address--rtl {
+  flex-direction: row-reverse;
+  padding: 8px 10px 8px 14px;
+}
+
+.property-address__icon-wrap {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(5, 74, 255, 0.12);
+}
+
+.property-address__icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+
+.property-address__text {
+  min-width: 0;
+  max-width: 720px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #334155;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.property-address--compact {
+  gap: 7px;
+  padding: 6px 10px 6px 7px;
+  box-shadow: none;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.property-address--compact.property-address--rtl {
+  padding: 6px 7px 6px 10px;
+}
+
+.property-address--compact .property-address__icon-wrap {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+  box-shadow: none;
+}
+
+.property-address--compact .property-address__icon {
+  width: 17px;
+  height: 17px;
+}
+
+.property-address--compact .property-address__text {
+  max-width: 220px;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 600;
+  -webkit-line-clamp: 1;
+}
+
+.property-address--mobile {
+  width: 100%;
+  justify-content: center;
+  border-radius: 22px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.property-address--mobile .property-address__icon-wrap {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+}
+
+.property-address--mobile .property-address__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.property-address--mobile .property-address__text {
+  max-width: 280px;
+  text-align: start;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.property-address--mobile.property-address--rtl .property-address__text {
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .property-address {
+    gap: 9px;
+  }
+
+  .property-address__text {
+    font-size: 13px;
+  }
+}
+
         .navienty-logo {
           display: inline-flex;
           align-items: center;
@@ -2114,15 +2268,7 @@ export default async function PropertyPage({
           background: #043be0;
         }
 
-        .mobile-rooms-cta__icon {
-          width: 20px;
-          height: 20px;
-          transition: transform 0.25s ease;
-        }
-
-        .mobile-rooms-toggle:checked ~ .mobile-rooms-cta .mobile-rooms-cta__icon {
-          transform: rotate(180deg);
-        }
+        
 
         .mobile-rooms-sheet {
           position: fixed;
@@ -2189,18 +2335,20 @@ export default async function PropertyPage({
         }
 
         .mobile-rooms-sheet__close {
-          min-width: 86px;
-          min-height: 38px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 999px;
-          background: #f1f5f9;
-          color: #0f172a;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-        }
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
 
         .mobile-rooms-sheet__body {
           max-height: calc(min(74vh, 720px) - 72px);
@@ -2354,31 +2502,42 @@ export default async function PropertyPage({
         }
 
         .broker-card-scene {
-          position: relative;
-          width: 100%;
-          perspective: 1400px;
-        }
+  position: relative;
+  width: 100%;
+  perspective: 1400px;
+}
 
-        .broker-card-toggle {
-          position: absolute;
-          opacity: 0;
-          pointer-events: none;
-        }
+.broker-card-toggle {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
 
-        .broker-card-inner {
-          position: relative;
-          width: 100%;
-          aspect-ratio: 1.58 / 1;
-          transform-style: preserve-3d;
-          transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-          will-change: transform;
-        }
+.broker-card-click-target {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
 
-        .broker-card-scene:hover .broker-card-inner,
-        .broker-card-scene:focus-within .broker-card-inner,
-        .broker-card-toggle:checked + .broker-card-inner {
-          transform: rotateY(180deg);
-        }
+.broker-card-inner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1.58 / 1;
+  transform-style: preserve-3d;
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.broker-card-toggle:checked + .broker-card-click-target .broker-card-inner {
+  transform: rotateY(180deg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .broker-card-scene:hover .broker-card-inner {
+    transform: rotateY(180deg);
+  }
+}
 
         .broker-card-face {
           position: absolute;
@@ -3022,11 +3181,14 @@ export default async function PropertyPage({
               </h1>
 
               {addressText && (
-                <div className="mt-3 flex items-center justify-center gap-3 text-center text-[18px] leading-7 font-medium text-slate-700">
-                  <LocationIcon className="h-12 w-12 shrink-0 object-contain drop-shadow-md" />
-                  <span className="line-clamp-2">{addressText}</span>
-                </div>
-              )}
+  <div className="mt-4 flex justify-center">
+    <PropertyAddress
+      address={addressText}
+      isArabic={isArabic}
+      variant="mobile"
+    />
+  </div>
+)}
 
               <p className="mt-2 text-center text-[15px] font-medium leading-6 text-slate-700">
                 {apartmentSummaryText}
@@ -3063,24 +3225,25 @@ export default async function PropertyPage({
                   </h2>
 
                   <Link
-                    href={buildSearchResultsLink()}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-900 transition hover:border-slate-900"
-                  >
-                    {t.viewAll}
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path
-                        d={isArabic ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </Link>
+  href={buildSearchResultsLink()}
+  className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-[13px] font-semibold leading-none text-slate-900 whitespace-nowrap shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
+>
+  <span>{t.viewAll}</span>
+
+  <svg
+    viewBox="0 0 24 24"
+    className={`h-4 w-4 shrink-0 ${isArabic ? 'rotate-180' : ''}`}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.3"
+  >
+    <path
+      d="M9 6l6 6-6 6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+</Link>
                 </div>
 
                 <div className="-mx-5 overflow-x-auto px-5 hide-scrollbar">
@@ -3134,10 +3297,13 @@ export default async function PropertyPage({
                             </h3>
 
                             {itemAddress && (
-                              <div className="mt-2 flex items-center gap-2 text-[14px] text-slate-500">
-                                <LocationIcon className="h-8 w-8 shrink-0 object-contain" />
-                                <span className="line-clamp-1">{itemAddress}</span>
-                              </div>
+                              <div className="mt-2">
+  <PropertyAddress
+    address={itemAddress}
+    isArabic={isArabic}
+    variant="compact"
+  />
+</div>
                             )}
 
                             {formattedPrice && (
@@ -3174,13 +3340,10 @@ export default async function PropertyPage({
               </h1>
 
               {addressText && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[14px] text-slate-700 md:text-[15px]">
-                  <span className="inline-flex items-center gap-2">
-                    <LocationIcon className="h-8 w-8 shrink-0 object-contain" />
-                    <span>{addressText}</span>
-                  </span>
-                </div>
-              )}
+  <div className="mt-3">
+    <PropertyAddress address={addressText} isArabic={isArabic} />
+  </div>
+)}
             </div>
           </div>
 
@@ -3388,10 +3551,13 @@ export default async function PropertyPage({
                         </h3>
 
                         {itemAddress && (
-                          <div className="mt-1.5 flex items-center gap-2 text-[12px] text-slate-500 xl:text-[13px]">
-                            <LocationIcon className="h-8 w-8 shrink-0 object-contain" />
-                            <span className="line-clamp-1">{itemAddress}</span>
-                          </div>
+                          <div className="mt-2">
+  <PropertyAddress
+    address={itemAddress}
+    isArabic={isArabic}
+    variant="compact"
+  />
+</div>
                         )}
 
                         {formattedPrice && (
@@ -3456,23 +3622,11 @@ export default async function PropertyPage({
       </footer>
 
       <div className="mobile-rooms-cta md:hidden">
-        <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-cta__button">
-          <span>{t.availableRooms}</span>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            className="mobile-rooms-cta__icon"
-          >
-            <path
-              d="M6 9l6 6 6-6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </label>
-      </div>
+  <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-cta__button">
+    <span>Select Your Room</span>
+    
+  </label>
+</div>
 
       <div className="mobile-rooms-sheet md:hidden">
         <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-sheet__backdrop" />
@@ -3481,14 +3635,16 @@ export default async function PropertyPage({
           <div className="mobile-rooms-sheet__handle" />
 
           <div className="mobile-rooms-sheet__header">
-            <h2 className="mobile-rooms-sheet__title">{t.availableRooms}</h2>
-            <label
-              htmlFor="mobile-rooms-toggle"
-              className="mobile-rooms-sheet__close"
-            >
-              {t.close}
-            </label>
-          </div>
+  <h2 className="mobile-rooms-sheet__title">{t.availableRooms}</h2>
+
+  <label
+    htmlFor="mobile-rooms-toggle"
+    className="mobile-rooms-sheet__close"
+    aria-label={t.close}
+  >
+    ×
+  </label>
+</div>
 
           <div className="mobile-rooms-sheet__body">
             <div className="space-y-4 pb-4">
