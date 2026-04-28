@@ -9,17 +9,25 @@ import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 import {
   cancelLegacyBedReservationAction,
   cancelPropertyReservationAction,
+  renewPropertyReservationAction,
 } from '../booking-requests/actions'
 
 type SearchParams = Promise<{
   property_id?: string
 }>
 
+type BillingCycleSummary = {
+  last_renewal_date: string | null
+  last_billing_period_start: string | null
+  last_billing_period_end: string | null
+}
+
 type ActiveUnifiedReservation =
   | {
       source: 'property_reservations'
       id: string
       property_id: string
+      user_id: string | null
       customer_name: string
       customer_phone: string | null
       customer_email: string | null
@@ -31,6 +39,11 @@ type ActiveUnifiedReservation =
       total_price_egp: number | null
       payment_status: string | null
       wallet_amount_used: number | null
+      user_wallet_balance: number | null
+      user_wallet_currency: string | null
+      last_renewal_date: string | null
+      last_billing_period_start: string | null
+      last_billing_period_end: string | null
       notes: string | null
       created_at: string
       property_title: string
@@ -42,6 +55,7 @@ type ActiveUnifiedReservation =
       source: 'bed_reservations'
       id: string
       property_id: string
+      user_id: string | null
       customer_name: string
       customer_phone: string | null
       customer_email: string | null
@@ -53,6 +67,11 @@ type ActiveUnifiedReservation =
       total_price_egp: null
       payment_status: null
       wallet_amount_used: null
+      user_wallet_balance: number | null
+      user_wallet_currency: string | null
+      last_renewal_date: null
+      last_billing_period_start: null
+      last_billing_period_end: null
       notes: string | null
       created_at: string
       property_title: string
@@ -79,25 +98,6 @@ type PropertyImage = {
 
 type BookingRequestNotification = {
   id: string
-}
-
-function getAdminDisplayName(admin: any) {
-  const possibleName =
-    admin?.full_name ||
-    admin?.name ||
-    admin?.broker_name ||
-    admin?.display_name ||
-    admin?.email
-
-  if (!possibleName || typeof possibleName !== 'string') {
-    return 'Broker'
-  }
-
-  if (possibleName.includes('@')) {
-    return possibleName.split('@')[0]
-  }
-
-  return possibleName
 }
 
 function BrandLogo() {
@@ -350,55 +350,47 @@ function formatDate(date?: string | null) {
   }
 }
 
-function formatDateTime(date?: string | null) {
-  if (!date) return '—'
-
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(date))
-  } catch {
-    return '—'
-  }
-}
-
 function formatPrice(value?: number | null) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '—'
   return `${Number(value).toLocaleString()} EGP`
 }
 
-function getReservationStatusClass(
-  status: 'pending' | 'reserved' | 'checked_in'
-) {
-  if (status === 'pending') {
-    return 'border-amber-200 bg-amber-50 text-amber-700'
+function getRenewButtonState(reservation: ActiveUnifiedReservation) {
+  if (reservation.source !== 'property_reservations') {
+    return {
+      canRenew: false,
+      reason: 'Renewal is only available for property reservations.',
+    }
   }
 
-  if (status === 'reserved') {
-    return 'border-blue-200 bg-blue-50 text-blue-700'
+  if (!reservation.user_id) {
+    return {
+      canRenew: false,
+      reason: 'This reservation is not linked to a user account.',
+    }
   }
 
-  return 'border-violet-200 bg-violet-50 text-violet-700'
-}
+  const amount = Number(reservation.total_price_egp || 0)
+  const balance = Number(reservation.user_wallet_balance || 0)
 
-function getPaymentStatusClass(status?: string | null) {
-  if (status === 'paid') {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (!amount || amount <= 0) {
+    return {
+      canRenew: false,
+      reason: 'Reservation amount is missing.',
+    }
   }
 
-  if (status === 'partial') {
-    return 'border-amber-200 bg-amber-50 text-amber-700'
+  if (balance < amount) {
+    return {
+      canRenew: false,
+      reason: 'Insufficient wallet balance.',
+    }
   }
 
-  if (status === 'refunded') {
-    return 'border-sky-200 bg-sky-50 text-sky-700'
+  return {
+    canRenew: true,
+    reason: null,
   }
-
-  return 'border-gray-200 bg-gray-100 text-gray-700'
 }
 
 function MobileBottomNav({
@@ -482,6 +474,44 @@ function MobileBottomNav({
   )
 }
 
+function RenewPropertyReservationForm({
+  reservation,
+}: {
+  reservation: ActiveUnifiedReservation
+}) {
+  const { canRenew, reason } = getRenewButtonState(reservation)
+
+  if (reservation.source !== 'property_reservations') {
+    return null
+  }
+
+  return (
+    <div>
+      <form action={renewPropertyReservationAction}>
+        <input type="hidden" name="reservation_id" value={reservation.id} />
+
+        <button
+          type="submit"
+          disabled={!canRenew}
+          className={`inline-flex w-full items-center justify-center rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+            canRenew
+              ? 'border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700'
+              : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+          }`}
+        >
+          Renew Reservation
+        </button>
+      </form>
+
+      {!canRenew && reason ? (
+        <p className="mt-2 text-center text-xs font-medium text-slate-500">
+          {reason}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function CancelPropertyReservationForm({
   reservationId,
 }: {
@@ -535,7 +565,6 @@ export default async function PropertyReservationsPage({
   const adminContext = await requirePropertiesSectionAccess()
   const supabase = createAdminClient()
   const admin = adminContext.admin
-  const brokerName = getAdminDisplayName(admin)
 
   let propertiesQuery = supabase
     .from('properties')
@@ -680,6 +709,7 @@ export default async function PropertyReservationsPage({
       .select(`
         id,
         property_id,
+        user_id,
         customer_name,
         customer_phone,
         customer_email,
@@ -726,6 +756,7 @@ export default async function PropertyReservationsPage({
       .select(`
         id,
         property_id,
+        user_id,
         room_id,
         bed_id,
         student_name,
@@ -784,6 +815,81 @@ export default async function PropertyReservationsPage({
       throw new Error(legacyBedReservationsError.message)
     }
 
+    const propertyReservationIds = ((propertyReservationsData || []) as any[]).map(
+      (reservation) => reservation.id
+    )
+
+    const allUserIds = Array.from(
+      new Set(
+        [
+          ...((propertyReservationsData || []) as any[]).map(
+            (reservation) => reservation.user_id
+          ),
+          ...((legacyBedReservationsData || []) as any[]).map(
+            (reservation) => reservation.user_id
+          ),
+        ].filter(Boolean)
+      )
+    ) as string[]
+
+    const walletsMap = new Map<
+      string,
+      {
+        balance: number
+        currency: string
+      }
+    >()
+
+    if (allUserIds.length > 0) {
+      const { data: walletsData, error: walletsError } = await supabase
+        .from('user_wallets')
+        .select('user_id, balance, currency')
+        .in('user_id', allUserIds)
+
+      if (walletsError) {
+        throw new Error(walletsError.message)
+      }
+
+      ;((walletsData || []) as any[]).forEach((wallet) => {
+        walletsMap.set(wallet.user_id, {
+          balance: Number(wallet.balance || 0),
+          currency: wallet.currency || 'EGP',
+        })
+      })
+    }
+
+    const billingCyclesMap = new Map<string, BillingCycleSummary>()
+
+    if (propertyReservationIds.length > 0) {
+      const { data: billingCyclesData, error: billingCyclesError } = await supabase
+        .from('reservation_billing_cycles')
+        .select(`
+          reservation_id,
+          billing_period_start,
+          billing_period_end,
+          status,
+          paid_at,
+          created_at
+        `)
+        .in('reservation_id', propertyReservationIds)
+        .eq('status', 'paid')
+        .order('paid_at', { ascending: false })
+
+      if (billingCyclesError) {
+        throw new Error(billingCyclesError.message)
+      }
+
+      ;((billingCyclesData || []) as any[]).forEach((cycle) => {
+        if (billingCyclesMap.has(cycle.reservation_id)) return
+
+        billingCyclesMap.set(cycle.reservation_id, {
+          last_renewal_date: cycle.paid_at || cycle.created_at || null,
+          last_billing_period_start: cycle.billing_period_start || null,
+          last_billing_period_end: cycle.billing_period_end || null,
+        })
+      })
+    }
+
     unifiedReservations = [
       ...((propertyReservationsData || []) as any[]).map((reservation) => {
         const property = Array.isArray(reservation.properties)
@@ -822,21 +928,34 @@ export default async function PropertyReservationsPage({
           )
         ) as string[]
 
+        const wallet = reservation.user_id
+          ? walletsMap.get(reservation.user_id)
+          : null
+
+        const billingSummary = billingCyclesMap.get(reservation.id)
+
         return {
           source: 'property_reservations' as const,
           id: reservation.id,
           property_id: reservation.property_id,
+          user_id: reservation.user_id,
           customer_name: reservation.customer_name,
           customer_phone: reservation.customer_phone,
           customer_email: reservation.customer_email,
           customer_whatsapp: reservation.customer_whatsapp,
-          start_date: reservation.start_date,
+          start_date: reservation.start_date || reservation.created_at,
           end_date: reservation.end_date,
           status: reservation.status,
           reservation_scope: reservation.reservation_scope,
-          total_price_egp: reservation.total_price_egp,
+          total_price_egp: Number(reservation.total_price_egp || 0),
           payment_status: reservation.payment_status,
           wallet_amount_used: reservation.wallet_amount_used,
+          user_wallet_balance: wallet?.balance ?? null,
+          user_wallet_currency: wallet?.currency ?? 'EGP',
+          last_renewal_date: billingSummary?.last_renewal_date || null,
+          last_billing_period_start:
+            billingSummary?.last_billing_period_start || null,
+          last_billing_period_end: billingSummary?.last_billing_period_end || null,
           notes: reservation.notes,
           created_at: reservation.created_at,
           property_title:
@@ -870,21 +989,31 @@ export default async function PropertyReservationsPage({
             ? [bed?.bed_label || bed?.bed_label_ar]
             : []
 
+        const wallet = reservation.user_id
+          ? walletsMap.get(reservation.user_id)
+          : null
+
         return {
           source: 'bed_reservations' as const,
           id: reservation.id,
           property_id: reservation.property_id,
+          user_id: reservation.user_id,
           customer_name: reservation.student_name,
           customer_phone: reservation.student_phone,
           customer_email: reservation.student_email,
           customer_whatsapp: reservation.student_whatsapp,
-          start_date: reservation.start_date,
+          start_date: reservation.start_date || reservation.created_at,
           end_date: reservation.end_date,
           status: reservation.status,
           reservation_scope: 'beds' as const,
           total_price_egp: null,
           payment_status: null,
           wallet_amount_used: null,
+          user_wallet_balance: wallet?.balance ?? null,
+          user_wallet_currency: wallet?.currency ?? 'EGP',
+          last_renewal_date: null,
+          last_billing_period_start: null,
+          last_billing_period_end: null,
           notes: reservation.notes,
           created_at: reservation.created_at,
           property_title:
@@ -935,10 +1064,6 @@ export default async function PropertyReservationsPage({
     (property) => property.id === selectedPropertyId
   )
   const selectedPropertyLabel = selectedProperty?.title || null
-  const totalActiveReservations = Array.from(reservationCountsByProperty.values()).reduce(
-    (sum, count) => sum + count,
-    0
-  )
 
   return (
     <>
@@ -1178,8 +1303,6 @@ export default async function PropertyReservationsPage({
         <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
           {!selectedPropertyId ? (
             <section className="rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-              
-
               <div className="p-4 md:p-6">
                 {propertyOptions.length === 0 ? (
                   <EmptyPropertiesState />
@@ -1187,7 +1310,6 @@ export default async function PropertyReservationsPage({
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                     {propertyOptions.map((property) => {
                       const coverImage = getCoverImage(property.id, propertyImagesMap)
-                      const count = reservationCountsByProperty.get(property.id) || 0
 
                       return (
                         <div
@@ -1204,16 +1326,12 @@ export default async function PropertyReservationsPage({
                             ) : (
                               <PropertyImagePlaceholder />
                             )}
-
-                            
                           </div>
 
                           <div className="p-5">
                             <h3 className="text-lg font-semibold text-slate-900">
                               {property.title}
                             </h3>
-
-                           
 
                             <div className="mt-5">
                               <Link
@@ -1235,17 +1353,17 @@ export default async function PropertyReservationsPage({
           ) : (
             <section className="rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
               <div className="border-b border-slate-200 px-5 py-5 md:px-7">
-                                <div className="flex items-center justify-between gap-3">
-                                  <h1 className="text-lg font-semibold text-slate-900 truncate">
-                  {selectedPropertyLabel || 'Property Reservations'}
-                </h1>
+                <div className="flex items-center justify-between gap-3">
+                  <h1 className="truncate text-lg font-semibold text-slate-900">
+                    {selectedPropertyLabel || 'Property Reservations'}
+                  </h1>
 
-                <Link
-                  href="/admin/properties/reservations"
-                  className="close-reservations-button"
-                >
-                  Close
-                </Link>
+                  <Link
+                    href="/admin/properties/reservations"
+                    className="close-reservations-button"
+                  >
+                    Close
+                  </Link>
                 </div>
               </div>
 
@@ -1262,11 +1380,56 @@ export default async function PropertyReservationsPage({
                         <ReservationCardCover reservation={reservation} />
 
                         <div className="p-4">
-                          <div className="rounded-[22px] border border-slate-100 bg-slate-50 p-4">
-                            <p className="text-xs text-slate-500">Total Price</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">
-                              {formatPrice(reservation.total_price_egp)}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="rounded-[22px] border border-slate-100 bg-slate-50 p-4">
+                              <p className="text-xs text-slate-500">Total Price</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">
+                                {formatPrice(reservation.total_price_egp)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-[22px] border border-slate-100 bg-slate-50 p-4">
+                              <p className="text-xs text-slate-500">Wallet Balance</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">
+                                {formatPrice(reservation.user_wallet_balance)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 rounded-[22px] border border-slate-100 bg-slate-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                              Reservation Dates
                             </p>
+
+                            <div className="mt-3 space-y-2 text-sm text-slate-700">
+                              <p>
+                                <span className="font-medium text-slate-900">
+                                  Start Date:
+                                </span>{' '}
+                                {formatDate(reservation.start_date)}
+                              </p>
+
+                              <p>
+                                <span className="font-medium text-slate-900">
+                                  Renewal Date:
+                                </span>{' '}
+                                {reservation.last_renewal_date
+                                  ? formatDate(reservation.last_renewal_date)
+                                  : 'Not renewed yet'}
+                              </p>
+
+                              {reservation.last_billing_period_start ||
+                              reservation.last_billing_period_end ? (
+                                <p>
+                                  <span className="font-medium text-slate-900">
+                                    Last Renewal Period:
+                                  </span>{' '}
+                                  {formatDate(reservation.last_billing_period_start)}
+                                  {' - '}
+                                  {formatDate(reservation.last_billing_period_end)}
+                                </p>
+                              ) : null}
+                            </div>
                           </div>
 
                           <div className="mt-4 rounded-[22px] border border-slate-100 bg-slate-50 p-4">
@@ -1297,7 +1460,9 @@ export default async function PropertyReservationsPage({
                             </div>
                           </div>
 
-                          <div className="mt-4">
+                          <div className="mt-4 grid grid-cols-1 gap-3">
+                            <RenewPropertyReservationForm reservation={reservation} />
+
                             {reservation.source === 'property_reservations' ? (
                               <CancelPropertyReservationForm
                                 reservationId={reservation.id}

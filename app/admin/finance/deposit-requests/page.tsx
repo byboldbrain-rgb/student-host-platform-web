@@ -1,114 +1,48 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { requireSuperAdminAccess } from '@/src/lib/admin-auth'
+import { requireDepositRequestsAccess } from '@/src/lib/admin-auth'
 import { createAdminClient } from '@/src/lib/supabase/admin'
+import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
+import AdminDepositNotifications from './AdminDepositNotifications'
 import {
   approveDepositRequestAction,
   rejectDepositRequestAction,
 } from './actions'
 
-function formatCurrency(amount: number | string | null) {
-  const value = Number(amount || 0)
-  return `${value.toFixed(2)} جنيه`
-}
-
-function formatDate(value: string | null) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString('ar-EG')
-}
-
-function getStatusConfig(status: string) {
-  switch (status) {
-    case 'approved':
-      return {
-        label: 'تم الاعتماد',
-        dotClass: 'bg-emerald-400',
-        badgeClass:
-          'border border-emerald-200 bg-emerald-50 text-emerald-700',
-        cardAccent: 'border-emerald-100',
-        actionTone: 'emerald',
-        glow: 'shadow-[0_18px_50px_rgba(16,185,129,0.08)]',
-      }
-    case 'rejected':
-      return {
-        label: 'مرفوض',
-        dotClass: 'bg-rose-400',
-        badgeClass: 'border border-rose-200 bg-rose-50 text-rose-700',
-        cardAccent: 'border-rose-100',
-        actionTone: 'rose',
-        glow: 'shadow-[0_18px_50px_rgba(244,63,94,0.08)]',
-      }
-    default:
-      return {
-        label: 'قيد المراجعة',
-        dotClass: 'bg-amber-400',
-        badgeClass: 'border border-amber-200 bg-amber-50 text-amber-700',
-        cardAccent: 'border-[#dbe5ff]',
-        actionTone: 'blue',
-        glow: 'shadow-[0_18px_50px_rgba(5,74,255,0.08)]',
-      }
-  }
-}
-
-function StatCard({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: number
-  tone?: 'default' | 'pending' | 'approved' | 'rejected'
-}) {
-  const toneClass = {
-    default: 'border-black/5 bg-white text-[#20212a]',
-    pending: 'border-amber-200 bg-amber-50 text-amber-800',
-    approved: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    rejected: 'border-rose-200 bg-rose-50 text-rose-800',
-  }[tone]
-
-  const iconClass = {
-    default: 'bg-[#f3f6ff] text-[#054aff]',
-    pending: 'bg-amber-100 text-amber-700',
-    approved: 'bg-emerald-100 text-emerald-700',
-    rejected: 'bg-rose-100 text-rose-700',
-  }[tone]
-
+function BrandLogo() {
   return (
-    <div
-      className={`rounded-[28px] border p-5 shadow-[0_10px_30px_rgba(0,0,0,0.035)] ${toneClass}`}
+    <Link
+      href="/admin/finance/deposit-requests"
+      className="navienty-logo"
+      aria-label="Navienty admin home"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-[13px] font-bold opacity-70">{label}</div>
-          <div className="mt-2 text-[32px] font-black tracking-tight">
-            {value}
-          </div>
-        </div>
-
-        <div
-          className={`flex h-12 w-12 items-center justify-center rounded-[18px] ${iconClass}`}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.9}
-            stroke="currentColor"
-            className="h-6 w-6"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 6.75h16.5M3.75 9.75h16.5m-13.5 4.5h3m-3 3h6M5.25 5.25h13.5A2.25 2.25 0 0 1 21 7.5v9A2.25 2.25 0 0 1 18.75 18.75H5.25A2.25 2.25 0 0 1 3 16.5v-9A2.25 2.25 0 0 1 5.25 5.25Z"
-            />
-          </svg>
-        </div>
-      </div>
-    </div>
+      <img
+        src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+        alt="Navienty icon"
+        className="navienty-logo-icon"
+      />
+      <span className="navienty-logo-text-wrap">
+        <img
+          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
+          alt="Navienty"
+          className="navienty-logo-text"
+        />
+      </span>
+    </Link>
   )
 }
 
-function InfoItem({
+function formatCurrency(amount: number | string | null) {
+  const value = Number(amount || 0)
+  return new Intl.NumberFormat('en-EG', {
+    style: 'currency',
+    currency: 'EGP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
+function DetailItem({
   label,
   value,
   mono = false,
@@ -118,14 +52,15 @@ function InfoItem({
   mono?: boolean
 }) {
   return (
-    <div className="rounded-[24px] border border-black/5 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.025)] sm:px-5">
-      <div className="mb-2 text-[13px] font-bold text-gray-500">{label}</div>
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+        {label}
+      </div>
       <div
         className={[
-          'break-words text-[15px] font-black text-[#20212a] sm:text-[16px]',
-          mono ? 'font-mono tracking-wide' : '',
+          'mt-1.5 break-words text-sm font-semibold text-slate-950',
+          mono ? 'font-mono text-[13px] tracking-tight' : '',
         ].join(' ')}
-        dir={mono ? 'ltr' : undefined}
       >
         {value}
       </div>
@@ -133,19 +68,25 @@ function InfoItem({
   )
 }
 
-function ReviewTextarea({
+function TextInput({
   name,
   placeholder,
+  required = false,
+  defaultValue,
 }: {
   name: string
   placeholder: string
+  required?: boolean
+  defaultValue?: string | null
 }) {
   return (
-    <textarea
+    <input
       name={name}
-      rows={4}
+      type="text"
+      required={required}
+      defaultValue={defaultValue || ''}
       placeholder={placeholder}
-      className="min-h-[118px] w-full resize-none rounded-[22px] border border-black/5 bg-white px-4 py-3 text-[15px] text-[#20212a] outline-none transition placeholder:text-gray-400 focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10"
+      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-950 outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10"
     />
   )
 }
@@ -159,41 +100,70 @@ function ActionButton({
 }) {
   const className =
     variant === 'approve'
-      ? 'bg-emerald-600 text-white ring-emerald-600/15 hover:bg-emerald-700'
-      : 'bg-rose-600 text-white ring-rose-600/15 hover:bg-rose-700'
+      ? 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600/20'
+      : 'bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-600/20'
 
   return (
     <button
       type="submit"
-      className={`inline-flex w-full items-center justify-center rounded-full px-5 py-3.5 text-sm font-black transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(0,0,0,0.12)] focus:outline-none focus-visible:ring-4 ${className}`}
+      className={`inline-flex h-12 w-full items-center justify-center rounded-2xl px-5 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-4 ${className}`}
     >
       {children}
     </button>
   )
 }
 
-function SectionTitle({
+function SectionHeader({
   title,
-  subtitle,
+  description,
 }: {
   title: string
-  subtitle?: string
+  description?: string
 }) {
   return (
     <div>
-      <h3 className="text-[20px] font-black tracking-tight text-[#20212a]">
-        {title}
-      </h3>
-      {subtitle ? (
-        <p className="mt-1 text-sm leading-7 text-gray-500">{subtitle}</p>
+      <h3 className="text-base font-bold text-slate-950">{title}</h3>
+      {description ? (
+        <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
       ) : null}
     </div>
   )
 }
 
-export default async function AdminDepositRequestsPage() {
-  await requireSuperAdminAccess()
+function EmptyState() {
+  return (
+    <section className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm sm:p-12">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.8}
+          stroke="currentColor"
+          className="h-8 w-8"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M2.25 18.75a60.063 60.063 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A2.25 2.25 0 0 0 6 7.5h12a2.25 2.25 0 0 0 2.25-2.25V4.5m-16.5 0A2.25 2.25 0 0 1 6 2.25h12a2.25 2.25 0 0 1 2.25 2.25m-16.5 0h16.5M6.75 12h10.5m-10.5 3h6"
+          />
+        </svg>
+      </div>
 
+      <h2 className="mt-5 text-2xl font-bold tracking-tight text-slate-950">
+        No new deposit requests
+      </h2>
+
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+        New pending wallet deposit requests will appear here as soon as users
+        submit their payment details.
+      </p>
+    </section>
+  )
+}
+
+export default async function AdminDepositRequestsPage() {
+  const adminContext = await requireDepositRequestsAccess()
   const supabase = createAdminClient()
 
   const { data: requests, error } = await supabase
@@ -212,453 +182,321 @@ export default async function AdminDepositRequestsPage() {
       created_at,
       user_id
     `)
+    .eq('status', 'pending')
     .order('created_at', { ascending: false })
 
   if (error) {
     throw new Error(error.message)
   }
 
-  const totalRequests = requests?.length ?? 0
-  const pendingCount =
-    requests?.filter((item: any) => item.status === 'pending').length ?? 0
-  const approvedCount =
-    requests?.filter((item: any) => item.status === 'approved').length ?? 0
-  const rejectedCount =
-    requests?.filter((item: any) => item.status === 'rejected').length ?? 0
+  const pendingRequestsCount = requests?.length ?? 0
+  const notificationsEnabledForAdmin = adminContext.admin.role === 'AR'
 
   return (
-    <main
-      dir="rtl"
-      className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#20212a] sm:px-6 sm:py-8 lg:px-8"
-    >
-      <div className="mx-auto max-w-7xl">
-        <section className="overflow-hidden rounded-[34px] border border-black/5 bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-5 lg:p-6">
-          <div className="relative overflow-hidden rounded-[30px] border border-[#dbe5ff] bg-gradient-to-l from-[#08152f] via-[#0b1f46] to-[#054aff] p-5 text-white shadow-[0_16px_40px_rgba(5,74,255,0.20)] sm:p-7 lg:p-8">
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute -left-20 top-0 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-              <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-[#6ea8ff]/25 blur-2xl" />
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.07)_1px,transparent_1px)] bg-[size:30px_30px] opacity-[0.10]" />
-            </div>
+    <>
+      <style>{`
+        .navienty-logo {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          text-decoration: none;
+          overflow: visible;
+          transform: none;
+          margin-top: -10px;
+        }
 
-            <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-[12px] font-bold text-white/85 backdrop-blur-md">
-                  <span className="h-2 w-2 rounded-full bg-[#9bd86a]" />
-                  Finance Admin
-                </div>
+        .navienty-logo-icon {
+          width: 56px;
+          height: 56px;
+          object-fit: contain;
+          flex-shrink: 0;
+          display: block;
+        }
 
-                <h1 className="mt-4 text-[30px] font-black tracking-tight text-white sm:text-[40px] lg:text-[46px]">
-                  طلبات شحن المحفظة
-                </h1>
+        .navienty-logo-text-wrap {
+          max-width: 0;
+          opacity: 0;
+          overflow: hidden;
+          transform: translateX(-6px);
+          transition:
+            max-width 0.35s ease,
+            opacity 0.25s ease,
+            transform 0.35s ease;
+          display: flex;
+          align-items: center;
+        }
 
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/72 sm:text-[15px]">
-                  راجع طلبات الإيداع، تحقق من بيانات التحويل والإيصالات، ثم
-                  اعتمد الطلب أو ارفضه من نفس الصفحة بتجربة أكثر وضوحًا وتناسقًا
-                  مع هوية Navienty.
-                </p>
-              </div>
+        .navienty-logo:hover .navienty-logo-text-wrap,
+        .navienty-logo:focus-visible .navienty-logo-text-wrap {
+          max-width: 120px;
+          opacity: 1;
+          transform: translateX(0);
+        }
 
-              <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-                <Link
-                  href="/admin"
-                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-black text-[#054aff] transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/90"
-                >
-                  الرجوع للإدارة
-                </Link>
+        .navienty-logo-text {
+          width: 112px;
+          min-width: 112px;
+          height: auto;
+          object-fit: contain;
+          display: block;
+          transform: translateY(-2px);
+        }
 
-                <div className="rounded-[24px] border border-white/12 bg-white/10 px-5 py-4 backdrop-blur-md">
-                  <div className="text-[12px] font-bold text-white/65">
-                    الطلبات قيد المراجعة
-                  </div>
-                  <div className="mt-1 text-[28px] font-black leading-none text-white">
-                    {pendingCount}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        .desktop-header-nav-button {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #20212a;
+          text-decoration: none;
+          font-size: 15px;
+          line-height: 1;
+          border: none;
+          background: none;
+          font-weight: 600;
+          font-family: 'Poppins', sans-serif;
+          padding: 8px 0;
+          transition: color 0.3s ease;
+        }
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="إجمالي الطلبات" value={totalRequests} />
-            <StatCard label="قيد المراجعة" value={pendingCount} tone="pending" />
-            <StatCard label="تم الاعتماد" value={approvedCount} tone="approved" />
-            <StatCard label="مرفوض" value={rejectedCount} tone="rejected" />
-          </div>
-        </section>
+        .desktop-header-nav-button::after,
+        .desktop-header-nav-button::before {
+          content: '';
+          width: 0%;
+          height: 2px;
+          background: #000000;
+          display: block;
+          transition: 0.5s;
+          position: absolute;
+          left: 0;
+        }
 
-        {!requests || requests.length === 0 ? (
-          <section className="mt-6 rounded-[34px] border border-black/5 bg-white p-8 text-center shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-10">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[28px] bg-[#f3f6ff] text-[#054aff] shadow-[0_12px_30px_rgba(5,74,255,0.10)]">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.8}
-                stroke="currentColor"
-                className="h-9 w-9"
+        .desktop-header-nav-button::before {
+          top: 0;
+        }
+
+        .desktop-header-nav-button::after {
+          bottom: 0;
+        }
+
+        .desktop-header-nav-button:hover::after,
+        .desktop-header-nav-button:hover::before,
+        .desktop-header-nav-button:focus-visible::after,
+        .desktop-header-nav-button:focus-visible::before {
+          width: 100%;
+        }
+
+        .desktop-header-nav-button-active {
+          color: #054aff;
+        }
+
+        @media (max-width: 768px) {
+          .navienty-logo {
+            transform: none;
+            margin-top: 0;
+          }
+
+          .navienty-logo-icon {
+            width: 42px;
+            height: 42px;
+          }
+
+          .navienty-logo-text-wrap {
+            display: none;
+          }
+
+          .mobile-header-inner {
+            justify-content: center !important;
+          }
+        }
+      `}</style>
+
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef4ff,_#f8fafc_45%,_#f8fafc_100%)] pb-8 text-slate-950">
+        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+          <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+            <BrandLogo />
+
+            <div className="hidden items-center gap-6 md:flex">
+              <Link
+                href="/admin/finance/deposit-requests"
+                className="desktop-header-nav-button desktop-header-nav-button-active"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 12a8.25 8.25 0 1 1-16.5 0A8.25 8.25 0 0 1 21 12Z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15.75 9.75H9.6a1.35 1.35 0 0 0 0 2.7h4.8a1.35 1.35 0 0 1 0 2.7H8.25M12 7.5v9"
-                />
-              </svg>
+                Deposit Requests
+              </Link>
+
+              <AdminDepositNotifications
+                enabled={notificationsEnabledForAdmin}
+                initialPendingCount={pendingRequestsCount}
+              />
+
+              <AdminLogoutButton />
             </div>
+          </div>
+        </header>
 
-            <h2 className="mt-5 text-[26px] font-black tracking-tight text-[#20212a]">
-              لا توجد طلبات شحن حاليًا
-            </h2>
+        <section className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+          <div className="mb-4 flex justify-end md:hidden">
+            <AdminDepositNotifications
+              enabled={notificationsEnabledForAdmin}
+              initialPendingCount={pendingRequestsCount}
+            />
+          </div>
 
-            <p className="mt-2 text-sm leading-7 text-gray-500">
-              بمجرد وصول طلبات جديدة ستظهر هنا لبدء المراجعة.
-            </p>
-          </section>
-        ) : (
-          <div className="mt-6 space-y-6">
-            {requests.map((request: any) => {
-              const status = getStatusConfig(request.status)
-
-              return (
-                <section
+          {!requests || requests.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="space-y-5">
+              {requests.map((request: any) => (
+                <article
                   key={request.id}
-                  className={`overflow-hidden rounded-[34px] border bg-white ${status.cardAccent} ${status.glow}`}
+                  className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_45px_rgba(15,23,42,0.06)]"
                 >
-                  <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <div className="p-5 sm:p-6 lg:p-7">
-                      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span
-                              className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-bold ${status.badgeClass}`}
-                            >
-                              <span
-                                className={`h-2 w-2 rounded-full ${status.dotClass}`}
-                              />
-                              {status.label}
-                            </span>
+                  <div className="pointer-events-none h-1 bg-gradient-to-r from-amber-500/12 via-transparent to-transparent" />
 
-                            <span className="rounded-full border border-black/5 bg-[#f7f7f7] px-3.5 py-1.5 text-[12px] font-bold text-gray-500">
-                              {formatDate(request.created_at)}
-                            </span>
-                          </div>
-
-                          <h2 className="mt-4 text-[26px] font-black tracking-tight text-[#20212a] sm:text-[30px]">
-                            طلب #{request.id}
-                          </h2>
-
-                          <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-500">
-                            تحقق من صاحب التحويل، رقم الهاتف، مرجع العملية
-                            وصورة الإيصال قبل اتخاذ القرار.
-                          </p>
-                        </div>
-
-                        <div className="rounded-[26px] border border-[#dbe5ff] bg-[#f3f6ff] px-5 py-4 text-right shadow-[0_12px_30px_rgba(5,74,255,0.08)] lg:min-w-[220px]">
-                          <div className="text-[12px] font-bold text-[#054aff]/70">
-                            قيمة الطلب
-                          </div>
-                          <div className="mt-1 text-[28px] font-black tracking-tight text-[#054aff]">
-                            {formatCurrency(request.amount)}
-                          </div>
-                        </div>
+                  <div className="p-4 sm:p-5 lg:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <SectionHeader title="Payment Information" />
                       </div>
 
-                      <div className="mt-7 space-y-7">
-                        <div>
-                          <SectionTitle
-                            title="بيانات الطلب"
-                            subtitle="كل بيانات التحويل الأساسية في مكان واحد للمراجعة السريعة."
-                          />
-
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            <InfoItem
-                              label="معرّف المستخدم"
-                              value={request.user_id || '-'}
-                              mono
-                            />
-                            <InfoItem
-                              label="وسيلة الدفع"
-                              value={request.payment_method || '-'}
-                            />
-                            <InfoItem
-                              label="اسم صاحب التحويل"
-                              value={request.sender_name || '-'}
-                            />
-                            <InfoItem
-                              label="رقم الهاتف"
-                              value={request.sender_phone || '-'}
-                              mono
-                            />
-                            <InfoItem
-                              label="مرجع العملية"
-                              value={request.transaction_reference || '-'}
-                              mono
-                            />
-                            <InfoItem
-                              label="تاريخ المراجعة"
-                              value={formatDate(request.reviewed_at)}
-                            />
-                          </div>
-                        </div>
-
-                        {request.receipt_image_url ? (
-                          <div>
-                            <SectionTitle
-                              title="الإيصال المرفق"
-                              subtitle="اضغط على الصورة أو الزر لفتح الإيصال بالحجم الكامل."
-                            />
-
-                            <div className="mt-4 overflow-hidden rounded-[30px] border border-black/5 bg-[#f7f7f7] shadow-[0_10px_30px_rgba(0,0,0,0.035)]">
-                              <a
-                                href={request.receipt_image_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block bg-[#f3f6ff]"
-                              >
-                                <img
-                                  src={request.receipt_image_url}
-                                  alt={`Receipt ${request.id}`}
-                                  className="h-[250px] w-full object-cover transition duration-300 hover:scale-[1.01] sm:h-[340px]"
-                                />
-                              </a>
-
-                              <div className="flex flex-col gap-4 border-t border-black/5 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                                <div>
-                                  <div className="text-sm font-black text-[#20212a]">
-                                    صورة إيصال التحويل
-                                  </div>
-                                  <p className="mt-1 text-xs leading-6 text-gray-500">
-                                    يفضل مطابقة الاسم والرقم والمرجع مع بيانات
-                                    الطلب قبل الاعتماد.
-                                  </p>
-                                </div>
-
-                                <a
-                                  href={request.receipt_image_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center justify-center rounded-full bg-[#054aff] px-5 py-3 text-sm font-black text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#003bd1]"
-                                >
-                                  فتح صورة الإيصال
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5">
-                            <div className="flex items-start gap-3">
-                              <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-amber-100 text-amber-700">
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  strokeWidth={1.9}
-                                  stroke="currentColor"
-                                  className="h-5 w-5"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M12 9v3.75m0 3.75h.008v.008H12V16.5Zm8.25-4.5a8.25 8.25 0 1 1-16.5 0 8.25 8.25 0 0 1 16.5 0Z"
-                                  />
-                                </svg>
-                              </div>
-
-                              <div>
-                                <div className="text-sm font-black text-amber-900">
-                                  لا توجد صورة إيصال مرفقة لهذا الطلب
-                                </div>
-                                <p className="mt-1 text-sm leading-7 text-amber-800/75">
-                                  يفضل عدم اعتماد الطلب قبل توفر دليل تحويل واضح.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {request.review_notes ? (
-                          <div className="rounded-[28px] border border-black/5 bg-[#f7f7f7] p-5">
-                            <SectionTitle title="ملاحظات المراجعة" />
-                            <p className="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600">
-                              {request.review_notes}
-                            </p>
-                          </div>
-                        ) : null}
+                      <div className="w-full rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-[0_8px_24px_rgba(37,99,235,0.08)] lg:w-auto lg:min-w-[230px]">
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">
+                          Amount
+                        </p>
+                        <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+                          {formatCurrency(request.amount)}
+                        </p>
                       </div>
                     </div>
 
-                    <aside className="border-t border-black/5 bg-[#fbfbfb] p-5 sm:p-6 lg:p-7 xl:border-r xl:border-t-0">
-                      {request.status === 'pending' ? (
-                        <div className="space-y-4 xl:sticky xl:top-6">
-                          <form
-                            action={approveDepositRequestAction}
-                            className="rounded-[30px] border border-emerald-200 bg-emerald-50 p-5 shadow-[0_12px_30px_rgba(16,185,129,0.08)]"
-                          >
-                            <input
-                              type="hidden"
-                              name="deposit_request_id"
-                              value={request.id}
-                            />
-
-                            <div className="mb-4">
-                              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-emerald-100 text-emerald-700">
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  strokeWidth={2}
-                                  stroke="currentColor"
-                                  className="h-6 w-6"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="m4.5 12.75 6 6 9-13.5"
-                                  />
-                                </svg>
-                              </div>
-
-                              <h3 className="mt-4 text-[20px] font-black tracking-tight text-emerald-950">
-                                اعتماد الطلب
-                              </h3>
-                              <p className="mt-1 text-sm leading-7 text-emerald-900/75">
-                                سيتم اعتماد الطلب وإضافة الرصيد إلى محفظة
-                                المستخدم.
-                              </p>
-                            </div>
-
-                            <div className="space-y-4">
-                              <div>
-                                <label className="mb-2.5 block text-[13px] font-bold text-emerald-950">
-                                  ملاحظات الاعتماد
-                                </label>
-                                <ReviewTextarea
-                                  name="review_notes"
-                                  placeholder="أدخل أي ملاحظات مرتبطة بعملية الاعتماد..."
-                                />
-                              </div>
-
-                              <ActionButton variant="approve">
-                                اعتماد وإضافة الرصيد
-                              </ActionButton>
-                            </div>
-                          </form>
-
-                          <form
-                            action={rejectDepositRequestAction}
-                            className="rounded-[30px] border border-rose-200 bg-rose-50 p-5 shadow-[0_12px_30px_rgba(244,63,94,0.08)]"
-                          >
-                            <input
-                              type="hidden"
-                              name="deposit_request_id"
-                              value={request.id}
-                            />
-
-                            <div className="mb-4">
-                              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-rose-100 text-rose-700">
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  strokeWidth={2}
-                                  stroke="currentColor"
-                                  className="h-6 w-6"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M6 18 18 6M6 6l12 12"
-                                  />
-                                </svg>
-                              </div>
-
-                              <h3 className="mt-4 text-[20px] font-black tracking-tight text-rose-950">
-                                رفض الطلب
-                              </h3>
-                              <p className="mt-1 text-sm leading-7 text-rose-900/75">
-                                أضف سببًا واضحًا للرفض حتى يكون القرار موثقًا
-                                بشكل مناسب.
-                              </p>
-                            </div>
-
-                            <div className="space-y-4">
-                              <div>
-                                <label className="mb-2.5 block text-[13px] font-bold text-rose-950">
-                                  سبب الرفض
-                                </label>
-                                <ReviewTextarea
-                                  name="review_notes"
-                                  placeholder="اذكر سبب رفض الطلب بشكل واضح..."
-                                />
-                              </div>
-
-                              <ActionButton variant="reject">
-                                رفض الطلب
-                              </ActionButton>
-                            </div>
-                          </form>
+                    <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+                      <section>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <DetailItem
+                            label="Payment Method"
+                            value={request.payment_method || '-'}
+                          />
+                          <DetailItem
+                            label="Sender Name"
+                            value={request.sender_name || '-'}
+                          />
+                          <DetailItem
+                            label="Sender Phone"
+                            value={request.sender_phone || '-'}
+                            mono
+                          />
+                          <DetailItem
+                            label="Transaction Ref"
+                            value={
+                              request.transaction_reference ||
+                              'Pending admin entry'
+                            }
+                            mono
+                          />
                         </div>
-                      ) : (
-                        <div className="rounded-[30px] border border-black/5 bg-white p-5 shadow-[0_10px_30px_rgba(0,0,0,0.035)] xl:sticky xl:top-6">
-                          <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-[#f3f6ff] text-[#054aff]">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={1.9}
-                              stroke="currentColor"
-                              className="h-7 w-7"
+                      </section>
+
+                      <section>
+                        <SectionHeader title="Receipt" />
+
+                        {request.receipt_image_url ? (
+                          <div className="mt-4 overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-sm">
+                            <a
+                              href={request.receipt_image_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group relative block"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                              <img
+                                src={request.receipt_image_url}
+                                alt={`Deposit receipt ${request.id}`}
+                                className="h-56 w-full object-cover transition duration-500 group-hover:scale-[1.03] sm:h-64 lg:h-72"
                               />
-                            </svg>
-                          </div>
 
-                          <h3 className="mt-4 text-[20px] font-black tracking-tight text-[#20212a]">
-                            حالة الطلب
-                          </h3>
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-transparent to-transparent opacity-80" />
 
-                          <div
-                            className={`mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black ${status.badgeClass}`}
-                          >
-                            <span
-                              className={`h-2 w-2 rounded-full ${status.dotClass}`}
-                            />
-                            {status.label}
-                          </div>
-
-                          <p className="mt-4 text-sm leading-7 text-gray-500">
-                            هذا الطلب تم التعامل معه بالفعل، ويمكنك مراجعة
-                            البيانات والإيصال والملاحظات من نفس البطاقة.
-                          </p>
-
-                          {request.reviewed_at ? (
-                            <div className="mt-5 rounded-[22px] border border-black/5 bg-[#f7f7f7] px-4 py-3">
-                              <div className="text-[13px] font-bold text-gray-500">
-                                آخر وقت مراجعة
+                              <div className="absolute bottom-4 left-4 right-4">
+                                <div className="inline-flex items-center rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-slate-950 shadow-lg backdrop-blur">
+                                  Open full receipt
+                                </div>
                               </div>
-                              <div className="mt-1 text-[15px] font-black text-[#20212a]">
-                                {formatDate(request.reviewed_at)}
-                              </div>
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-3xl border border-amber-100 bg-amber-50 p-5">
+                            <div className="text-sm font-bold text-amber-950">
+                              No receipt attached
                             </div>
-                          ) : null}
-                        </div>
-                      )}
-                    </aside>
+                            <p className="mt-1 text-sm leading-6 text-amber-800/80">
+                              Avoid approving this request until a clear proof
+                              of payment is available.
+                            </p>
+                          </div>
+                        )}
+                      </section>
+                    </div>
+
+                    {request.review_notes ? (
+                      <section className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
+                        <SectionHeader title="Review Notes" />
+                        <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600">
+                          {request.review_notes}
+                        </p>
+                      </section>
+                    ) : null}
+
+                    <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_150px] lg:items-end">
+                        <form
+                          id={`approve-${request.id}`}
+                          action={approveDepositRequestAction}
+                          className="contents"
+                        >
+                          <input
+                            type="hidden"
+                            name="deposit_request_id"
+                            value={request.id}
+                          />
+                          <input type="hidden" name="review_notes" value="" />
+
+                          <div>
+                            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                              Transaction Reference
+                            </label>
+                            <TextInput
+                              name="transaction_reference"
+                              placeholder="Enter transaction reference"
+                              defaultValue={request.transaction_reference}
+                              required
+                            />
+                          </div>
+
+                          <ActionButton variant="approve">Approve</ActionButton>
+                        </form>
+
+                        <form action={rejectDepositRequestAction}>
+                          <input
+                            type="hidden"
+                            name="deposit_request_id"
+                            value={request.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="review_notes"
+                            value="Rejected by admin"
+                          />
+
+                          <ActionButton variant="reject">Reject</ActionButton>
+                        </form>
+                      </div>
+                    </div>
                   </div>
-                </section>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </main>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+    </>
   )
 }

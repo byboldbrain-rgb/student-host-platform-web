@@ -171,10 +171,19 @@ async function getDefaultAdminRoute(
     id: string
     role?: string | null
     department?: string | null
+    owner_id?: string | null
   }
 ) {
+  if (admin.role === 'property_owner') {
+    return admin.owner_id ? '/admin/owners' : '/admin/unauthorized'
+  }
+
   if (admin.role === 'super_admin') {
     return '/admin'
+  }
+
+  if (admin.role === 'AR') {
+    return '/admin/finance/deposit-requests'
   }
 
   if (admin.role === 'properties_super_admin') {
@@ -187,6 +196,10 @@ async function getDefaultAdminRoute(
 
   if (admin.role === 'property_editor') {
     return '/admin/properties'
+  }
+
+  if (admin.role === 'property_receiver') {
+    return '/admin/properties/booking-requests'
   }
 
   if (admin.role === 'food_super_admin') {
@@ -359,7 +372,7 @@ export async function middleware(request: NextRequest) {
     if (isUserGuestOnlyRoute && user) {
       const { data: adminUser } = await supabase
         .from('admin_users')
-        .select('id, is_active')
+        .select('id, is_active, role')
         .eq('id', user.id)
         .eq('is_active', true)
         .maybeSingle()
@@ -384,7 +397,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: adminUser } = await supabase
     .from('admin_users')
-    .select('id, role, department, is_active')
+    .select('id, role, department, is_active, owner_id')
     .eq('id', user.id)
     .eq('is_active', true)
     .maybeSingle()
@@ -404,6 +417,34 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isUnauthorizedRoute) {
+    return response
+  }
+
+  if (adminUser.role === 'property_owner') {
+    const allowedPath = '/admin/owners'
+    const isAllowedPath =
+      pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!adminUser.owner_id || !isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+
+    return response
+  }
+
+  if (adminUser.role === 'AR') {
+    const allowedPath = '/admin/finance/deposit-requests'
+    const isAllowedPath =
+      pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+
     return response
   }
 

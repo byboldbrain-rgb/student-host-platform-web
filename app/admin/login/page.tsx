@@ -265,10 +265,19 @@ async function getDefaultAdminRoute(
     id: string
     role?: string | null
     department?: string | null
+    owner_id?: string | null
   }
 ) {
+  if (admin.role === 'property_owner') {
+    return admin.owner_id ? '/admin/owners' : '/admin/unauthorized'
+  }
+
   if (admin.role === 'super_admin') {
     return '/admin'
+  }
+
+  if (admin.role === 'AR') {
+    return '/admin/finance/deposit-requests'
   }
 
   if (admin.role === 'properties_super_admin') {
@@ -281,6 +290,10 @@ async function getDefaultAdminRoute(
 
   if (admin.role === 'property_editor') {
     return '/admin/properties'
+  }
+
+  if (admin.role === 'property_receiver') {
+    return '/admin/properties/booking-requests'
   }
 
   if (admin.role === 'food_super_admin') {
@@ -456,7 +469,7 @@ export default function AdminLoginPage() {
 
     const { data: adminUser, error: adminError } = await supabase
       .from('admin_users')
-      .select('id, role, department, is_active')
+      .select('id, role, department, is_active, owner_id')
       .eq('id', data.user.id)
       .eq('is_active', true)
       .maybeSingle()

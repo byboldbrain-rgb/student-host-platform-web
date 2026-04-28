@@ -7,6 +7,26 @@ import { updatePropertyAction } from './actions'
 type City = { id: string; name_en: string; name_ar: string }
 type University = { id: string; city_id: string; name_en: string; name_ar: string }
 type Broker = { id: string; full_name: string; company_name?: string | null }
+
+type OwnerServiceArea = {
+  id?: string
+  city_id: string
+  university_id: string
+  is_active?: boolean | null
+}
+
+type Owner = {
+  id: string
+  full_name: string
+  phone_number?: string | null
+  whatsapp_number?: string | null
+  email?: string | null
+  company_name?: string | null
+  is_active?: boolean | null
+  property_owner_service_areas?: OwnerServiceArea[] | null
+  service_areas?: OwnerServiceArea[] | null
+}
+
 type Amenity = { id: string; name_en: string; name_ar: string }
 type Facility = { id: number; name_en: string; name_ar: string }
 type BillType = { id: number; name_en: string; name_ar: string }
@@ -69,6 +89,7 @@ type Property = {
   city_id: string
   university_id: string
   broker_id: string
+  owner_id: string | null
   price_egp: number
   rental_duration: 'daily' | 'monthly'
   availability_status: 'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
@@ -135,6 +156,7 @@ type Props = {
   cities: City[]
   universities: University[]
   brokers: Broker[]
+  owners: Owner[]
   amenities: Amenity[]
   facilities: Facility[]
   billTypes: BillType[]
@@ -302,6 +324,34 @@ function getBookingRequestStatusClass(status: string) {
   return 'border-gray-200 bg-gray-50 text-gray-700'
 }
 
+function getOwnerLabel(owner: Owner) {
+  const company = owner.company_name?.trim()
+  const fullName = owner.full_name?.trim()
+  const phone = owner.phone_number?.trim()
+
+  const mainLabel = company || fullName || 'Owner'
+  return phone ? `${mainLabel} - ${phone}` : mainLabel
+}
+
+function getOwnerServiceAreas(owner: Owner) {
+  const serviceAreas =
+    owner.property_owner_service_areas || owner.service_areas || []
+
+  return Array.isArray(serviceAreas) ? serviceAreas : []
+}
+
+function ownerMatchesLocation(owner: Owner, cityId: string, universityId: string) {
+  if (!cityId || !universityId) return false
+
+  return getOwnerServiceAreas(owner).some(
+    (area) =>
+      area &&
+      String(area.city_id) === String(cityId) &&
+      String(area.university_id) === String(universityId) &&
+      area.is_active !== false
+  )
+}
+
 function CounterField({
   label,
   value,
@@ -328,7 +378,9 @@ function CounterField({
           −
         </button>
 
-        <span className="text-[24px] font-semibold text-[#1a1a1a]">{numericValue}</span>
+        <span className="text-[24px] font-semibold text-[#1a1a1a]">
+          {numericValue}
+        </span>
 
         <button
           type="button"
@@ -353,6 +405,7 @@ function normalizeRoomNumberFieldIfNeeded(field: keyof RoomForm, value: string) 
   ) {
     return normalizeNumberString(value)
   }
+
   return value
 }
 
@@ -486,6 +539,7 @@ export default function EditPropertyForm({
   cities = [],
   universities = [],
   brokers = [],
+  owners = [],
   amenities = [],
   facilities = [],
   billTypes = [],
@@ -520,36 +574,53 @@ export default function EditPropertyForm({
   const [cityId, setCityId] = useState(property.city_id)
   const [universityId, setUniversityId] = useState(property.university_id)
   const [brokerId, setBrokerId] = useState(property.broker_id)
+  const [ownerId, setOwnerId] = useState(property.owner_id || '')
   const [priceEgp, setPriceEgp] = useState(String(property.price_egp || ''))
-  const [propertyRentalDuration, setPropertyRentalDuration] = useState<'daily' | 'monthly'>(
-    property.rental_duration
-  )
+  const [propertyRentalDuration, setPropertyRentalDuration] = useState<
+    'daily' | 'monthly'
+  >(property.rental_duration)
   const [availabilityStatus, setAvailabilityStatus] = useState<
     'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
   >(property.availability_status)
 
-  const [bedroomsCount, setBedroomsCount] = useState(String(property.bedrooms_count ?? 0))
-  const [bathroomsCount, setBathroomsCount] = useState(String(property.bathrooms_count ?? 0))
+  const [bedroomsCount, setBedroomsCount] = useState(
+    String(property.bedrooms_count ?? 0)
+  )
+  const [bathroomsCount, setBathroomsCount] = useState(
+    String(property.bathrooms_count ?? 0)
+  )
   const [bedsCount, setBedsCount] = useState(String(property.beds_count ?? 0))
-  const [guestsCount, setGuestsCount] = useState(String(property.guests_count ?? 0))
+  const [guestsCount, setGuestsCount] = useState(
+    String(property.guests_count ?? 0)
+  )
   const [gender, setGender] = useState(property.gender || '')
-  const [smokingPolicy, setSmokingPolicy] = useState(property.smoking_policy || '')
-  const [airbnbPriceMin, setAirbnbPriceMin] = useState(String(property.airbnb_price_min ?? ''))
-  const [airbnbPriceMax, setAirbnbPriceMax] = useState(String(property.airbnb_price_max ?? ''))
+  const [smokingPolicy, setSmokingPolicy] = useState(
+    property.smoking_policy || ''
+  )
+  const [airbnbPriceMin, setAirbnbPriceMin] = useState(
+    String(property.airbnb_price_min ?? '')
+  )
+  const [airbnbPriceMax, setAirbnbPriceMax] = useState(
+    String(property.airbnb_price_max ?? '')
+  )
   const [latitude, setLatitude] = useState(String(property.latitude ?? ''))
   const [longitude, setLongitude] = useState(String(property.longitude ?? ''))
 
   const safeImages = Array.isArray(images) ? images : []
   const safeRooms = Array.isArray(rooms) ? rooms : []
-  const safeBookingRequests = Array.isArray(bookingRequests) ? bookingRequests : []
+  const safeBookingRequests = Array.isArray(bookingRequests)
+    ? bookingRequests
+    : []
 
-  const [existingImages, setExistingImages] = useState<PropertyImage[]>(safeImages)
+  const [existingImages, setExistingImages] =
+    useState<PropertyImage[]>(safeImages)
   const [newImageFiles, setNewImageFiles] = useState<ImageFileItem[]>([])
   const [coverSelection, setCoverSelection] = useState<CoverSelection>(() => {
     const existingCoverIndex = safeImages.findIndex((img) => img.is_cover)
     if (existingCoverIndex >= 0) {
       return { kind: 'existing', index: existingCoverIndex }
     }
+
     return { kind: 'existing', index: 0 }
   })
   const [isDraggingPhotos, setIsDraggingPhotos] = useState(false)
@@ -562,10 +633,13 @@ export default function EditPropertyForm({
           room_name_ar: room?.room_name_ar || '',
           room_type: room?.room_type || 'single',
           rental_duration: property?.rental_duration || 'monthly',
-          beds_count: String(Array.isArray(room?.room_beds) ? room.room_beds.length : 1),
+          beds_count: String(
+            Array.isArray(room?.room_beds) ? room.room_beds.length : 1
+          ),
           private_bathroom: Boolean(room?.private_bathroom),
           is_reserved:
-            room?.status === 'fully_reserved' || room?.status === 'partially_reserved',
+            room?.status === 'fully_reserved' ||
+            room?.status === 'partially_reserved',
           single_room_option_id: getRoomOptionId(room, 'single_room'),
           single_room_enabled: getRoomOptionEnabled(room, 'single_room'),
           single_room_price_egp: getRoomOptionPrice(room, 'single_room'),
@@ -589,8 +663,42 @@ export default function EditPropertyForm({
     return universities.filter((u) => u.city_id === cityId)
   }, [cityId, universities])
 
+  const selectedOwner = useMemo(() => {
+    return owners.find((owner) => owner.id === ownerId) || null
+  }, [owners, ownerId])
+
+  const filteredOwners = useMemo(() => {
+    if (!cityId || !universityId) return []
+
+    const matchingOwners = owners.filter(
+      (owner) =>
+        owner.is_active !== false &&
+        ownerMatchesLocation(owner, cityId, universityId)
+    )
+
+    const selectedOwnerExists =
+      selectedOwner &&
+      selectedOwner.is_active !== false &&
+      !matchingOwners.some((owner) => owner.id === selectedOwner.id)
+
+    const finalOwners = selectedOwnerExists
+      ? [...matchingOwners, selectedOwner]
+      : matchingOwners
+
+    return finalOwners.sort((a, b) =>
+      getOwnerLabel(a).localeCompare(getOwnerLabel(b))
+    )
+  }, [owners, cityId, universityId, selectedOwner])
+
   const activeBrokerName =
-    brokers.find((broker) => broker.id === property.broker_id)?.full_name || property.broker_id
+    brokers.find((broker) => broker.id === property.broker_id)?.full_name ||
+    property.broker_id
+
+  const activeOwnerName =
+    selectedOwner?.full_name ||
+    owners.find((owner) => owner.id === property.owner_id)?.full_name ||
+    property.owner_id ||
+    ''
 
   const hasAtLeastOneImage =
     existingImages.length > 0 || newImageFiles.some((item) => item.file !== null)
@@ -613,7 +721,9 @@ export default function EditPropertyForm({
 
   const lowestRoomOptionPrice = useMemo(() => {
     const prices = roomState.flatMap((room) =>
-      getEnabledRoomOptions(room).map((option) => Number(normalizeNumberString(option.price)))
+      getEnabledRoomOptions(room).map((option) =>
+        Number(normalizeNumberString(option.price))
+      )
     )
     const validPrices = prices.filter((value) => Number.isFinite(value) && value > 0)
     if (validPrices.length === 0) return null
@@ -622,14 +732,17 @@ export default function EditPropertyForm({
 
   const hasValidRoom = roomState.some((room) => {
     const bedsCountValue = Number(normalizeNumberString(room.beds_count || '0'))
+
     const hasValidSingle =
       room.single_room_enabled &&
       isValidPrice(room.single_room_price_egp) &&
       bedsCountValue >= 1
+
     const hasValidDouble =
       room.double_room_enabled &&
       isValidPrice(room.double_room_price_egp) &&
       bedsCountValue >= 2
+
     const hasValidTriple =
       room.triple_room_enabled &&
       isValidPrice(room.triple_room_price_egp) &&
@@ -707,6 +820,22 @@ export default function EditPropertyForm({
       setAvailabilityStatus(getAvailabilityStatusFromRooms(roomState))
     }
   }, [roomState, availabilityStatus])
+
+  useEffect(() => {
+    if (!ownerId) return
+    if (!cityId || !universityId) return
+
+    const ownerStillValid = owners.some(
+      (owner) =>
+        owner.id === ownerId &&
+        owner.is_active !== false &&
+        ownerMatchesLocation(owner, cityId, universityId)
+    )
+
+    if (!ownerStillValid && ownerId !== property.owner_id) {
+      setOwnerId('')
+    }
+  }, [cityId, universityId, ownerId, owners, property.owner_id])
 
   useEffect(() => {
     return () => {
@@ -831,6 +960,17 @@ export default function EditPropertyForm({
     if (!universityStillValid) {
       setUniversityId('')
     }
+
+    setOwnerId('')
+  }
+
+  const handleUniversityChange = (value: string) => {
+    setUniversityId(value)
+    setOwnerId('')
+  }
+
+  const handleBrokerChange = (value: string) => {
+    setBrokerId(value)
   }
 
   const validateStep = (step: number) => {
@@ -869,6 +1009,21 @@ export default function EditPropertyForm({
 
         if (canChangeBroker && !brokerId.trim()) {
           return 'Please select a broker.'
+        }
+
+        if (!ownerId.trim()) {
+          return 'Please select the property owner.'
+        }
+
+        if (
+          !owners.some(
+            (owner) =>
+              owner.id === ownerId &&
+              owner.is_active !== false &&
+              ownerMatchesLocation(owner, cityId, universityId)
+          )
+        ) {
+          return 'Selected owner is not available for the selected city and university.'
         }
 
         return ''
@@ -979,6 +1134,7 @@ export default function EditPropertyForm({
     formData.set('address_ar', addressAr)
     formData.set('city_id', cityId)
     formData.set('university_id', universityId)
+    formData.set('owner_id', ownerId)
     formData.set('price_egp', normalizeNumberString(priceEgp))
     formData.set('rental_duration', propertyRentalDuration)
     formData.set('availability_status', derivedAvailabilityStatus)
@@ -1167,6 +1323,7 @@ export default function EditPropertyForm({
           </div>
         </div>
       </div>
+
       <main className="px-4 py-8 md:px-8 md:py-10">
         <div className="mx-auto max-w-[1100px]">
           <div className="max-w-[1000px]">
@@ -1340,7 +1497,7 @@ export default function EditPropertyForm({
                     <select
                       name="university_id"
                       value={universityId}
-                      onChange={(e) => setUniversityId(e.target.value)}
+                      onChange={(e) => handleUniversityChange(e.target.value)}
                       disabled={!cityId}
                       className={`${selectClass} disabled:bg-[#f5f5f5]`}
                     >
@@ -1362,7 +1519,7 @@ export default function EditPropertyForm({
                       <select
                         name="broker_id"
                         value={brokerId}
-                        onChange={(e) => setBrokerId(e.target.value)}
+                        onChange={(e) => handleBrokerChange(e.target.value)}
                         className={selectClass}
                       >
                         <option value="">Select Broker</option>
@@ -1379,6 +1536,43 @@ export default function EditPropertyForm({
                         disabled
                         className={`${inputClass} bg-[#f5f5f5]`}
                       />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+                      Owner
+                    </label>
+                    <select
+                      name="owner_id"
+                      value={ownerId}
+                      onChange={(e) => setOwnerId(e.target.value)}
+                      disabled={!cityId || !universityId}
+                      className={`${selectClass} disabled:bg-[#f5f5f5]`}
+                    >
+                      <option value="">
+                        {!cityId
+                          ? 'Select City'
+                          : !universityId
+                          ? 'Select University'
+                          : 'Select Owner'}
+                      </option>
+
+                      {filteredOwners.map((owner) => (
+                        <option key={owner.id} value={owner.id}>
+                          {getOwnerLabel(owner)}
+                        </option>
+                      ))}
+                    </select>
+
+                    {cityId && universityId && filteredOwners.length === 0 ? (
+                      <p className="mt-2 text-xs font-medium text-[#b42318]">
+                        No active owners found.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-[#6b7280]">
+                        Owners are filtered by the selected city and university.
+                      </p>
                     )}
                   </div>
 
@@ -1507,18 +1701,6 @@ export default function EditPropertyForm({
                       onClick={() => fileInputRef.current?.click()}
                       className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#006ce4] bg-white px-5 py-3 text-[16px] font-semibold text-[#006ce4] transition hover:bg-[#f7fbff]"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className="h-5 w-5"
-                      >
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <path d="M7 10l5-5 5 5" />
-                        <path d="M12 5v12" />
-                      </svg>
                       Upload photos
                     </button>
                   </div>
@@ -1666,21 +1848,17 @@ export default function EditPropertyForm({
                     </p>
                   </div>
 
-                  <div>
-                    <CounterField
-                      label="How many guests can stay?"
-                      value={guestsCount}
-                      onChange={setGuestsCount}
-                    />
-                  </div>
+                  <CounterField
+                    label="How many guests can stay?"
+                    value={guestsCount}
+                    onChange={setGuestsCount}
+                  />
 
-                  <div>
-                    <CounterField
-                      label="How many bathrooms are there?"
-                      value={bathroomsCount}
-                      onChange={setBathroomsCount}
-                    />
-                  </div>
+                  <CounterField
+                    label="How many bathrooms are there?"
+                    value={bathroomsCount}
+                    onChange={setBathroomsCount}
+                  />
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
@@ -1808,9 +1986,15 @@ export default function EditPropertyForm({
                   {roomState.map((room, index) => {
                     const bedsCountValue = Number(normalizeNumberString(room.beds_count || '0'))
                     const enabledOptions = [
-                      room.single_room_enabled ? `Single: ${room.single_room_price_egp || '-'} EGP` : null,
-                      room.double_room_enabled ? `Double: ${room.double_room_price_egp || '-'} EGP` : null,
-                      room.triple_room_enabled ? `Triple: ${room.triple_room_price_egp || '-'} EGP` : null,
+                      room.single_room_enabled
+                        ? `Single: ${room.single_room_price_egp || '-'} EGP`
+                        : null,
+                      room.double_room_enabled
+                        ? `Double: ${room.double_room_price_egp || '-'} EGP`
+                        : null,
+                      room.triple_room_enabled
+                        ? `Triple: ${room.triple_room_price_egp || '-'} EGP`
+                        : null,
                     ].filter(Boolean)
 
                     return (
@@ -2077,7 +2261,18 @@ export default function EditPropertyForm({
                         Broker
                       </p>
                       <p className="mt-1 font-semibold">
-                        {brokers.find((b) => b.id === brokerId)?.full_name || activeBrokerName || '-'}
+                        {brokers.find((b) => b.id === brokerId)?.full_name ||
+                          activeBrokerName ||
+                          '-'}
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border border-[#ececec] p-3">
+                      <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
+                        Owner
+                      </p>
+                      <p className="mt-1 font-semibold">
+                        {selectedOwner ? getOwnerLabel(selectedOwner) : activeOwnerName || '-'}
                       </p>
                     </div>
 
@@ -2160,56 +2355,6 @@ export default function EditPropertyForm({
                     </div>
                   </div>
 
-                  {safeBookingRequests.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="mb-3 text-base font-semibold text-[#1a1a1a]">
-                        Booking Requests
-                      </h3>
-
-                      <div className="space-y-3">
-                        {safeBookingRequests.map((request) => (
-                          <div
-                            key={request.id}
-                            className="rounded-md border border-[#ececec] p-4"
-                          >
-                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                              <div>
-                                <p className="font-semibold text-[#1a1a1a]">
-                                  {request.customer_name || 'Unknown customer'}
-                                </p>
-
-                                <div className="mt-2 space-y-1 text-sm text-[#6b7280]">
-                                  <p>Phone: {request.customer_phone || '—'}</p>
-                                  <p>Email: {request.customer_email || '—'}</p>
-                                  <p>WhatsApp: {request.customer_whatsapp || '—'}</p>
-                                  <p>
-                                    Start Date: {request.preferred_start_date || '—'} | End Date:{' '}
-                                    {request.preferred_end_date || '—'}
-                                  </p>
-                                  <p>Submitted: {formatBookingRequestDate(request.created_at)}</p>
-                                </div>
-
-                                {request.message ? (
-                                  <p className="mt-3 rounded-md bg-[#fafafa] p-3 text-sm text-[#374151]">
-                                    {request.message}
-                                  </p>
-                                ) : null}
-                              </div>
-
-                              <span
-                                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getBookingRequestStatusClass(
-                                  request.status
-                                )}`}
-                              >
-                                {formatBookingRequestStatus(request.status)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {roomState.length > 0 && (
                     <div className="mt-6">
                       <h3 className="mb-3 text-base font-semibold text-[#1a1a1a]">
@@ -2255,56 +2400,6 @@ export default function EditPropertyForm({
                             </div>
                           )
                         })}
-                      </div>
-                    </div>
-                  )}
-
-                  {totalImageCount > 0 && (
-                    <div className="mt-6">
-                      <h3 className="mb-3 text-base font-semibold text-[#1a1a1a]">
-                        Image Preview
-                      </h3>
-
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {existingImages.map((image, index) => (
-                          <div
-                            key={`review-existing-${image.id}`}
-                            className="overflow-hidden rounded-md border border-[#ececec] bg-white"
-                          >
-                            <img
-                              src={image.image_url}
-                              alt={`Property existing ${index + 1}`}
-                              className="h-44 w-full object-cover"
-                            />
-                            <div className="p-3 text-sm text-[#1a1a1a]">
-                              {coverSelection.kind === 'existing' &&
-                              coverSelection.index === index &&
-                              existingCoverActive
-                                ? 'Cover image'
-                                : `Existing image ${index + 1}`}
-                            </div>
-                          </div>
-                        ))}
-
-                        {newImageFiles.map((image, index) => (
-                          <div
-                            key={`review-new-${image.previewUrl}-${index}`}
-                            className="overflow-hidden rounded-md border border-[#ececec] bg-white"
-                          >
-                            <img
-                              src={image.previewUrl}
-                              alt={`Property new ${index + 1}`}
-                              className="h-44 w-full object-cover"
-                            />
-                            <div className="p-3 text-sm text-[#1a1a1a]">
-                              {coverSelection.kind === 'new' &&
-                              coverSelection.index === index &&
-                              newCoverActive
-                                ? 'Cover image'
-                                : `New image ${index + 1}`}
-                            </div>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   )}

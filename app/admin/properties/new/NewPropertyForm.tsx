@@ -25,6 +25,26 @@ type Broker = {
   company_name?: string | null
 }
 
+type Owner = {
+  id: string
+  full_name: string
+  company_name?: string | null
+  phone_number?: string | null
+  whatsapp_number?: string | null
+  email?: string | null
+  tax_id?: string | null
+  national_id?: string | null
+  is_active?: boolean
+}
+
+type OwnerServiceArea = {
+  id?: string | number
+  owner_id: string
+  city_id: string | null
+  university_id: string | null
+  is_active?: boolean | null
+}
+
 type BrokerUniversity = {
   broker_id: string
   university_id: string
@@ -75,6 +95,8 @@ type Props = {
   cities: City[]
   universities: University[]
   brokers: Broker[]
+  owners: Owner[]
+  ownerServiceAreas: OwnerServiceArea[]
   brokerUniversities: BrokerUniversity[]
   amenities: Amenity[]
   billTypes: BillType[]
@@ -247,9 +269,7 @@ function CounterField({
         </button>
       </div>
 
-      {helperText && (
-        <p className="mt-2 text-sm text-[#6b7280]">{helperText}</p>
-      )}
+      {helperText && <p className="mt-2 text-sm text-[#6b7280]">{helperText}</p>}
     </div>
   )
 }
@@ -436,11 +456,7 @@ function IconThumb({
   if (iconUrl) {
     return (
       <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#dbe4f0] bg-white shadow-sm">
-        <img
-          src={iconUrl}
-          alt={label}
-          className="h-6 w-6 object-contain"
-        />
+        <img src={iconUrl} alt={label} className="h-6 w-6 object-contain" />
       </div>
     )
   }
@@ -466,10 +482,7 @@ function FeatureSelectableCard({
   iconUrl?: string | null
 }) {
   return (
-    <label
-      htmlFor={inputId}
-      className="group relative block cursor-pointer"
-    >
+    <label htmlFor={inputId} className="group relative block cursor-pointer">
       <input
         id={inputId}
         type="checkbox"
@@ -482,9 +495,7 @@ function FeatureSelectableCard({
         <IconThumb label={title} iconUrl={iconUrl} />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#162033]">
-            {title}
-          </p>
+          <p className="truncate text-sm font-semibold text-[#162033]">{title}</p>
         </div>
 
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#ccd7e4] bg-white text-transparent transition peer-checked:border-[#0b66c3] peer-checked:bg-[#0b66c3] peer-checked:text-white">
@@ -518,7 +529,11 @@ function FeatureSection({
 
 function BrandLogo() {
   return (
-    <Link href="/properties" className="navienty-logo" aria-label="Navienty admin home">
+    <Link
+      href="/admin/properties"
+      className="navienty-logo"
+      aria-label="Navienty admin home"
+    >
       <img
         src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
         alt="Navienty icon"
@@ -535,20 +550,12 @@ function BrandLogo() {
   )
 }
 
-function NotificationBadge({ count }: { count: number }) {
-  if (count <= 0) return null
-
-  return (
-    <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-[5px] text-[10px] font-bold leading-none text-white shadow-md">
-      {count > 99 ? '99+' : count}
-    </span>
-  )
-}
-
 export default function NewPropertyForm({
   cities,
   universities,
   brokers,
+  owners,
+  ownerServiceAreas,
   brokerUniversities,
   amenities,
   billTypes,
@@ -567,6 +574,8 @@ export default function NewPropertyForm({
   const [cityId, setCityId] = useState('')
   const [universityId, setUniversityId] = useState('')
   const [brokerId, setBrokerId] = useState('')
+  const [ownerId, setOwnerId] = useState('')
+  const [ownerSearch, setOwnerSearch] = useState('')
   const [priceEgp, setPriceEgp] = useState('')
   const [propertyRentalDuration, setPropertyRentalDuration] = useState<
     'monthly' | 'daily'
@@ -616,7 +625,7 @@ export default function NewPropertyForm({
 
   const filteredUniversities = useMemo(() => {
     if (!cityId) return []
-    return universities.filter((u) => u.city_id === cityId)
+    return universities.filter((university) => university.city_id === cityId)
   }, [cityId, universities])
 
   const filteredBrokers = useMemo(() => {
@@ -631,13 +640,71 @@ export default function NewPropertyForm({
     return brokers.filter((broker) => allowedBrokerIds.has(broker.id))
   }, [universityId, brokerUniversities, brokers])
 
+  const activeOwners = useMemo(() => {
+    return [...owners]
+      .filter((owner) => owner.is_active !== false)
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+  }, [owners])
+
+  const eligibleOwners = useMemo(() => {
+    if (!cityId || !universityId) return []
+
+    const eligibleOwnerIds = new Set(
+      ownerServiceAreas
+        .filter((area) => {
+          if (area.is_active === false) return false
+          if (area.city_id !== cityId) return false
+          if (area.university_id !== universityId) return false
+          return true
+        })
+        .map((area) => area.owner_id)
+    )
+
+    return activeOwners.filter((owner) => eligibleOwnerIds.has(owner.id))
+  }, [activeOwners, ownerServiceAreas, cityId, universityId])
+
+  const displayedOwners = useMemo(() => {
+    const search = ownerSearch.trim().toLowerCase()
+
+    if (!cityId || !universityId) {
+      return []
+    }
+
+    if (!search) {
+      return eligibleOwners.slice(0, 80)
+    }
+
+    return eligibleOwners
+      .filter((owner) => {
+        const haystack = [
+          owner.full_name,
+          owner.company_name,
+          owner.phone_number,
+          owner.whatsapp_number,
+          owner.email,
+          owner.tax_id,
+          owner.national_id,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        return haystack.includes(search)
+      })
+      .slice(0, 80)
+  }, [eligibleOwners, ownerSearch, cityId, universityId])
+
+  const selectedOwner = useMemo(() => {
+    return activeOwners.find((owner) => owner.id === ownerId) || null
+  }, [activeOwners, ownerId])
+
   const activeAmenities = useMemo(() => {
     return [...amenities]
       .filter((item) => item.is_active !== false)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   }, [amenities])
 
-  const amenityCategoryGroups = useMemo<AmenityCategoryGroup[]>(() => {
+    const amenityCategoryGroups = useMemo<AmenityCategoryGroup[]>(() => {
     const groupMap = new Map<string, AmenityCategoryGroup>()
 
     activeAmenities.forEach((item) => {
@@ -690,6 +757,16 @@ export default function NewPropertyForm({
     }
   }, [canAutoSuggestBedrooms, rooms.length, bedroomsCount])
 
+  useEffect(() => {
+    if (!ownerId) return
+
+    const ownerStillValid = eligibleOwners.some((owner) => owner.id === ownerId)
+
+    if (!ownerStillValid) {
+      setOwnerId('')
+    }
+  }, [ownerId, eligibleOwners])
+
   const lowestAvailableOptionPrice = useMemo(() => {
     const prices = rooms.flatMap((room) =>
       getEnabledRoomOptions(room).map((option) =>
@@ -697,9 +774,7 @@ export default function NewPropertyForm({
       )
     )
 
-    const validPrices = prices.filter(
-      (price) => Number.isFinite(price) && price > 0
-    )
+    const validPrices = prices.filter((price) => Number.isFinite(price) && price > 0)
 
     if (validPrices.length === 0) return null
     return Math.min(...validPrices)
@@ -709,11 +784,19 @@ export default function NewPropertyForm({
     setCityId(value)
     setUniversityId('')
     setBrokerId('')
+    setOwnerId('')
+    setOwnerSearch('')
   }
 
   const handleUniversityChange = (value: string) => {
     setUniversityId(value)
     setBrokerId('')
+    setOwnerId('')
+    setOwnerSearch('')
+  }
+
+  const handleBrokerChange = (value: string) => {
+    setBrokerId(value)
   }
 
   const addImages = (filesList: FileList | null) => {
@@ -734,8 +817,7 @@ export default function NewPropertyForm({
         URL.revokeObjectURL(itemToRemove.previewUrl)
       }
 
-      const next = prev.filter((_, i) => i !== index)
-      return next
+      return prev.filter((_, i) => i !== index)
     })
 
     if (coverIndex === index) {
@@ -843,11 +925,17 @@ export default function NewPropertyForm({
           !cityId.trim() ||
           !universityId.trim() ||
           !brokerId.trim() ||
+          !ownerId.trim() ||
           !gender.trim() ||
           !propertyRentalDuration.trim()
         ) {
-          return 'Please complete city, university, broker, gender, and rental duration.'
+          return 'Please complete city, university, broker, owner, gender, and rental duration.'
         }
+
+        if (!eligibleOwners.some((owner) => owner.id === ownerId)) {
+          return 'Selected owner is not available for the selected city and university.'
+        }
+
         return ''
 
       case 3:
@@ -955,6 +1043,7 @@ export default function NewPropertyForm({
     formData.set('city_id', cityId)
     formData.set('university_id', universityId)
     formData.set('broker_id', brokerId)
+    formData.set('owner_id', ownerId)
     formData.set('price_egp', normalizeNumberString(priceEgp))
     formData.set('rental_duration', propertyRentalDuration)
     formData.set('gender', gender)
@@ -979,7 +1068,7 @@ export default function NewPropertyForm({
 
     rooms.forEach((room) => {
       formData.append('room_name', room.room_name)
-      formData.append('room_name_ar', room.room_name)
+      formData.append('room_name_ar', room.room_name_ar || room.room_name)
       formData.append('room_type', room.room_type)
       formData.append('room_rental_duration', room.rental_duration)
       formData.append('room_beds_count', normalizeNumberString(room.beds_count))
@@ -1033,6 +1122,7 @@ export default function NewPropertyForm({
       'city_id',
       'university_id',
       'broker_id',
+      'owner_id',
       'price_egp',
       'rental_duration',
       'gender',
@@ -1063,8 +1153,7 @@ export default function NewPropertyForm({
 
   const getDisplayStepStatus = (step: DisplayStep) => {
     if (currentStep > step.endStep) return 'done'
-    if (currentStep >= step.startStep && currentStep <= step.endStep)
-      return 'active'
+    if (currentStep >= step.startStep && currentStep <= step.endStep) return 'active'
     return 'upcoming'
   }
 
@@ -1238,12 +1327,9 @@ export default function NewPropertyForm({
       <input type="hidden" name="city_id" value={cityId} />
       <input type="hidden" name="university_id" value={universityId} />
       <input type="hidden" name="broker_id" value={brokerId} />
+      <input type="hidden" name="owner_id" value={ownerId} />
       <input type="hidden" name="price_egp" value={priceEgp} />
-      <input
-        type="hidden"
-        name="rental_duration"
-        value={propertyRentalDuration}
-      />
+      <input type="hidden" name="rental_duration" value={propertyRentalDuration} />
       <input type="hidden" name="gender" value={gender} />
       <input type="hidden" name="bedrooms_count" value={bedroomsCount} />
       <input type="hidden" name="bathrooms_count" value={bathroomsCount} />
@@ -1432,7 +1518,7 @@ export default function NewPropertyForm({
                     </label>
                     <select
                       value={brokerId}
-                      onChange={(e) => setBrokerId(e.target.value)}
+                      onChange={(e) => handleBrokerChange(e.target.value)}
                       disabled={!universityId}
                       className={`${selectClass} disabled:bg-[#f5f5f5]`}
                     >
@@ -1446,7 +1532,96 @@ export default function NewPropertyForm({
                         </option>
                       ))}
                     </select>
+                    <p className="mt-2 text-xs text-[#6b7280]">
+                      Broker is the person/company handling listing and operations.
+                    </p>
                   </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">
+                      Search Owner
+                    </label>
+                    <input
+                      value={ownerSearch}
+                      onChange={(e) => setOwnerSearch(e.target.value)}
+                      placeholder={
+                        cityId && universityId
+                          ? 'Search by name, phone, email, tax ID...'
+                          : 'Select city and university first'
+                      }
+                      disabled={!cityId || !universityId}
+                      className={`${inputClass} disabled:bg-[#f5f5f5]`}
+                    />
+                    <p className="mt-2 text-xs text-[#6b7280]">
+                      Owners are filtered by the selected city and university.
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium">
+                      Owner
+                    </label>
+                    <select
+                      value={ownerId}
+                      onChange={(e) => setOwnerId(e.target.value)}
+                      disabled={!cityId || !universityId}
+                      className={`${selectClass} disabled:bg-[#f5f5f5]`}
+                    >
+                      <option value="">
+                        {!cityId
+                          ? 'Select City'
+                          : !universityId
+                          ? 'Select University'
+                          : displayedOwners.length > 0
+                          ? 'Select Owner'
+                          : 'No matching owners'}
+                      </option>
+
+                      {selectedOwner &&
+                      !displayedOwners.some((owner) => owner.id === selectedOwner.id) ? (
+                        <option value={selectedOwner.id}>
+                          {selectedOwner.full_name}
+                          {selectedOwner.phone_number
+                            ? ` - ${selectedOwner.phone_number}`
+                            : ''}
+                        </option>
+                      ) : null}
+
+                      {displayedOwners.map((owner) => (
+                        <option key={owner.id} value={owner.id}>
+                          {owner.full_name}
+                          {owner.company_name ? ` - ${owner.company_name}` : ''}
+                          {owner.phone_number ? ` - ${owner.phone_number}` : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    {cityId && universityId && eligibleOwners.length === 0 ? (
+                      <p className="mt-2 text-xs font-medium text-[#b42318]">
+                        No active owners are assigned to this city and university.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-[#6b7280]">
+                        Showing owners assigned to the selected city and university only.
+                      </p>
+                    )}
+                  </div>
+
+                  {selectedOwner ? (
+                    <div className="md:col-span-2 rounded-md border border-[#dbeafe] bg-[#f0f7ff] p-4 text-sm text-[#0f3f75]">
+                      <p className="font-semibold text-[#0f3f75]">
+                        Selected owner details
+                      </p>
+                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                        <p>Name: {selectedOwner.full_name || '—'}</p>
+                        <p>Company: {selectedOwner.company_name || '—'}</p>
+                        <p>Phone: {selectedOwner.phone_number || '—'}</p>
+                        <p>WhatsApp: {selectedOwner.whatsapp_number || '—'}</p>
+                        <p>Email: {selectedOwner.email || '—'}</p>
+                        <p>Tax ID: {selectedOwner.tax_id || '—'}</p>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div>
                     <label className="mb-1.5 block text-sm font-medium">
@@ -1463,7 +1638,7 @@ export default function NewPropertyForm({
                     </select>
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="mb-1.5 block text-sm font-medium">
                       Rental Duration
                     </label>
@@ -1741,7 +1916,8 @@ export default function NewPropertyForm({
                               {room.room_name || `Bedroom ${index + 1}`}
                             </h3>
                             <p className="mt-1 text-sm text-[#6b7280]">
-                              {getRoomOptionCountLabel(room)} • {room.beds_count || '0'} bed(s)
+                              {getRoomOptionCountLabel(room)} •{' '}
+                              {room.beds_count || '0'} bed(s)
                             </p>
                           </div>
 
@@ -1923,7 +2099,9 @@ export default function NewPropertyForm({
                   <FeatureSection
                     key={group.key}
                     title={group.title}
-                    subtitle={`${group.items.length} item${group.items.length === 1 ? '' : 's'}`}
+                    subtitle={`${group.items.length} item${
+                      group.items.length === 1 ? '' : 's'
+                    }`}
                   >
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                       {group.items.map((item) => (
@@ -1989,7 +2167,7 @@ export default function NewPropertyForm({
                         City
                       </p>
                       <p className="mt-1 font-semibold">
-                        {cities.find((c) => c.id === cityId)?.name_en || '-'}
+                        {cities.find((city) => city.id === cityId)?.name_en || '-'}
                       </p>
                     </div>
 
@@ -1998,8 +2176,8 @@ export default function NewPropertyForm({
                         University
                       </p>
                       <p className="mt-1 font-semibold">
-                        {universities.find((u) => u.id === universityId)?.name_en ||
-                          '-'}
+                        {universities.find((university) => university.id === universityId)
+                          ?.name_en || '-'}
                       </p>
                     </div>
 
@@ -2008,8 +2186,27 @@ export default function NewPropertyForm({
                         Broker
                       </p>
                       <p className="mt-1 font-semibold">
-                        {brokers.find((b) => b.id === brokerId)?.full_name || '-'}
+                        {brokers.find((broker) => broker.id === brokerId)?.full_name ||
+                          '-'}
                       </p>
+                    </div>
+
+                    <div className="rounded-md border border-[#ececec] p-3">
+                      <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
+                        Owner
+                      </p>
+                      <p className="mt-1 font-semibold">
+                        {selectedOwner?.full_name || '-'}
+                      </p>
+                      {selectedOwner ? (
+                        <p className="mt-1 text-xs text-[#6b7280]">
+                          {selectedOwner.company_name ||
+                            selectedOwner.phone_number ||
+                            selectedOwner.whatsapp_number ||
+                            selectedOwner.email ||
+                            ''}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="rounded-md border border-[#ececec] p-3">
@@ -2130,12 +2327,15 @@ export default function NewPropertyForm({
                                 {room.room_name || `Room ${index + 1}`}
                               </p>
                               <p className="mt-2 text-sm text-[#6b7280]">
-                                Type: {room.room_type} | Duration: {room.rental_duration} | Beds:{' '}
+                                Type: {room.room_type} | Duration:{' '}
+                                {room.rental_duration} | Beds:{' '}
                                 {room.beds_count || '0'}
                               </p>
                               <p className="mt-1 text-sm text-[#6b7280]">
                                 Options:{' '}
-                                {optionLabels.length > 0 ? optionLabels.join(' | ') : '-'}
+                                {optionLabels.length > 0
+                                  ? optionLabels.join(' | ')
+                                  : '-'}
                               </p>
                             </div>
                           )

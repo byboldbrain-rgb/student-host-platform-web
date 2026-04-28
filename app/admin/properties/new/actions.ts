@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/src/lib/supabase/admin'
-import { requirePropertyCreatorAccess } from '@/src/lib/admin-auth'
+import { requirePropertyCreatorAccess, isSuperAdmin } from '@/src/lib/admin-auth'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 
@@ -39,6 +39,8 @@ function slugifyFileName(fileName: string) {
   return extension ? `${safeName || 'image'}.${extension}` : safeName || 'image'
 }
 
+type AdminSupabaseClient = ReturnType<typeof createAdminClient>
+
 type RoomSellableOptionInput = {
   code: 'single_room' | 'double_room' | 'triple_room'
   name_en: string
@@ -63,6 +65,34 @@ type RoomRowInput = {
   enabled_options: RoomSellableOptionInput[]
 }
 
+type InsertedRoomSummary = {
+  id: string
+  sort_order: number
+  enabled_options: RoomSellableOptionInput[]
+}
+
+type PropertyOptionCode =
+  | 'full_apartment'
+  | 'single_room'
+  | 'double_room'
+  | 'triple_room'
+
+type PropertySellableOptionRow = {
+  property_id: string
+  code: PropertyOptionCode
+  option_code: PropertyOptionCode
+  name_en: string
+  name_ar: string
+  sell_mode: 'entire_property' | 'bed'
+  occupancy_size: number | null
+  price_egp: number
+  rental_duration: 'daily' | 'monthly'
+  is_active: boolean
+  sort_order: number
+  source_scope: 'property' | 'room'
+  pricing_mode: 'per_person' | 'per_room'
+}
+
 function getOptionLabel(code: RoomSellableOptionInput['code']) {
   switch (code) {
     case 'single_room':
@@ -73,6 +103,269 @@ function getOptionLabel(code: RoomSellableOptionInput['code']) {
       return 'Triple Room'
     default:
       return code
+  }
+}
+
+function normalizeRentalDuration(value: string): 'daily' | 'monthly' {
+  return value === 'daily' ? 'daily' : 'monthly'
+}
+
+function buildPropertySellableOptionRows(params: {
+  propertyIdRef: string
+  rentalDuration: 'daily' | 'monthly'
+  fullApartmentPrice: number
+  insertedRooms: InsertedRoomSummary[]
+}) {
+  const { propertyIdRef, rentalDuration, fullApartmentPrice, insertedRooms } =
+    params
+
+  const singleOptionPrices = insertedRooms
+    .flatMap((room) =>
+      room.enabled_options.filter((option) => option.code === 'single_room')
+    )
+    .map((option) => option.price_egp)
+
+  const doubleOptionPrices = insertedRooms
+    .flatMap((room) =>
+      room.enabled_options.filter((option) => option.code === 'double_room')
+    )
+    .map((option) => option.price_egp)
+
+  const tripleOptionPrices = insertedRooms
+    .flatMap((room) =>
+      room.enabled_options.filter((option) => option.code === 'triple_room')
+    )
+    .map((option) => option.price_egp)
+
+  return [
+    {
+      property_id: propertyIdRef,
+      code: 'full_apartment',
+      option_code: 'full_apartment',
+      name_en: 'Full Apartment',
+      name_ar: 'الشقة بالكامل',
+      sell_mode: 'entire_property',
+      occupancy_size: null,
+      price_egp: fullApartmentPrice,
+      rental_duration: rentalDuration,
+      is_active: true,
+      sort_order: 0,
+      source_scope: 'property',
+      pricing_mode: 'per_room',
+    },
+    ...(singleOptionPrices.length > 0
+      ? [
+          {
+            property_id: propertyIdRef,
+            code: 'single_room',
+            option_code: 'single_room',
+            name_en: 'Single Room',
+            name_ar: 'غرفة سينجل',
+            sell_mode: 'bed',
+            occupancy_size: 1,
+            price_egp: Math.min(...singleOptionPrices),
+            rental_duration: rentalDuration,
+            is_active: true,
+            sort_order: 1,
+            source_scope: 'room',
+            pricing_mode: 'per_person',
+          } satisfies PropertySellableOptionRow,
+        ]
+      : []),
+    ...(doubleOptionPrices.length > 0
+      ? [
+          {
+            property_id: propertyIdRef,
+            code: 'double_room',
+            option_code: 'double_room',
+            name_en: 'Double Room',
+            name_ar: 'غرفة دابل',
+            sell_mode: 'bed',
+            occupancy_size: 2,
+            price_egp: Math.min(...doubleOptionPrices),
+            rental_duration: rentalDuration,
+            is_active: true,
+            sort_order: 2,
+            source_scope: 'room',
+            pricing_mode: 'per_person',
+          } satisfies PropertySellableOptionRow,
+        ]
+      : []),
+    ...(tripleOptionPrices.length > 0
+      ? [
+          {
+            property_id: propertyIdRef,
+            code: 'triple_room',
+            option_code: 'triple_room',
+            name_en: 'Triple Room',
+            name_ar: 'غرفة تربل',
+            sell_mode: 'bed',
+            occupancy_size: 3,
+            price_egp: Math.min(...tripleOptionPrices),
+            rental_duration: rentalDuration,
+            is_active: true,
+            sort_order: 3,
+            source_scope: 'room',
+            pricing_mode: 'per_person',
+          } satisfies PropertySellableOptionRow,
+        ]
+      : []),
+  ].filter((row) => row.price_egp > 0) as PropertySellableOptionRow[]
+}
+
+async function validateBrokerAccess({
+  supabase,
+  admin,
+  brokerId,
+}: {
+  supabase: AdminSupabaseClient
+  admin: {
+    id: string
+    broker_id?: string | null
+  }
+  brokerId: string
+}) {
+  if (!brokerId) {
+    throw new Error('Broker is required')
+  }
+
+  if (!isSuperAdmin(admin as any)) {
+    if (!admin.broker_id) {
+      throw new Error('Editor account is missing broker assignment')
+    }
+
+    if (brokerId !== admin.broker_id) {
+      throw new Error('You are not allowed to create properties for this broker')
+    }
+  }
+
+  const { data: broker, error: brokerError } = await supabase
+    .from('brokers')
+    .select('id')
+    .eq('id', brokerId)
+    .maybeSingle()
+
+  if (brokerError) {
+    throw new Error(brokerError.message)
+  }
+
+  if (!broker) {
+    throw new Error('Selected broker was not found')
+  }
+}
+
+async function validateOwner({
+  supabase,
+  ownerId,
+}: {
+  supabase: AdminSupabaseClient
+  ownerId: string
+}) {
+  if (!ownerId) {
+    throw new Error('Owner is required')
+  }
+
+  const { data: owner, error: ownerError } = await supabase
+    .from('property_owners')
+    .select('id, is_active')
+    .eq('id', ownerId)
+    .maybeSingle()
+
+  if (ownerError) {
+    throw new Error(ownerError.message)
+  }
+
+  if (!owner) {
+    throw new Error('Selected owner was not found')
+  }
+
+  if (owner.is_active === false) {
+    throw new Error('Selected owner is inactive')
+  }
+}
+
+async function validateOwnerServiceArea({
+  supabase,
+  ownerId,
+  cityId,
+  universityId,
+}: {
+  supabase: AdminSupabaseClient
+  ownerId: string
+  cityId: string
+  universityId: string
+}) {
+  if (!ownerId) {
+    throw new Error('Owner is required')
+  }
+
+  if (!cityId) {
+    throw new Error('City is required')
+  }
+
+  if (!universityId) {
+    throw new Error('University is required')
+  }
+
+  const { data: serviceArea, error: serviceAreaError } = await supabase
+    .from('owner_service_areas')
+    .select('id')
+    .eq('owner_id', ownerId)
+    .eq('city_id', cityId)
+    .eq('university_id', universityId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (serviceAreaError) {
+    throw new Error(serviceAreaError.message)
+  }
+
+  if (!serviceArea) {
+    throw new Error(
+      'Selected owner is not assigned to the selected city and university'
+    )
+  }
+}
+
+async function validateBrokerOwnerLink({
+  supabase,
+  brokerId,
+  ownerId,
+}: {
+  supabase: AdminSupabaseClient
+  brokerId: string
+  ownerId: string
+}) {
+  const { data: existingLink, error: linkError } = await supabase
+    .from('broker_property_owners')
+    .select('id, status')
+    .eq('broker_id', brokerId)
+    .eq('owner_id', ownerId)
+    .maybeSingle()
+
+  if (linkError) {
+    throw new Error(linkError.message)
+  }
+
+  if (existingLink && existingLink.status === 'blocked') {
+    throw new Error('This owner is blocked for the selected broker')
+  }
+
+  if (!existingLink) {
+    const { error: insertLinkError } = await supabase
+      .from('broker_property_owners')
+      .insert({
+        broker_id: brokerId,
+        owner_id: ownerId,
+        relationship_type: 'managed_by',
+        status: 'active',
+      })
+
+    if (insertLinkError) {
+      throw new Error(
+        `Failed to link owner with broker: ${insertLinkError.message}`
+      )
+    }
   }
 }
 
@@ -89,40 +382,54 @@ export async function createPropertyAction(formData: FormData) {
   const city_id = String(formData.get('city_id') || '').trim()
   const university_id = String(formData.get('university_id') || '').trim()
   const submittedBrokerId = String(formData.get('broker_id') || '').trim()
-  const rental_duration = String(
-    formData.get('rental_duration') || 'monthly'
-  ).trim()
+  const owner_id = String(formData.get('owner_id') || '').trim()
+  const rental_duration = normalizeRentalDuration(
+    String(formData.get('rental_duration') || 'monthly').trim()
+  )
   const admin_status = String(formData.get('admin_status') || 'draft').trim()
   const gender = String(formData.get('gender') || '').trim() || null
   const smoking_policy =
     String(formData.get('smoking_policy') || '').trim() || null
 
-  // Fallbacks لو حقول العربي اتشالت من الواجهة
   const title_ar = rawTitleAr || title_en
   const description_ar = rawDescriptionAr || description_en
   const address_en = String(formData.get('address_en') || '').trim() || null
   const rawAddressAr = String(formData.get('address_ar') || '').trim()
   const address_ar = rawAddressAr || address_en
 
-  // لو الحساب مربوط بـ broker نستخدمه تلقائيًا
-  // لو مش مربوط، نستخدم الـ broker المختار من الفورم
   const broker_id = admin.broker_id || submittedBrokerId
 
   if (!property_id) {
     throw new Error('Property code is required')
   }
 
-  if (!['daily', 'monthly'].includes(rental_duration)) {
-    throw new Error('Invalid rental duration')
-  }
-
   if (!['draft', 'pending_review'].includes(admin_status)) {
     throw new Error('Invalid admin status')
   }
 
-  if (!broker_id) {
-    throw new Error('Broker is required')
-  }
+  await validateBrokerAccess({
+    supabase,
+    admin,
+    brokerId: broker_id,
+  })
+
+  await validateOwner({
+    supabase,
+    ownerId: owner_id,
+  })
+
+  await validateOwnerServiceArea({
+    supabase,
+    ownerId: owner_id,
+    cityId: city_id,
+    universityId: university_id,
+  })
+
+  await validateBrokerOwnerLink({
+    supabase,
+    brokerId: broker_id,
+    ownerId: owner_id,
+  })
 
   const price_egp = toNullableNumber(formData.get('price_egp'))
   const uploadedImages = formData
@@ -313,6 +620,7 @@ export async function createPropertyAction(formData: FormData) {
     if (!city_id) throw new Error('City is required')
     if (!university_id) throw new Error('University is required')
     if (!broker_id) throw new Error('Broker is required')
+    if (!owner_id) throw new Error('Owner is required')
 
     if (price_egp === null || price_egp <= 0) {
       throw new Error('Valid full apartment price is required')
@@ -336,6 +644,16 @@ export async function createPropertyAction(formData: FormData) {
     }
   }
 
+  const finalBedroomsCount =
+    roomRows.length > 0
+      ? roomRows.length
+      : toNumberOrDefault(formData.get('bedrooms_count'), 0)
+
+  const finalBedsCount =
+    roomRows.length > 0
+      ? roomRows.reduce((sum, room) => sum + room.beds_count, 0)
+      : toNumberOrDefault(formData.get('beds_count'), 0)
+
   const propertyPayload = {
     property_id,
     title_en,
@@ -345,14 +663,15 @@ export async function createPropertyAction(formData: FormData) {
     city_id,
     university_id,
     broker_id,
+    owner_id,
     price_egp,
     rental_duration,
     availability_status: 'available',
     address_en,
     address_ar,
-    bedrooms_count: toNumberOrDefault(formData.get('bedrooms_count'), 0),
+    bedrooms_count: finalBedroomsCount,
     bathrooms_count: toNumberOrDefault(formData.get('bathrooms_count'), 0),
-    beds_count: toNumberOrDefault(formData.get('beds_count'), 0),
+    beds_count: finalBedsCount,
     guests_count: toNumberOrDefault(formData.get('guests_count'), 0),
     gender,
     smoking_policy,
@@ -418,6 +737,10 @@ export async function createPropertyAction(formData: FormData) {
       })
     }
 
+    if (imageRows.length > 0 && !imageRows.some((image) => image.is_cover)) {
+      imageRows[0].is_cover = true
+    }
+
     const { error: imagesError } = await supabase
       .from('property_images')
       .insert(imageRows)
@@ -439,6 +762,7 @@ export async function createPropertyAction(formData: FormData) {
     }))
 
     const { error } = await supabase.from('property_amenities').insert(rows)
+
     if (error) {
       throw new Error(`Failed to insert property amenities: ${error.message}`)
     }
@@ -456,6 +780,7 @@ export async function createPropertyAction(formData: FormData) {
     }))
 
     const { error } = await supabase.from('property_facilities').insert(rows)
+
     if (error) {
       throw new Error(`Failed to insert property facilities: ${error.message}`)
     }
@@ -473,10 +798,13 @@ export async function createPropertyAction(formData: FormData) {
     }))
 
     const { error } = await supabase.from('property_bill_includes').insert(rows)
+
     if (error) {
       throw new Error(`Failed to insert property bill includes: ${error.message}`)
     }
   }
+
+  const insertedRooms: InsertedRoomSummary[] = []
 
   if (roomRows.length > 0) {
     for (const room of roomRows) {
@@ -512,20 +840,21 @@ export async function createPropertyAction(formData: FormData) {
         )
       }
 
-      const bedRows = Array.from({ length: room.beds_count }).map((_, bedIndex) => ({
-        room_id: insertedRoom.id,
-        bed_label: `Bed ${bedIndex + 1}`,
-        bed_type: room.beds_count === 1 ? 'single' : 'custom',
-        price_egp: null,
-        status: 'available',
-        is_active: true,
-        sort_order: bedIndex,
-      }))
+      const bedRows = Array.from({ length: room.beds_count }).map(
+        (_, bedIndex) => ({
+          room_id: insertedRoom.id,
+          bed_label: `Bed ${bedIndex + 1}`,
+          bed_label_ar: `Bed ${bedIndex + 1}`,
+          bed_type: room.beds_count === 1 ? 'single' : 'custom',
+          price_egp: null,
+          status: 'available',
+          is_active: true,
+          sort_order: bedIndex,
+        })
+      )
 
       if (bedRows.length > 0) {
-        const { error: bedsError } = await supabase
-          .from('room_beds')
-          .insert(bedRows)
+        const { error: bedsError } = await supabase.from('room_beds').insert(bedRows)
 
         if (bedsError) {
           throw new Error(`Failed to insert room beds: ${bedsError.message}`)
@@ -557,39 +886,54 @@ export async function createPropertyAction(formData: FormData) {
           )
         }
       }
+
+      insertedRooms.push({
+        id: insertedRoom.id,
+        sort_order: room.sort_order,
+        enabled_options: room.enabled_options,
+      })
     }
   }
 
-  const sellableOptionsRows = [
-    {
-      property_id: propertyIdRef,
-      code: 'full_apartment',
-      name_en: 'Full Apartment',
-      name_ar: 'الشقة بالكامل',
-      sell_mode: 'entire_property',
-      occupancy_size: null,
-      price_egp: price_egp ?? 0,
-      rental_duration,
-      is_active: true,
-      sort_order: 0,
-      source_scope: 'property',
-      pricing_mode: 'per_room',
-      option_code: 'full_apartment',
+  if (price_egp && price_egp > 0) {
+    const sellableOptionsRows = buildPropertySellableOptionRows({
+      propertyIdRef,
+      rentalDuration: rental_duration,
+      fullApartmentPrice: price_egp,
+      insertedRooms,
+    })
+
+    if (sellableOptionsRows.length > 0) {
+      const { error: sellableOptionsError } = await supabase
+        .from('property_sellable_options')
+        .insert(sellableOptionsRows)
+
+      if (sellableOptionsError) {
+        throw new Error(
+          `Failed to insert property sellable options: ${sellableOptionsError.message}`
+        )
+      }
+    }
+  }
+
+  await supabase.from('admin_audit_logs').insert({
+    admin_user_id: admin.id,
+    action_type: 'property_created',
+    target_table: 'properties',
+    target_id: propertyIdRef,
+    details: {
+      property_id,
+      broker_id,
+      owner_id,
+      city_id,
+      university_id,
+      admin_status,
     },
-  ].filter((row) => row.price_egp > 0)
-
-  if (sellableOptionsRows.length > 0) {
-    const { error: sellableOptionsError } = await supabase
-      .from('property_sellable_options')
-      .insert(sellableOptionsRows)
-
-    if (sellableOptionsError) {
-      throw new Error(
-        `Failed to insert property sellable options: ${sellableOptionsError.message}`
-      )
-    }
-  }
+  })
 
   revalidatePath('/admin/properties')
   revalidatePath('/admin/properties/review')
+  revalidatePath('/admin/owners')
+  revalidatePath('/admin/finance/owner-settlements')
+  revalidatePath(`/properties/${property_id}`)
 }

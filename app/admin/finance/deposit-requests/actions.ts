@@ -1,7 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireSuperAdminAccess } from '@/src/lib/admin-auth'
+import { createAdminClient } from '@/src/lib/supabase/admin'
+import { requireDepositRequestsAccess } from '@/src/lib/admin-auth'
 import {
   approveDepositRequestByAdmin,
   rejectDepositRequestByAdmin,
@@ -22,17 +23,48 @@ function parseOptionalString(value: FormDataEntryValue | null) {
   return parsed || null
 }
 
+function parseRequiredString(value: FormDataEntryValue | null, message: string) {
+  const parsed = String(value || '').trim()
+
+  if (!parsed) {
+    throw new Error(message)
+  }
+
+  return parsed
+}
+
 export async function approveDepositRequestAction(formData: FormData) {
   const depositRequestId = parseDepositRequestId(formData)
   const reviewNotes = parseOptionalString(formData.get('review_notes'))
+  const transactionReference = parseRequiredString(
+    formData.get('transaction_reference'),
+    'Transaction reference is required'
+  )
 
-  const adminContext = await requireSuperAdminAccess()
+  const adminContext = await requireDepositRequestsAccess()
+  const admin = createAdminClient()
 
-  await approveDepositRequestByAdmin({
+  const { error: updateReferenceError } = await admin
+    .from('wallet_deposit_requests')
+    .update({
+      transaction_reference: transactionReference,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', depositRequestId)
+    .eq('status', 'pending')
+
+  if (updateReferenceError) {
+    throw new Error(updateReferenceError.message)
+  }
+
+  const approvePayload = {
     depositRequestId,
     adminUserId: adminContext.admin.id,
     reviewNotes,
-  })
+    transactionReference,
+  }
+
+  await approveDepositRequestByAdmin(approvePayload)
 
   revalidatePath('/admin/finance/deposit-requests')
   revalidatePath('/account/wallet')
@@ -40,9 +72,10 @@ export async function approveDepositRequestAction(formData: FormData) {
 
 export async function rejectDepositRequestAction(formData: FormData) {
   const depositRequestId = parseDepositRequestId(formData)
-  const reviewNotes = parseOptionalString(formData.get('review_notes'))
+  const reviewNotes =
+    parseOptionalString(formData.get('review_notes')) || 'Rejected by admin'
 
-  const adminContext = await requireSuperAdminAccess()
+  const adminContext = await requireDepositRequestsAccess()
 
   await rejectDepositRequestByAdmin({
     depositRequestId,

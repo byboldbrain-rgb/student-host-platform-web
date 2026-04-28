@@ -15,10 +15,12 @@ export type AdminDepartment =
 export type AdminRole =
   | 'super_admin'
   | 'admin'
+  | 'AR'
   | 'properties_super_admin'
   | 'property_adder'
   | 'property_editor'
   | 'property_receiver'
+  | 'property_owner'
   | 'food_super_admin'
   | 'food_adder'
   | 'food_editor'
@@ -52,6 +54,7 @@ export type AdminProfile = {
   role: AdminRole | string
   department: AdminDepartment | null
   broker_id: string | null
+  owner_id: string | null
   username?: string | null
 }
 
@@ -96,7 +99,7 @@ export async function getCurrentAdminContext(): Promise<CurrentAdminContext | nu
   const { data: admin, error: adminError } = await supabase
     .from('admin_users')
     .select(
-      'id, email, full_name, is_active, created_at, role, department, broker_id, username'
+      'id, email, full_name, is_active, created_at, role, department, broker_id, owner_id, username'
     )
     .eq('id', user.id)
     .eq('is_active', true)
@@ -124,6 +127,50 @@ export async function requireAdmin() {
 
 export function isSuperAdmin(admin: AdminProfile) {
   return admin.role === 'super_admin'
+}
+
+/* =========================
+   Finance / Deposit Requests
+========================= */
+
+export function isARAdmin(admin: AdminProfile) {
+  return admin.role === 'AR'
+}
+
+export function hasDepositRequestsAccess(admin: AdminProfile) {
+  return isSuperAdmin(admin) || isARAdmin(admin)
+}
+
+export async function requireDepositRequestsAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!hasDepositRequestsAccess(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
+}
+
+/* =========================
+   Owners Portal
+========================= */
+
+export function isPropertyOwner(admin: AdminProfile) {
+  return admin.role === 'property_owner' && Boolean(admin.owner_id)
+}
+
+export function canAccessOwnerPortal(admin: AdminProfile) {
+  return isPropertyOwner(admin)
+}
+
+export async function requirePropertyOwnerAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!canAccessOwnerPortal(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
 }
 
 /* =========================
@@ -417,8 +464,16 @@ export function hasCareerSectionAccess(admin: AdminProfile) {
 }
 
 export function getDefaultAdminRoute(admin: AdminProfile) {
+  if (admin.role === 'property_owner') {
+    return admin.owner_id ? '/admin/owners' : '/admin/unauthorized'
+  }
+
   if (isSuperAdmin(admin)) {
     return '/admin'
+  }
+
+  if (admin.role === 'AR') {
+    return '/admin/finance/deposit-requests'
   }
 
   if (admin.role === 'properties_super_admin') {

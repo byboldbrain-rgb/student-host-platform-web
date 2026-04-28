@@ -545,6 +545,20 @@ function getMinimumActiveOptionPrice(
   return [...prices].sort((a, b) => a - b)[0]
 }
 
+function getMinimumActiveOptionPriceAcrossRooms(
+  rooms: PropertyRoom[],
+  optionCode: Exclude<OptionCode, 'full_apartment'>
+) {
+  const prices = rooms
+    .map((room) =>
+      getMinimumActiveOptionPrice(room.room_sellable_options || [], optionCode)
+    )
+    .filter((price): price is number => price !== null)
+
+  if (prices.length === 0) return null
+  return [...prices].sort((a, b) => a - b)[0]
+}
+
 function getRoomOption(
   room: PropertyRoom,
   optionCode: Exclude<OptionCode, 'full_apartment'>
@@ -1606,70 +1620,86 @@ export default async function PropertyPage({
       .filter((price): price is number => price !== null)
       .sort((a, b) => a - b)[0] ?? null
 
-  const hasAvailableTriple = rooms.some((room) =>
-    isRoomAvailableForOption(
-      room,
-      'triple_room',
-      roomOccupancyByRoomId.get(room.id) || {
-        roomId: room.id,
-        lockedMode: null,
-        activeReservationsCount: 0,
-        maxCapacity: 0,
-        hasAvailability: false,
-        blocksEntireProperty: false,
-      }
+    const tripleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
+      rooms,
+      'triple_room'
     )
-  )
 
-  const hasAvailableDouble = rooms.some((room) =>
-    isRoomAvailableForOption(
-      room,
-      'double_room',
-      roomOccupancyByRoomId.get(room.id) || {
-        roomId: room.id,
-        lockedMode: null,
-        activeReservationsCount: 0,
-        maxCapacity: 0,
-        hasAvailability: false,
-        blocksEntireProperty: false,
-      }
+    const doubleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
+      rooms,
+      'double_room'
     )
-  )
 
-  const hasAvailableSingle = rooms.some((room) =>
-    isRoomAvailableForOption(
-      room,
-      'single_room',
-      roomOccupancyByRoomId.get(room.id) || {
-        roomId: room.id,
-        lockedMode: null,
-        activeReservationsCount: 0,
-        maxCapacity: 0,
-        hasAvailability: false,
-        blocksEntireProperty: false,
-      }
+    const singleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
+      rooms,
+      'single_room'
     )
-  )
+
+    const hasAvailableTriple = rooms.some((room) =>
+      isRoomAvailableForOption(
+        room,
+        'triple_room',
+        roomOccupancyByRoomId.get(room.id) || {
+          roomId: room.id,
+          lockedMode: null,
+          activeReservationsCount: 0,
+          maxCapacity: 0,
+          hasAvailability: false,
+          blocksEntireProperty: false,
+        }
+      )
+    )
+
+    const hasAvailableDouble = rooms.some((room) =>
+      isRoomAvailableForOption(
+        room,
+        'double_room',
+        roomOccupancyByRoomId.get(room.id) || {
+          roomId: room.id,
+          lockedMode: null,
+          activeReservationsCount: 0,
+          maxCapacity: 0,
+          hasAvailability: false,
+          blocksEntireProperty: false,
+        }
+      )
+    )
+
+    const hasAvailableSingle = rooms.some((room) =>
+      isRoomAvailableForOption(
+        room,
+        'single_room',
+        roomOccupancyByRoomId.get(room.id) || {
+          roomId: room.id,
+          lockedMode: null,
+          activeReservationsCount: 0,
+          maxCapacity: 0,
+          hasAvailability: false,
+          blocksEntireProperty: false,
+        }
+      )
+    )
 
   const optionCards: DisplayOption[] = [
-    {
+        {
       code: 'triple_room',
       label: getDisplayOptionLabel('triple_room', t),
-      price: availableTriplePrice,
+      price: tripleDisplayPrice,
       isBooked: !hasAvailableTriple,
     },
     {
       code: 'double_room',
       label: getDisplayOptionLabel('double_room', t),
-      price: availableDoublePrice,
+      price: doubleDisplayPrice,
       isBooked: !hasAvailableDouble,
     },
     {
       code: 'single_room',
       label: getDisplayOptionLabel('single_room', t),
-      price: availableSinglePrice,
+      price: singleDisplayPrice,
       isBooked: !hasAvailableSingle,
     },
+ 
     {
       code: 'full_apartment',
       label: getDisplayOptionLabel('full_apartment', t),

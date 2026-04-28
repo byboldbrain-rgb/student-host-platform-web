@@ -5,10 +5,11 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Navienty',
     short_name: 'Navienty',
     description: 'Student accommodation listing platform',
-    start_url: '/',
+    start_url: '/admin/finance/deposit-requests',
+    scope: '/',
     display: 'standalone',
     background_color: '#ffffff',
-    theme_color: '#000000',
+    theme_color: '#054aff',
     icons: [
       {
         src: '/icon-192.png',

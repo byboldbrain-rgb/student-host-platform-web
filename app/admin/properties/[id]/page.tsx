@@ -10,17 +10,113 @@ type PageProps = {
   params: Promise<{ id: string }>
 }
 
+function normalizeOwnerRows(rows: any[] | null | undefined) {
+  const uniqueOwners = new Map<string, any>()
+
+  ;(rows ?? []).forEach((row) => {
+    const owner = row.property_owners
+
+    if (!owner || owner.is_active === false || !owner.id) return
+
+    const serviceArea = {
+      id: row.id,
+      city_id: row.city_id,
+      university_id: row.university_id,
+      is_active: row.is_active,
+    }
+
+    const existingOwner = uniqueOwners.get(owner.id)
+
+    if (existingOwner) {
+      uniqueOwners.set(owner.id, {
+        ...existingOwner,
+        property_owner_service_areas: [
+          ...(existingOwner.property_owner_service_areas ?? []),
+          serviceArea,
+        ],
+      })
+
+      return
+    }
+
+    uniqueOwners.set(owner.id, {
+      ...owner,
+      property_owner_service_areas: [serviceArea],
+    })
+  })
+
+  return Array.from(uniqueOwners.values()).sort((a, b) =>
+    String(a.full_name || '').localeCompare(String(b.full_name || ''))
+  )
+}
+
 export default async function EditPropertyPage({ params }: PageProps) {
   const adminContext = await requirePropertyEditorAccess()
   const { id } = await params
   const supabase = await createClient()
   const admin = adminContext.admin
 
+  const propertyRes = await supabase
+    .from('properties')
+    .select(`
+      id,
+      property_id,
+      title_en,
+      title_ar,
+      description_en,
+      description_ar,
+      city_id,
+      university_id,
+      broker_id,
+      owner_id,
+      price_egp,
+      rental_duration,
+      availability_status,
+      address_en,
+      address_ar,
+      latitude,
+      longitude,
+      bedrooms_count,
+      bathrooms_count,
+      beds_count,
+      guests_count,
+      gender,
+      airbnb_price_min,
+      airbnb_price_max,
+      smoking_policy,
+      admin_status,
+      is_active
+    `)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (propertyRes.error) {
+    throw new Error(propertyRes.error.message)
+  }
+
+  if (!propertyRes.data) {
+    notFound()
+  }
+
+  const property = propertyRes.data
+
+  if (!isSuperAdmin(admin)) {
+    if (!admin.broker_id) {
+      throw new Error('Editor account is missing broker assignment')
+    }
+
+    if (property.broker_id !== admin.broker_id) {
+      redirect('/admin/unauthorized')
+    }
+  }
+
   const [
-    propertyRes,
     citiesRes,
     universitiesRes,
     brokersRes,
+    ownerServiceAreasRes,
+    allOwnersRes,
+    currentOwnerRes,
     amenitiesRes,
     facilitiesRes,
     billTypesRes,
@@ -30,39 +126,6 @@ export default async function EditPropertyPage({ params }: PageProps) {
     propertyBillsRes,
     roomsRes,
   ] = await Promise.all([
-    supabase
-      .from('properties')
-      .select(`
-        id,
-        property_id,
-        title_en,
-        title_ar,
-        description_en,
-        description_ar,
-        city_id,
-        university_id,
-        broker_id,
-        price_egp,
-        rental_duration,
-        availability_status,
-        address_en,
-        address_ar,
-        latitude,
-        longitude,
-        bedrooms_count,
-        bathrooms_count,
-        beds_count,
-        guests_count,
-        gender,
-        airbnb_price_min,
-        airbnb_price_max,
-        smoking_policy,
-        admin_status,
-        is_active
-      `)
-      .eq('id', id)
-      .maybeSingle(),
-
     supabase.from('cities').select('id, name_en, name_ar').order('name_en'),
 
     supabase
@@ -74,6 +137,58 @@ export default async function EditPropertyPage({ params }: PageProps) {
       .from('brokers')
       .select('id, full_name, company_name')
       .order('full_name'),
+
+    supabase
+      .from('property_owner_service_areas')
+      .select(`
+        id,
+        owner_id,
+        city_id,
+        university_id,
+        is_active,
+        property_owners (
+          id,
+          full_name,
+          phone_number,
+          whatsapp_number,
+          email,
+          company_name,
+          is_active
+        )
+      `)
+      .eq('is_active', true)
+      .eq('property_owners.is_active', true)
+      .order('created_at', { ascending: false }),
+
+    supabase
+      .from('property_owners')
+      .select(`
+        id,
+        full_name,
+        phone_number,
+        whatsapp_number,
+        email,
+        company_name,
+        is_active
+      `)
+      .eq('is_active', true)
+      .order('full_name'),
+
+    property.owner_id
+      ? supabase
+          .from('property_owners')
+          .select(`
+            id,
+            full_name,
+            phone_number,
+            whatsapp_number,
+            email,
+            company_name,
+            is_active
+          `)
+          .eq('id', property.owner_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
 
     supabase
       .from('amenities')
@@ -153,29 +268,62 @@ export default async function EditPropertyPage({ params }: PageProps) {
       .order('sort_order'),
   ])
 
-  if (propertyRes.error) {
-    throw new Error(propertyRes.error.message)
-  }
-
-  if (!propertyRes.data) {
-    notFound()
-  }
-
-  const property = propertyRes.data
-
-  if (!isSuperAdmin(admin)) {
-    if (!admin.broker_id) {
-      throw new Error('Editor account is missing broker assignment')
-    }
-
-    if (property.broker_id !== admin.broker_id) {
-      redirect('/admin/unauthorized')
-    }
-  }
+  if (citiesRes.error) throw new Error(citiesRes.error.message)
+  if (universitiesRes.error) throw new Error(universitiesRes.error.message)
+  if (brokersRes.error) throw new Error(brokersRes.error.message)
+  if (ownerServiceAreasRes.error) throw new Error(ownerServiceAreasRes.error.message)
+  if (allOwnersRes.error) throw new Error(allOwnersRes.error.message)
+  if (currentOwnerRes.error) throw new Error(currentOwnerRes.error.message)
+  if (amenitiesRes.error) throw new Error(amenitiesRes.error.message)
+  if (facilitiesRes.error) throw new Error(facilitiesRes.error.message)
+  if (billTypesRes.error) throw new Error(billTypesRes.error.message)
+  if (imagesRes.error) throw new Error(imagesRes.error.message)
+  if (propertyAmenitiesRes.error) throw new Error(propertyAmenitiesRes.error.message)
+  if (propertyFacilitiesRes.error) throw new Error(propertyFacilitiesRes.error.message)
+  if (propertyBillsRes.error) throw new Error(propertyBillsRes.error.message)
+  if (roomsRes.error) throw new Error(roomsRes.error.message)
 
   const brokers = isSuperAdmin(admin)
     ? brokersRes.data ?? []
     : (brokersRes.data ?? []).filter((broker) => broker.id === admin.broker_id)
+
+  const serviceAreaOwners = normalizeOwnerRows(ownerServiceAreasRes.data)
+  const ownersMap = new Map<string, any>()
+
+  ;((allOwnersRes.data ?? []) as any[]).forEach((owner) => {
+    if (owner?.id && owner.is_active !== false) {
+      ownersMap.set(owner.id, {
+        ...owner,
+        property_owner_service_areas: [],
+      })
+    }
+  })
+
+  serviceAreaOwners.forEach((owner) => {
+    const existingOwner = ownersMap.get(owner.id)
+
+    ownersMap.set(owner.id, {
+      ...existingOwner,
+      ...owner,
+      property_owner_service_areas: owner.property_owner_service_areas ?? [],
+    })
+  })
+
+    if (currentOwnerRes.data && currentOwnerRes.data.is_active !== false) {
+    const existingOwner = ownersMap.get(currentOwnerRes.data.id)
+
+    if (existingOwner) {
+      ownersMap.set(currentOwnerRes.data.id, {
+        ...currentOwnerRes.data,
+        property_owner_service_areas:
+          existingOwner.property_owner_service_areas ?? [],
+      })
+    }
+  }
+
+  const owners = Array.from(ownersMap.values()).sort((a, b) =>
+    String(a.full_name || '').localeCompare(String(b.full_name || ''))
+  )
 
   const activeRooms = (roomsRes.data ?? []).map((room: any) => ({
     ...room,
@@ -209,6 +357,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
         cities={citiesRes.data ?? []}
         universities={universitiesRes.data ?? []}
         brokers={brokers}
+        owners={owners}
         amenities={amenitiesRes.data ?? []}
         facilities={facilitiesRes.data ?? []}
         billTypes={billTypesRes.data ?? []}

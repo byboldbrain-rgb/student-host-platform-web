@@ -184,6 +184,33 @@ type ReferralRewardRpcResult = {
   invited_bonus_amount?: number
 }
 
+type FinanceSettings = {
+  currency: string
+  service_fee_type: 'percentage' | 'fixed'
+  service_fee_value: number
+  payment_fee_type: 'percentage' | 'fixed'
+  payment_fee_value: number
+  tax_rate: number
+}
+
+type FinanceBreakdown = {
+  grossRentAmount: number
+  serviceFeeAmount: number
+  paymentFeeAmount: number
+  taxAmount: number
+  adjustmentAmount: number
+  netPayableAmount: number
+  currency: string
+}
+
+type ReservationFinanceContext = {
+  owner_id: string
+  broker_id: string
+  property_title: string | null
+  property_code: string | null
+  owner_name: string | null
+}
+
 const ACTIVE_RESERVATION_STATUSES: ActiveReservationStatus[] = [
   'pending',
   'reserved',
@@ -218,6 +245,26 @@ function parseLegacyReservationId(formData: FormData) {
   }
 
   return reservationId
+}
+
+function addMonthsToDate(date: Date, months: number) {
+  const nextDate = new Date(date)
+  nextDate.setMonth(nextDate.getMonth() + months)
+  return nextDate
+}
+
+function addDaysToDate(date: Date, days: number) {
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + days)
+  return nextDate
+}
+
+function toDateOnlyString(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function getReservationStartDate(preferredStartDate?: string | null) {
+  return preferredStartDate || toDateOnlyString(new Date())
 }
 
 function parseOptionalString(value: FormDataEntryValue | null) {
@@ -298,6 +345,24 @@ function parseBoolean(value: FormDataEntryValue | null, fallback = false) {
   if (parsed === 'false') return false
 
   return fallback
+}
+
+function roundMoney(value: number) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
+}
+
+function calculateFeeAmount(params: {
+  grossAmount: number
+  feeType: 'percentage' | 'fixed'
+  feeValue: number
+}) {
+  const { grossAmount, feeType, feeValue } = params
+
+  if (feeType === 'percentage') {
+    return roundMoney((grossAmount * feeValue) / 100)
+  }
+
+  return roundMoney(feeValue)
 }
 
 function resolveReservationScope(params: {
@@ -606,6 +671,525 @@ async function getAuthorizedLegacyBedReservation(reservationId: string) {
     supabase,
     reservation: reservationFields as AuthorizedLegacyBedReservation,
   }
+}
+
+async function getActiveFinanceSettings(params: {
+  supabase: ReturnType<typeof createAdminClient>
+}): Promise<FinanceSettings> {
+  const { supabase } = params
+
+  const { data, error } = await supabase
+    .from('platform_finance_settings')
+    .select(`
+      currency,
+      service_fee_type,
+      service_fee_value,
+      payment_fee_type,
+      payment_fee_value,
+      tax_rate
+    `)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return {
+    currency: data?.currency || 'EGP',
+    service_fee_type:
+      data?.service_fee_type === 'fixed' ? 'fixed' : 'percentage',
+    service_fee_value: Number(data?.service_fee_value || 0),
+    payment_fee_type:
+      data?.payment_fee_type === 'fixed' ? 'fixed' : 'percentage',
+    payment_fee_value: Number(data?.payment_fee_value || 0),
+    tax_rate: Number(data?.tax_rate || 0),
+  }
+}
+
+function calculateFinanceBreakdown(params: {
+  grossRentAmount: number
+  settings: FinanceSettings
+}): FinanceBreakdown {
+  const { grossRentAmount, settings } = params
+
+  const gross = roundMoney(grossRentAmount)
+
+  const serviceFeeAmount = calculateFeeAmount({
+    grossAmount: gross,
+    feeType: settings.service_fee_type,
+    feeValue: settings.service_fee_value,
+  })
+
+  const paymentFeeAmount = calculateFeeAmount({
+    grossAmount: gross,
+    feeType: settings.payment_fee_type,
+    feeValue: settings.payment_fee_value,
+  })
+
+  const taxableAmount = serviceFeeAmount + paymentFeeAmount
+  const taxAmount = roundMoney((taxableAmount * settings.tax_rate) / 100)
+  const adjustmentAmount = 0
+
+  const netPayableAmount = roundMoney(
+    gross - serviceFeeAmount - paymentFeeAmount - taxAmount + adjustmentAmount
+  )
+
+  if (netPayableAmount < 0) {
+    throw new Error('Owner payable amount cannot be negative. Check finance settings.')
+  }
+
+  return {
+    grossRentAmount: gross,
+    serviceFeeAmount,
+    paymentFeeAmount,
+    taxAmount,
+    adjustmentAmount,
+    netPayableAmount,
+    currency: settings.currency || 'EGP',
+  }
+}
+
+async function getReservationFinanceContext(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  propertyId: string
+}): Promise<ReservationFinanceContext> {
+  const { supabase, propertyId } = params
+
+  const { data: property, error } = await supabase
+    .from('properties')
+    .select(`
+      id,
+      property_id,
+      title_en,
+      title_ar,
+      broker_id,
+      owner_id,
+      property_owners (
+        id,
+        full_name,
+        company_name
+      )
+    `)
+    .eq('id', propertyId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if (!property) {
+    throw new Error('Property not found for finance records')
+  }
+
+  if (!property.broker_id) {
+    throw new Error('Property is missing broker assignment')
+  }
+
+  if (!property.owner_id) {
+    throw new Error('Property is missing owner assignment')
+  }
+
+  const owner = Array.isArray((property as any).property_owners)
+    ? (property as any).property_owners[0]
+    : (property as any).property_owners
+
+  return {
+    owner_id: property.owner_id,
+    broker_id: property.broker_id,
+    property_title: property.title_en || property.title_ar || null,
+    property_code: property.property_id || null,
+    owner_name: owner?.company_name || owner?.full_name || null,
+  }
+}
+
+async function getLatestWalletTransactionId(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  userId: string
+  transactionType: string
+  referenceTable: string
+  referenceId: string
+}) {
+  const { supabase, userId, transactionType, referenceTable, referenceId } = params
+
+  const { data, error } = await supabase
+    .from('wallet_transactions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('wallet_direction', 'debit')
+    .eq('transaction_type', transactionType)
+    .eq('reference_table', referenceTable)
+    .eq('reference_id', referenceId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data?.id || null
+}
+
+async function createAccountingLedgerEntries(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  adminUserId: string
+  userId: string | null
+  ownerId: string
+  brokerId: string
+  propertyId: string
+  reservationId: string
+  billingCycleId?: string | null
+  walletTransactionId?: string | null
+  ownerPayableId?: string | null
+  rentCollectionReceiptId?: string | null
+  amount: number
+  breakdown: FinanceBreakdown
+  descriptionPrefix: string
+}) {
+  const {
+    supabase,
+    adminUserId,
+    userId,
+    ownerId,
+    brokerId,
+    propertyId,
+    reservationId,
+    billingCycleId = null,
+    walletTransactionId = null,
+    ownerPayableId = null,
+    rentCollectionReceiptId = null,
+    amount,
+    breakdown,
+    descriptionPrefix,
+  } = params
+
+  const shared = {
+    user_id: userId,
+    broker_id: brokerId,
+    owner_id: ownerId,
+    property_id: propertyId,
+    reservation_id: reservationId,
+    billing_cycle_id: billingCycleId,
+    wallet_transaction_id: walletTransactionId,
+    owner_payable_id: ownerPayableId,
+    rent_collection_receipt_id: rentCollectionReceiptId,
+    currency: breakdown.currency,
+    created_by_admin_id: adminUserId,
+  }
+
+  const entries: any[] = [
+    {
+      ...shared,
+      entry_type: 'wallet_debit',
+      direction: 'debit',
+      amount: roundMoney(amount),
+      description: `${descriptionPrefix}: wallet debited from student`,
+      reference_table: 'property_reservations',
+      reference_id: reservationId,
+    },
+    {
+      ...shared,
+      entry_type: 'rent_collected_on_behalf_of_owner',
+      direction: 'credit',
+      amount: roundMoney(amount),
+      description: `${descriptionPrefix}: rent collected on behalf of owner`,
+      reference_table: 'property_reservations',
+      reference_id: reservationId,
+    },
+    {
+      ...shared,
+      entry_type: 'owner_payable',
+      direction: 'credit',
+      amount: breakdown.netPayableAmount,
+      description: `${descriptionPrefix}: net owner payable created`,
+      reference_table: 'owner_payables',
+      reference_id: ownerPayableId,
+    },
+  ]
+
+  if (breakdown.serviceFeeAmount > 0) {
+    entries.push({
+      ...shared,
+      entry_type: 'service_fee_revenue',
+      direction: 'credit',
+      amount: breakdown.serviceFeeAmount,
+      description: `${descriptionPrefix}: platform service fee charged to owner`,
+      reference_table: 'owner_payables',
+      reference_id: ownerPayableId,
+    })
+  }
+
+  if (breakdown.paymentFeeAmount > 0) {
+    entries.push({
+      ...shared,
+      entry_type: 'payment_fee_revenue',
+      direction: 'credit',
+      amount: breakdown.paymentFeeAmount,
+      description: `${descriptionPrefix}: platform payment fee charged to owner`,
+      reference_table: 'owner_payables',
+      reference_id: ownerPayableId,
+    })
+  }
+
+  if (breakdown.taxAmount > 0) {
+    entries.push({
+      ...shared,
+      entry_type: 'tax_payable',
+      direction: 'credit',
+      amount: breakdown.taxAmount,
+      description: `${descriptionPrefix}: tax payable on platform fees`,
+      reference_table: 'owner_payables',
+      reference_id: ownerPayableId,
+    })
+  }
+
+  const { error } = await supabase
+    .from('accounting_ledger_entries')
+    .insert(entries)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+async function createFinanceRecordsForPaidReservation(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  adminUserId: string
+  reservationId: string
+  propertyId: string
+  userId: string
+  customerName: string
+  customerPhone?: string | null
+  amount: number
+  walletTransactionId?: string | null
+  sourceType: 'initial_reservation' | 'renewal'
+  receiptType: 'rent_collection' | 'renewal_collection'
+  billingCycleId?: string | null
+}) {
+  const {
+    supabase,
+    adminUserId,
+    reservationId,
+    propertyId,
+    userId,
+    customerName,
+    customerPhone,
+    amount,
+    walletTransactionId = null,
+    sourceType,
+    receiptType,
+    billingCycleId = null,
+  } = params
+
+  const existingPayableQuery = supabase
+    .from('owner_payables')
+    .select('id')
+    .eq('reservation_id', reservationId)
+    .eq('source_type', sourceType)
+
+  if (sourceType === 'renewal') {
+    existingPayableQuery.eq('billing_cycle_id', billingCycleId)
+  } else {
+    existingPayableQuery.is('billing_cycle_id', null)
+  }
+
+  const { data: existingPayable, error: existingPayableError } =
+    await existingPayableQuery.maybeSingle()
+
+  if (existingPayableError) {
+    throw new Error(existingPayableError.message)
+  }
+
+  if (existingPayable) {
+    return
+  }
+
+  const financeContext = await getReservationFinanceContext({
+    supabase,
+    propertyId,
+  })
+
+  const financeSettings = await getActiveFinanceSettings({ supabase })
+
+  const breakdown = calculateFinanceBreakdown({
+    grossRentAmount: amount,
+    settings: financeSettings,
+  })
+
+  const { data: receipt, error: receiptError } = await supabase
+    .from('rent_collection_receipts')
+    .insert({
+      user_id: userId,
+      broker_id: financeContext.broker_id,
+      owner_id: financeContext.owner_id,
+      property_id: propertyId,
+      reservation_id: reservationId,
+      billing_cycle_id: billingCycleId,
+      wallet_transaction_id: walletTransactionId,
+      amount: breakdown.grossRentAmount,
+      currency: breakdown.currency,
+      receipt_type: receiptType,
+      status: 'issued',
+      payer_name: customerName,
+      payer_phone: customerPhone || null,
+      owner_name: financeContext.owner_name,
+      property_title: financeContext.property_title,
+      created_by_admin_id: adminUserId,
+      notes:
+        receiptType === 'renewal_collection'
+          ? 'Rent renewal collection receipt issued automatically after wallet deduction.'
+          : 'Rent collection receipt issued automatically after booking payment.',
+      metadata: {
+        owner_id: financeContext.owner_id,
+        property_code: financeContext.property_code,
+        source_type: sourceType,
+      },
+    })
+    .select('id')
+    .single()
+
+  if (receiptError || !receipt) {
+    throw new Error(receiptError?.message || 'Failed to create rent receipt')
+  }
+
+  const { data: ownerPayable, error: ownerPayableError } = await supabase
+    .from('owner_payables')
+    .insert({
+      owner_id: financeContext.owner_id,
+      broker_id: financeContext.broker_id,
+      property_id: propertyId,
+      reservation_id: reservationId,
+      billing_cycle_id: billingCycleId,
+      source_type: sourceType,
+      gross_rent_amount: breakdown.grossRentAmount,
+      service_fee_amount: breakdown.serviceFeeAmount,
+      payment_fee_amount: breakdown.paymentFeeAmount,
+      tax_amount: breakdown.taxAmount,
+      adjustment_amount: breakdown.adjustmentAmount,
+      net_payable_amount: breakdown.netPayableAmount,
+      currency: breakdown.currency,
+      status: 'unsettled',
+      wallet_transaction_id: walletTransactionId,
+      rent_collection_receipt_id: receipt.id,
+      notes:
+        sourceType === 'renewal'
+          ? 'Owner payable created from reservation renewal.'
+          : 'Owner payable created from initial reservation.',
+      metadata: {
+        owner_id: financeContext.owner_id,
+        property_code: financeContext.property_code,
+        receipt_type: receiptType,
+      },
+    })
+    .select('id')
+    .single()
+
+  if (ownerPayableError || !ownerPayable) {
+    throw new Error(ownerPayableError?.message || 'Failed to create owner payable')
+  }
+
+  await createAccountingLedgerEntries({
+      supabase,
+      adminUserId,
+      userId,
+      ownerId: financeContext.owner_id,
+      brokerId: financeContext.broker_id,
+      propertyId,
+      reservationId,
+      billingCycleId,
+      walletTransactionId,
+      ownerPayableId: ownerPayable.id,
+      rentCollectionReceiptId: receipt.id,
+      amount: breakdown.grossRentAmount,
+      breakdown,
+      descriptionPrefix:
+        sourceType === 'renewal'
+          ? 'Reservation renewal finance record'
+          : 'Initial reservation finance record',
+    })
+
+  await supabase.from('admin_audit_logs').insert({
+    admin_user_id: adminUserId,
+    action_type:
+      sourceType === 'renewal'
+        ? 'reservation_renewal_finance_records_created'
+        : 'reservation_finance_records_created',
+    target_table: 'property_reservations',
+    target_id: reservationId,
+    details: {
+      receipt_id: receipt.id,
+      owner_payable_id: ownerPayable.id,
+      billing_cycle_id: billingCycleId,
+      wallet_transaction_id: walletTransactionId,
+      gross_rent_amount: breakdown.grossRentAmount,
+      service_fee_amount: breakdown.serviceFeeAmount,
+      payment_fee_amount: breakdown.paymentFeeAmount,
+      tax_amount: breakdown.taxAmount,
+      net_payable_amount: breakdown.netPayableAmount,
+      currency: breakdown.currency,
+      source_type: sourceType,
+    },
+  })
+}
+
+async function cancelUnsettledOwnerPayablesForReservation(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  adminUserId?: string | null
+  reservationId: string
+  reason?: string | null
+}) {
+  const { supabase, adminUserId = null, reservationId, reason = null } = params
+
+  const { data: payables, error: payablesError } = await supabase
+    .from('owner_payables')
+    .select('id, status')
+    .eq('reservation_id', reservationId)
+
+  if (payablesError) {
+    throw new Error(payablesError.message)
+  }
+
+  const rows = (payables || []) as Array<{
+    id: string
+    status: string
+  }>
+
+  const cancellableIds = rows
+    .filter((payable) => payable.status === 'unsettled')
+    .map((payable) => payable.id)
+
+  if (cancellableIds.length === 0) {
+    return
+  }
+
+  const { error: updateError } = await supabase
+    .from('owner_payables')
+    .update({
+      status: 'cancelled',
+      notes: reason?.trim()
+        ? `Cancelled because reservation was cancelled. Reason: ${reason.trim()}`
+        : 'Cancelled because reservation was cancelled.',
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', cancellableIds)
+
+  if (updateError) {
+    throw new Error(updateError.message)
+  }
+
+  await supabase.from('admin_audit_logs').insert({
+    admin_user_id: adminUserId,
+    action_type: 'owner_payables_cancelled_after_reservation_cancel',
+    target_table: 'property_reservations',
+    target_id: reservationId,
+    details: {
+      owner_payable_ids: cancellableIds,
+      reason,
+    },
+  })
 }
 
 /**
@@ -1112,8 +1696,8 @@ async function createReservationWithBeds(params: {
       customer_whatsapp: request.customer_whatsapp,
       reserved_units_count: reservedUnitsCount,
       total_price_egp: totalPrice,
-      start_date: request.preferred_start_date,
-      end_date: request.preferred_end_date,
+      start_date: getReservationStartDate(request.preferred_start_date),
+      end_date: null,
       notes,
       user_id: request.user_id,
       payment_status: 'unpaid',
@@ -1402,8 +1986,8 @@ async function acceptEntirePropertyReservation(params: {
       customer_whatsapp: request.customer_whatsapp,
       reserved_units_count: typedBeds.length,
       total_price_egp: totalPrice,
-      start_date: request.preferred_start_date,
-      end_date: request.preferred_end_date,
+      start_date: getReservationStartDate(request.preferred_start_date),
+      end_date: null,
       notes,
       user_id: request.user_id,
       payment_status: 'unpaid',
@@ -1520,6 +2104,14 @@ async function applyWalletToReservation(params: {
     createdByAdminId: adminUserId,
   })
 
+  const walletTransactionId = await getLatestWalletTransactionId({
+    supabase,
+    userId: request.user_id,
+    transactionType: 'booking_payment',
+    referenceTable: 'property_reservations',
+    referenceId: reservationId,
+  })
+
   const paymentStatus = 'paid'
 
   const { error: reservationUpdateError } = await supabase
@@ -1538,6 +2130,7 @@ async function applyWalletToReservation(params: {
   return {
     walletAmountUsed: walletAmountToUse,
     paymentStatus,
+    walletTransactionId,
   }
 }
 
@@ -1886,6 +2479,23 @@ export async function acceptBookingRequestAction(formData: FormData) {
     walletAmountToUse,
   })
 
+  if (walletResult.paymentStatus === 'paid') {
+    await createFinanceRecordsForPaidReservation({
+      supabase,
+      adminUserId: admin.id,
+      reservationId,
+      propertyId: request.property_id,
+      userId: request.user_id,
+      customerName: request.customer_name,
+      customerPhone: request.customer_phone,
+      amount: totalPrice,
+      walletTransactionId: walletResult.walletTransactionId,
+      sourceType: 'initial_reservation',
+      receiptType: 'rent_collection',
+      billingCycleId: null,
+    })
+  }
+
   const { error: updateRequestError } = await supabase
     .from('property_booking_requests')
     .update({
@@ -1927,11 +2537,193 @@ export async function acceptBookingRequestAction(formData: FormData) {
   revalidatePath('/account/wallet')
 }
 
+export async function renewPropertyReservationAction(formData: FormData) {
+  const reservationId = parseReservationId(formData)
+
+  const { supabase, reservation, admin } = await getAuthorizedReservation(
+    reservationId
+  )
+
+  if (!ACTIVE_RESERVATION_STATUSES.includes(reservation.status as ActiveReservationStatus)) {
+    throw new Error('Only active reservations can be renewed')
+  }
+
+  if (!reservation.user_id) {
+    throw new Error('This reservation is not linked to a user account')
+  }
+
+  const renewalAmount = Number(reservation.total_price_egp || 0)
+
+  if (!Number.isFinite(renewalAmount) || renewalAmount <= 0) {
+    throw new Error('Reservation renewal amount is invalid')
+  }
+
+  const { data: walletRow, error: walletError } = await supabase
+    .from('user_wallets')
+    .select('balance, is_active')
+    .eq('user_id', reservation.user_id)
+    .maybeSingle()
+
+  if (walletError) {
+    throw new Error(walletError.message)
+  }
+
+  if (!walletRow) {
+    throw new Error('User wallet not found')
+  }
+
+  if (walletRow.is_active === false) {
+    throw new Error('User wallet is inactive')
+  }
+
+  const currentBalance = Number(walletRow.balance || 0)
+
+  if (currentBalance < renewalAmount) {
+    throw new Error('Insufficient wallet balance to renew this reservation')
+  }
+
+  const { data: lastPaidCycle, error: lastPaidCycleError } = await supabase
+    .from('reservation_billing_cycles')
+    .select('billing_period_start, billing_period_end, paid_at, created_at')
+    .eq('reservation_id', reservation.id)
+    .eq('status', 'paid')
+    .order('billing_period_end', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (lastPaidCycleError) {
+    throw new Error(lastPaidCycleError.message)
+  }
+
+  const baseStartDate =
+    reservation.start_date || toDateOnlyString(new Date(reservation.created_at))
+
+  const renewalPeriodStartDate = lastPaidCycle?.billing_period_end
+    ? addDaysToDate(new Date(`${lastPaidCycle.billing_period_end}T00:00:00`), 1)
+    : addMonthsToDate(new Date(`${baseStartDate}T00:00:00`), 1)
+
+  const renewalPeriodEndDate = addDaysToDate(
+    addMonthsToDate(renewalPeriodStartDate, 1),
+    -1
+  )
+
+  const renewalPeriodStart = toDateOnlyString(renewalPeriodStartDate)
+  const renewalPeriodEnd = toDateOnlyString(renewalPeriodEndDate)
+
+  await applyWalletTransactionByAdmin({
+    userId: reservation.user_id,
+    direction: 'debit',
+    transactionType: 'rent_auto_deduction',
+    amount: renewalAmount,
+    referenceTable: 'property_reservations',
+    referenceId: reservation.id,
+    notes: `Reservation renewal by admin for period ${renewalPeriodStart} to ${renewalPeriodEnd}`,
+    createdByAdminId: admin.id,
+  })
+
+  const walletTransactionId = await getLatestWalletTransactionId({
+    supabase,
+    userId: reservation.user_id,
+    transactionType: 'rent_auto_deduction',
+    referenceTable: 'property_reservations',
+    referenceId: reservation.id,
+  })
+
+  const { error: paymentError } = await supabase
+    .from('reservation_payments')
+    .insert({
+      reservation_id: reservation.id,
+      user_id: reservation.user_id,
+      payment_method: 'wallet',
+      amount: renewalAmount,
+      status: 'confirmed',
+      wallet_transaction_id: walletTransactionId,
+    })
+
+  if (paymentError) {
+    throw new Error(paymentError.message)
+  }
+
+  const { data: billingCycle, error: billingCycleError } = await supabase
+    .from('reservation_billing_cycles')
+    .insert({
+      reservation_id: reservation.id,
+      user_id: reservation.user_id,
+      property_id: reservation.property_id,
+      amount_due: renewalAmount,
+      due_date: renewalPeriodStart,
+      billing_period_start: renewalPeriodStart,
+      billing_period_end: renewalPeriodEnd,
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+      wallet_transaction_id: walletTransactionId,
+      attempt_count: 1,
+    })
+    .select('id')
+    .single()
+
+  if (billingCycleError || !billingCycle) {
+    throw new Error(billingCycleError?.message || 'Failed to create billing cycle')
+  }
+
+  const nextWalletAmountUsed =
+    Number(reservation.wallet_amount_used || 0) + renewalAmount
+
+  const { error: reservationUpdateError } = await supabase
+    .from('property_reservations')
+    .update({
+      wallet_amount_used: nextWalletAmountUsed,
+      payment_status: 'paid',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', reservation.id)
+
+  if (reservationUpdateError) {
+    throw new Error(reservationUpdateError.message)
+  }
+
+  await createFinanceRecordsForPaidReservation({
+    supabase,
+    adminUserId: admin.id,
+    reservationId: reservation.id,
+    propertyId: reservation.property_id,
+    userId: reservation.user_id,
+    customerName: reservation.customer_name,
+    customerPhone: reservation.customer_phone,
+    amount: renewalAmount,
+    walletTransactionId,
+    sourceType: 'renewal',
+    receiptType: 'renewal_collection',
+    billingCycleId: billingCycle.id,
+  })
+
+  await supabase.from('admin_audit_logs').insert({
+    admin_user_id: admin.id,
+    action_type: 'property_reservation_renewed',
+    target_table: 'property_reservations',
+    target_id: reservation.id,
+    details: {
+      amount: renewalAmount,
+      reservation_end_date: reservation.end_date,
+      billing_period_start: renewalPeriodStart,
+      billing_period_end: renewalPeriodEnd,
+      billing_cycle_id: billingCycle.id,
+      wallet_transaction_id: walletTransactionId,
+    },
+  })
+
+  revalidatePath('/admin/properties/booking-requests')
+  revalidatePath('/admin/properties')
+  revalidatePath('/admin/properties/reservations')
+  revalidatePath('/account')
+  revalidatePath('/account/wallet')
+}
+
 export async function cancelPropertyReservationAction(formData: FormData) {
   const reservationId = parseReservationId(formData)
   const cancellationReason = parseOptionalString(formData.get('cancellation_reason'))
 
-  const { supabase, reservation } = await getAuthorizedReservation(reservationId)
+  const { supabase, reservation, admin } = await getAuthorizedReservation(reservationId)
 
   if (reservation.status === 'cancelled') {
     revalidatePath('/admin/properties/booking-requests')
@@ -1950,6 +2742,7 @@ export async function cancelPropertyReservationAction(formData: FormData) {
     .from('property_reservations')
     .update({
       status: 'cancelled',
+      end_date: toDateOnlyString(new Date()),
       notes: nextNotes,
       updated_at: new Date().toISOString(),
     })
@@ -1958,6 +2751,13 @@ export async function cancelPropertyReservationAction(formData: FormData) {
   if (updateReservationError) {
     throw new Error(updateReservationError.message)
   }
+
+  await cancelUnsettledOwnerPayablesForReservation({
+    supabase,
+    adminUserId: admin.id,
+    reservationId,
+    reason: cancellationReason,
+  })
 
   await releaseReservationAllocations({
     supabase,
@@ -1994,6 +2794,7 @@ export async function cancelLegacyBedReservationAction(formData: FormData) {
     .from('bed_reservations')
     .update({
       status: 'cancelled',
+      end_date: toDateOnlyString(new Date()),
       notes: nextNotes,
       updated_at: new Date().toISOString(),
     })
