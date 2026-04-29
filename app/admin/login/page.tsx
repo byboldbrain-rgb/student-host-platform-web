@@ -276,6 +276,10 @@ async function getDefaultAdminRoute(
     return '/admin'
   }
 
+  if (admin.role === 'accountant') {
+    return '/admin/finance/accountant'
+  }
+
   if (admin.role === 'AR') {
     return '/admin/finance/deposit-requests'
   }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/src/lib/supabase/admin'
+import { notifyWaitingListStudentsForNewProperty } from '@/src/lib/waiting-list/notify-new-property'
 import {
   requirePropertyEditorAccess,
   isSuperAdmin,
@@ -51,6 +52,13 @@ type PropertyAvailabilityStatus =
   | 'partially_reserved'
   | 'fully_reserved'
   | 'inactive'
+
+type PropertyAdminStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'published'
+  | 'rejected'
+  | 'archived'
 
 type RoomStatus =
   | 'available'
@@ -162,8 +170,14 @@ function normalizeAvailabilityStatus(value: string): PropertyAvailabilityStatus 
   return 'available'
 }
 
-function normalizeAdminStatus(value: string) {
-  if (value === 'draft' || value === 'pending_review') {
+function normalizeAdminStatus(value: string): PropertyAdminStatus {
+  if (
+    value === 'draft' ||
+    value === 'pending_review' ||
+    value === 'published' ||
+    value === 'rejected' ||
+    value === 'archived'
+  ) {
     return value
   }
 
@@ -2124,6 +2138,23 @@ export async function updatePropertyAction(formData: FormData) {
     propertyId: propertyDbId,
   })
 
+  let waitingListNotificationResult: Awaited<
+    ReturnType<typeof notifyWaitingListStudentsForNewProperty>
+  > | null = null
+
+  const wasNotPublished = existingProperty.admin_status !== 'published'
+  const becamePublished = admin_status === 'published'
+  const isActiveAfterUpdate = propertyPayload.is_active === true
+
+  if (wasNotPublished && becamePublished && isActiveAfterUpdate) {
+    try {
+      waitingListNotificationResult =
+        await notifyWaitingListStudentsForNewProperty(propertyDbId)
+    } catch (error) {
+      console.error('Failed to send waiting list notifications:', error)
+    }
+  }
+
   await supabase.from('admin_audit_logs').insert({
     admin_user_id: admin.id,
     action_type: 'property_updated',
@@ -2138,6 +2169,15 @@ export async function updatePropertyAction(formData: FormData) {
       admin_status,
       availability_status,
       structure_sync_mode: 'preserve_existing_ids',
+      waiting_list_notifications:
+        waitingListNotificationResult || {
+          success: false,
+          sentCount: 0,
+          reason:
+            wasNotPublished && becamePublished && isActiveAfterUpdate
+              ? 'notification_function_failed'
+              : 'property_did_not_become_published',
+        },
     },
   })
 

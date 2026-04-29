@@ -17,6 +17,7 @@ export type AdminRole =
   | 'admin'
   | 'AR'
   | 'AP'
+  | 'accountant'
   | 'properties_super_admin'
   | 'property_adder'
   | 'property_editor'
@@ -131,7 +132,7 @@ export function isSuperAdmin(admin: AdminProfile) {
 }
 
 /* =========================
-   Finance / Deposit Requests / Owner Settlements
+   Finance / Accountant / AR / AP
 ========================= */
 
 export function isARAdmin(admin: AdminProfile) {
@@ -142,12 +143,49 @@ export function isAPAdmin(admin: AdminProfile) {
   return admin.role === 'AP'
 }
 
+export function isAccountantAdmin(admin: AdminProfile) {
+  return admin.role === 'accountant'
+}
+
+export function hasFinanceAccess(admin: AdminProfile) {
+  return (
+    isSuperAdmin(admin) ||
+    isARAdmin(admin) ||
+    isAPAdmin(admin) ||
+    isAccountantAdmin(admin)
+  )
+}
+
+export function hasAccountantAccess(admin: AdminProfile) {
+  return isSuperAdmin(admin) || isAccountantAdmin(admin)
+}
+
 export function hasDepositRequestsAccess(admin: AdminProfile) {
-  return isSuperAdmin(admin) || isARAdmin(admin)
+  return isSuperAdmin(admin) || isARAdmin(admin) || isAccountantAdmin(admin)
 }
 
 export function hasOwnerSettlementsAccess(admin: AdminProfile) {
-  return isSuperAdmin(admin) || isAPAdmin(admin)
+  return isSuperAdmin(admin) || isAPAdmin(admin) || isAccountantAdmin(admin)
+}
+
+export async function requireAccountantAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!hasAccountantAccess(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
+}
+
+export async function requireFinanceAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!hasFinanceAccess(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
 }
 
 export async function requireDepositRequestsAccess() {
@@ -489,6 +527,10 @@ export function getDefaultAdminRoute(admin: AdminProfile) {
 
   if (isSuperAdmin(admin)) {
     return '/admin'
+  }
+
+  if (admin.role === 'accountant') {
+    return '/admin/finance/accountant'
   }
 
   if (admin.role === 'AR') {

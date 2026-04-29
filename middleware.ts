@@ -182,6 +182,10 @@ async function getDefaultAdminRoute(
     return '/admin'
   }
 
+  if (admin.role === 'accountant') {
+    return '/admin/finance/accountant'
+  }
+
   if (admin.role === 'AR') {
     return '/admin/finance/deposit-requests'
   }
@@ -433,6 +437,20 @@ export async function middleware(request: NextRequest) {
       pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
 
     if (!adminUser.owner_id || !isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+
+    return response
+  }
+
+  if (adminUser.role === 'accountant') {
+    const allowedPath = '/admin/finance'
+    const isAllowedPath =
+      pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!isAllowedPath) {
       const url = request.nextUrl.clone()
       url.pathname = '/admin/unauthorized'
       return NextResponse.redirect(url)
