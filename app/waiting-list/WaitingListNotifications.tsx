@@ -12,6 +12,10 @@ const WAITING_LIST_PROMPT_DISMISSED_KEY =
 const WAITING_LIST_PROMPT_ENABLED_KEY =
   'navienty-waiting-list-push-enabled'
 
+type WaitingListNotificationsProps = {
+  waitingListRequestId?: string
+}
+
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = `${base64String}${padding}`
@@ -45,7 +49,9 @@ async function getExistingSubscription() {
   return registration.pushManager.getSubscription()
 }
 
-export default function WaitingListNotifications() {
+export default function WaitingListNotifications({
+  waitingListRequestId,
+}: WaitingListNotificationsProps) {
   const [isPending, startTransition] = useTransition()
   const [permission, setPermission] = useState<
     NotificationPermission | 'unsupported'
@@ -55,18 +61,25 @@ export default function WaitingListNotifications() {
   const [message, setMessage] = useState<string | null>(null)
 
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
+  const cleanWaitingListRequestId = String(waitingListRequestId || '').trim()
 
   const shouldShowPrompt = useMemo(() => {
+    if (!cleanWaitingListRequestId) return false
     if (permission === 'unsupported') return false
     if (permission === 'denied') return false
     if (isSubscribed) return false
     return isVisible
-  }, [isSubscribed, isVisible, permission])
+  }, [cleanWaitingListRequestId, isSubscribed, isVisible, permission])
 
   useEffect(() => {
     let mounted = true
 
     async function prepareNotifications() {
+      if (!cleanWaitingListRequestId) {
+        setIsVisible(false)
+        return
+      }
+
       if (!isPushSupported()) {
         if (mounted) {
           setPermission('unsupported')
@@ -87,30 +100,37 @@ export default function WaitingListNotifications() {
           return
         }
 
-        setIsSubscribed(Boolean(subscription))
+        if (subscription && currentPermission === 'granted') {
+          await saveWaitingListPushSubscriptionAction(
+            subscription.toJSON(),
+            navigator.userAgent,
+            cleanWaitingListRequestId
+          )
 
-        if (subscription) {
           localStorage.setItem(WAITING_LIST_PROMPT_ENABLED_KEY, '1')
+          localStorage.removeItem(WAITING_LIST_PROMPT_DISMISSED_KEY)
+
+          if (mounted) {
+            setIsSubscribed(true)
+            setIsVisible(false)
+            setMessage('تم ربط إشعارات قائمة الانتظار بطلبك.')
+          }
+
           return
         }
+
+        setIsSubscribed(false)
 
         const dismissed = localStorage.getItem(
           WAITING_LIST_PROMPT_DISMISSED_KEY
         )
-        const enabledBefore = localStorage.getItem(
-          WAITING_LIST_PROMPT_ENABLED_KEY
-        )
 
-        if (
-          currentPermission === 'default' &&
-          dismissed !== '1' &&
-          enabledBefore !== '1'
-        ) {
+        if (currentPermission === 'default' && dismissed !== '1') {
           window.setTimeout(() => {
             if (mounted) {
               setIsVisible(true)
             }
-          }, 1800)
+          }, 600)
         }
       } catch {
         // الإشعارات لا يجب أن توقف الصفحة لو حصل خطأ.
@@ -122,7 +142,7 @@ export default function WaitingListNotifications() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [cleanWaitingListRequestId])
 
   const handleClose = () => {
     localStorage.setItem(WAITING_LIST_PROMPT_DISMISSED_KEY, '1')
@@ -131,7 +151,7 @@ export default function WaitingListNotifications() {
   }
 
   const handleEnable = () => {
-    if (isPending) return
+    if (isPending || !cleanWaitingListRequestId) return
 
     setMessage(null)
 
@@ -170,7 +190,8 @@ export default function WaitingListNotifications() {
 
         await saveWaitingListPushSubscriptionAction(
           subscription.toJSON(),
-          navigator.userAgent
+          navigator.userAgent,
+          cleanWaitingListRequestId
         )
 
         localStorage.setItem(WAITING_LIST_PROMPT_ENABLED_KEY, '1')

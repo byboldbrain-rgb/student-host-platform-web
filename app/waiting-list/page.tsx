@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import WaitingListNotifications from './WaitingListNotifications'
 import {
@@ -36,8 +35,6 @@ type CollegeOption = {
 }
 
 export default function WaitingListPage() {
-  const router = useRouter()
-
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
@@ -60,6 +57,7 @@ export default function WaitingListPage() {
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [waitingListRequestId, setWaitingListRequestId] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -132,6 +130,7 @@ export default function WaitingListPage() {
     setLoading(true)
     setErrorMessage('')
     setSuccessMessage('')
+    setWaitingListRequestId('')
 
     try {
       const result = await completeWaitingListAction({
@@ -149,12 +148,11 @@ export default function WaitingListPage() {
         message,
       })
 
-      setSuccessMessage('تم إضافة طلبك لقائمة الانتظار بنجاح.')
+      setWaitingListRequestId(result.waitingListRequestId)
 
-      setTimeout(() => {
-        router.push('/login')
-        router.refresh()
-      }, 1400)
+      setSuccessMessage(
+        'تم إضافة طلبك لقائمة الانتظار بنجاح. فعّل الإشعارات عشان نبلغك أول ما يظهر سكن مناسب لجامعتك.'
+      )
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : 'حدث خطأ غير متوقع.'
@@ -172,7 +170,7 @@ export default function WaitingListPage() {
 
   return (
     <main className="min-h-screen bg-white text-gray-700 relative" dir="rtl">
-      <WaitingListNotifications />
+      <WaitingListNotifications waitingListRequestId={waitingListRequestId} />
 
       <header className="border-b border-gray-200 bg-[#f7f7f7] sticky top-0 md:static z-40 shadow-sm md:shadow-none h-20">
         <div className="mx-auto max-w-[1920px] px-4 h-full">
