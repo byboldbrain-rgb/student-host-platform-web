@@ -6,6 +6,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import PostCard from "./components/feed/PostCard";
 import type { FeedPost } from "./components/feed/types";
+import CommunityNotifications from "./CommunityNotifications";
 
 const squadaOne = Squada_One({
   subsets: ["latin"],
@@ -52,37 +53,6 @@ type CommunityPost = {
   social_media_link: string | null;
   community_post_assets: PostAsset[];
 };
-
-function PillButton({
-  children,
-  as = "button",
-  href,
-}: {
-  children: React.ReactNode;
-  as?: "button" | "link";
-  href?: string;
-}) {
-  const className =
-    "inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-xs font-semibold text-white shadow-[0_6px_18px_rgba(37,99,235,0.25)] transition hover:scale-[1.02] md:px-6 md:py-3.5 md:text-sm";
-
-  if (as === "link" && href) {
-    return (
-      <Link href={href} className={className}>
-        {children}
-      </Link>
-    );
-  }
-
-  return <button className={className}>{children}</button>;
-}
-
-function SectionTitle({ black, purple }: { black: string; purple: string }) {
-  return (
-    <h2 className="text-3xl font-bold leading-none tracking-[-0.04em] text-[#20212a] md:text-5xl xl:text-[60px]">
-      {black} <span className="text-blue-600">{purple}</span>
-    </h2>
-  );
-}
 
 function normalizePosts(posts: CommunityPost[]): FeedPost[] {
   return posts.map((post) => {
@@ -210,6 +180,8 @@ export default async function CommunityPage() {
 
   return (
     <main className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0">
+      <CommunityNotifications />
+
       <style>{`
         .navienty-logo {
           display: inline-flex;

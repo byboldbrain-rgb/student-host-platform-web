@@ -280,6 +280,10 @@ async function getDefaultAdminRoute(
     return '/admin/finance/deposit-requests'
   }
 
+  if (admin.role === 'AP') {
+    return '/admin/finance/owner-settlements'
+  }
+
   if (admin.role === 'properties_super_admin') {
     return '/admin/properties'
   }

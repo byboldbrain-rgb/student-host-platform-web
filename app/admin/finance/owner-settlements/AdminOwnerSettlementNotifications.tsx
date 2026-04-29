@@ -28,64 +28,55 @@ function isPushSupported() {
   )
 }
 
-function normalizeBadgeCount(value: number) {
-  const count = Number(value || 0)
-
-  if (!Number.isFinite(count) || count < 0) {
-    return 0
-  }
-
-  return Math.floor(count)
+function BellIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
 }
 
-async function setAppBadge(count: number) {
-  const normalizedCount = normalizeBadgeCount(count)
-
-  try {
-    if ('setAppBadge' in navigator && normalizedCount > 0) {
-      await navigator.setAppBadge(normalizedCount)
-      return
-    }
-
-    if ('clearAppBadge' in navigator && normalizedCount <= 0) {
-      await navigator.clearAppBadge()
-      return
-    }
-  } catch {
-    // Some browsers expose the API but still fail depending on install state.
-  }
-
-  try {
-    if (!('serviceWorker' in navigator)) return
-
-    const registration = await navigator.serviceWorker.ready
-
-    if (!registration.active) return
-
-    registration.active.postMessage({
-      type: normalizedCount > 0 ? 'SET_APP_BADGE' : 'CLEAR_APP_BADGE',
-      count: normalizedCount,
-    })
-  } catch {
-    // Badge API is optional. Notifications still work without it.
-  }
+function CheckIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
 }
 
-export default function AdminDepositNotifications({
+export default function AdminOwnerSettlementNotifications({
   enabled,
-  initialPendingCount,
+  initialPayablesCount,
+  initialSettlementsCount,
 }: {
   enabled: boolean
-  initialPendingCount: number
+  initialPayablesCount: number
+  initialSettlementsCount: number
 }) {
   const [isPending, startTransition] = useTransition()
-  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(
-    'default'
-  )
+  const [permission, setPermission] = useState<
+    NotificationPermission | 'unsupported'
+  >('default')
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
+  const alertCount = initialPayablesCount + initialSettlementsCount
 
   const buttonLabel = useMemo(() => {
     if (!enabled) return 'Notifications unavailable'
@@ -94,12 +85,6 @@ export default function AdminDepositNotifications({
     if (isSubscribed) return 'Notifications on'
     return 'Enable notifications'
   }, [enabled, isSubscribed, permission])
-
-  useEffect(() => {
-    if (!enabled) return
-
-    setAppBadge(initialPendingCount)
-  }, [enabled, initialPendingCount])
 
   useEffect(() => {
     if (!enabled) return
@@ -165,10 +150,8 @@ export default function AdminDepositNotifications({
           navigator.userAgent
         )
 
-        await setAppBadge(initialPendingCount)
-
         setIsSubscribed(true)
-        setMessage('Deposit notifications are enabled.')
+        setMessage('Owner settlement notifications are enabled.')
       } catch (error: any) {
         setMessage(error?.message || 'Could not enable notifications.')
       }
@@ -190,10 +173,8 @@ export default function AdminDepositNotifications({
           await subscription.unsubscribe()
         }
 
-        await setAppBadge(0)
-
         setIsSubscribed(false)
-        setMessage('Deposit notifications are disabled on this device.')
+        setMessage('Owner settlement notifications are disabled on this device.')
       } catch (error: any) {
         setMessage(error?.message || 'Could not disable notifications.')
       }
@@ -221,9 +202,10 @@ export default function AdminDepositNotifications({
         ].join(' ')}
       >
         <span className="relative flex h-2.5 w-2.5">
-          {initialPendingCount > 0 ? (
+          {alertCount > 0 ? (
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
           ) : null}
+
           <span
             className={[
               'relative inline-flex h-2.5 w-2.5 rounded-full',
@@ -231,6 +213,9 @@ export default function AdminDepositNotifications({
             ].join(' ')}
           />
         </span>
+
+        {isSubscribed ? <CheckIcon /> : <BellIcon />}
+
         {isPending ? 'Please wait...' : buttonLabel}
       </button>
 

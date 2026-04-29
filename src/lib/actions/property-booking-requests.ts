@@ -1,6 +1,8 @@
 'use server'
 
 import { createClient } from '@/src/lib/supabase/server'
+import { createAdminClient } from '@/src/lib/supabase/admin'
+import { notifyAdminsByRole } from '@/src/lib/notifications/admin-push'
 
 export type RequestedOptionCode =
   | 'triple_room'
@@ -29,6 +31,28 @@ function getRequestedOptionLabel(optionCode: RequestedOptionCode) {
   if (optionCode === 'double_room') return 'Double Room'
   if (optionCode === 'single_room') return 'Single Room'
   return 'Full Apartment'
+}
+
+async function getOpenPropertyBookingRequestsCount() {
+  const supabaseAdmin = createAdminClient()
+
+  const { count, error } = await supabaseAdmin
+    .from('property_booking_requests')
+    .select('id', {
+      count: 'exact',
+      head: true,
+    })
+    .in('status', ['new', 'contacted', 'in_progress'])
+
+  if (error) {
+    console.warn(
+      'Failed to count open property booking requests:',
+      error.message
+    )
+    return 0
+  }
+
+  return count || 0
 }
 
 export async function createPropertyBookingRequestFromProfile(
@@ -98,7 +122,7 @@ export async function createPropertyBookingRequestFromProfile(
 
     const { data: property, error: propertyError } = await supabase
       .from('properties')
-      .select('id, broker_id')
+      .select('id, property_id, title_en, title_ar, broker_id')
       .eq('id', propertyId)
       .maybeSingle()
 
@@ -145,6 +169,36 @@ export async function createPropertyBookingRequestFromProfile(
         error: insertError.message,
         code: 'UNKNOWN',
       }
+    }
+
+    const propertyTitle =
+      property.title_en || property.title_ar || property.property_id || 'Property'
+
+    try {
+      const badgeCount = await getOpenPropertyBookingRequestsCount()
+
+      await notifyAdminsByRole({
+        roles: [
+          'super_admin',
+          'properties_super_admin',
+          'property_editor',
+          'property_receiver',
+        ],
+        payload: {
+          title: 'New reservation request',
+          body: `${fullName} requested ${normalizedOptionLabel} for ${propertyTitle}.`,
+          url: '/admin/properties/booking-requests',
+          tag: `property-booking-request-${insertedRequest.id}`,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          badgeCount,
+        },
+      })
+    } catch (notificationError) {
+      console.warn(
+        'Booking request was created, but push notification failed:',
+        notificationError
+      )
     }
 
     return {

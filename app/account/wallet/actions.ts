@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/src/lib/supabase/admin'
 import { createClient } from '@/src/lib/supabase/server'
-import { sendNewDepositRequestNotificationToARAdmins } from '@/src/lib/push-notifications'
+import { notifyAdminsByRole } from '@/src/lib/notifications/admin-push'
 
 const WALLET_RECEIPTS_BUCKET = 'wallet-receipts'
 
@@ -70,6 +70,13 @@ function parsePaymentMethod(value: FormDataEntryValue | null): WalletDepositMeth
   throw new Error('وسيلة الدفع غير صحيحة')
 }
 
+function formatPushMoney(amount: number, currency = 'EGP') {
+  return `${Number(amount || 0).toLocaleString('en-EG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`
+}
+
 export async function getWalletDepositMethodsWithAccountsAction() {
   const supabase = await createClient()
 
@@ -86,10 +93,12 @@ export async function getWalletDepositMethodsWithAccountsAction() {
 
   const result = await Promise.all(
     (methods || []).map(async (method) => {
-      const { data: activeAccountRows, error: activeAccountError } =
-        await supabase.rpc('get_active_wallet_payment_account', {
+      const { data: activeAccountRows, error: activeAccountError } = await supabase.rpc(
+        'get_active_wallet_payment_account',
+        {
           p_method_code: method.code,
-        })
+        }
+      )
 
       if (activeAccountError) {
         throw new Error(activeAccountError.message)
@@ -136,14 +145,10 @@ export async function createWalletDepositRequestWithUploadAction(formData: FormD
 
   const amount = parseAmount(formData.get('amount'))
   const paymentMethod = parsePaymentMethod(formData.get('payment_method'))
-  const paymentMethodAccountId = parseOptionalNumber(
-    formData.get('payment_method_account_id')
-  )
+  const paymentMethodAccountId = parseOptionalNumber(formData.get('payment_method_account_id'))
   const senderName = parseOptionalString(formData.get('sender_name'))
   const senderPhone = parseOptionalString(formData.get('sender_phone'))
-  const transactionReference = parseOptionalString(
-    formData.get('transaction_reference')
-  )
+  const transactionReference = parseOptionalString(formData.get('transaction_reference'))
   const receiptFile = formData.get('receipt_file')
 
   if (!amount) {
@@ -223,7 +228,7 @@ export async function createWalletDepositRequestWithUploadAction(formData: FormD
     shown_at: new Date().toISOString(),
   }
 
-  const { data: insertedRequest, error: insertError } = await admin
+  const { data: depositRequest, error: insertError } = await admin
     .from('wallet_deposit_requests')
     .insert({
       user_id: user.id,
@@ -237,19 +242,22 @@ export async function createWalletDepositRequestWithUploadAction(formData: FormD
       sender_phone: senderPhone,
       transaction_reference: transactionReference,
     })
-    .select('id, amount, payment_method, sender_name')
+    .select('id, amount')
     .single()
 
-  if (insertError || !insertedRequest) {
+  if (insertError || !depositRequest) {
     await admin.storage.from(WALLET_RECEIPTS_BUCKET).remove([filePath])
     throw new Error(insertError?.message || 'Failed to create deposit request')
   }
 
-  await sendNewDepositRequestNotificationToARAdmins({
-    depositRequestId: insertedRequest.id,
-    amount: Number(insertedRequest.amount),
-    paymentMethod: insertedRequest.payment_method,
-    senderName: insertedRequest.sender_name,
+  await notifyAdminsByRole({
+    roles: ['AR', 'super_admin'],
+    payload: {
+      title: 'New Deposit Request',
+      body: `New wallet deposit request: ${formatPushMoney(amount)}`,
+      url: '/admin/finance/deposit-requests',
+      tag: `wallet-deposit-${depositRequest.id}`,
+    },
   })
 
   revalidatePath('/account/wallet')

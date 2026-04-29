@@ -6,6 +6,7 @@ import {
 } from '@/src/lib/admin-auth'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 import BookingRequestActionsPanel from './BookingRequestActionsPanel'
+import AdminPropertyBookingNotifications from './AdminPropertyBookingNotifications'
 
 type RequestedOptionCode =
   | 'single_room'
@@ -184,7 +185,11 @@ function getAdminDisplayName(admin: any) {
 
 function BrandLogo() {
   return (
-    <Link href="/admin/properties" className="navienty-logo" aria-label="Navienty admin home">
+    <Link
+      href="/admin/properties"
+      className="navienty-logo"
+      aria-label="Navienty admin home"
+    >
       <img
         src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
         alt="Navienty icon"
@@ -214,24 +219,6 @@ function InboxIcon() {
       <path d="M4 13V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7" />
       <path d="M4 13l2.2 4.4A2 2 0 0 0 8 18h8a2 2 0 0 0 1.8-1.1L20 13" />
       <path d="M9 13h6" />
-    </svg>
-  )
-}
-
-function CalendarIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4" />
-      <path d="M8 2v4" />
-      <path d="M3 10h18" />
     </svg>
   )
 }
@@ -267,37 +254,6 @@ function UserIcon() {
   )
 }
 
-function MailIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M4 4h16v16H4z" />
-      <path d="M4 7l8 6 8-6" />
-    </svg>
-  )
-}
-
-function MessageSquareIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
 function BuildingIcon() {
   return (
     <svg
@@ -318,7 +274,17 @@ function BuildingIcon() {
   )
 }
 
-function ClipboardListIcon() {
+function MobileNavIcon({
+  src,
+  alt,
+}: {
+  src: string
+  alt: string
+}) {
+  return <img src={src} alt={alt} className="h-[20px] w-[20px] object-contain" />
+}
+
+function LockIcon() {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -328,22 +294,10 @@ function ClipboardListIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <rect x="9" y="2" width="6" height="4" rx="1" />
-      <path d="M8 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
-      <path d="M8 11h8" />
-      <path d="M8 15h5" />
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </svg>
   )
-}
-
-function MobileNavIcon({
-  src,
-  alt,
-}: {
-  src: string
-  alt: string
-}) {
-  return <img src={src} alt={alt} className="h-[20px] w-[20px] object-contain" />
 }
 
 function NotificationBadge({ count }: { count: number }) {
@@ -363,7 +317,9 @@ function EmptyState() {
         <InboxIcon />
       </div>
 
-      <h3 className="text-lg font-semibold text-slate-900">No new reservations found</h3>
+      <h3 className="text-lg font-semibold text-slate-900">
+        No new reservations found
+      </h3>
       <p className="mt-2 text-sm text-slate-500">
         There are no open guest reservation requests right now.
       </p>
@@ -425,59 +381,9 @@ function formatDate(date?: string | null) {
   }
 }
 
-function formatStatusLabel(
-  status: 'new' | 'contacted' | 'in_progress' | 'converted' | 'cancelled'
-) {
-  if (status === 'in_progress') return 'In Progress'
-  return status.charAt(0).toUpperCase() + status.slice(1)
-}
-
-function getStatusBadgeClass(
-  status: 'new' | 'contacted' | 'in_progress' | 'converted' | 'cancelled'
-) {
-  if (status === 'new') {
-    return 'border-[#dbe5ff] bg-[#f3f6ff] text-[#054aff]'
-  }
-
-  if (status === 'contacted') {
-    return 'border-yellow-200 bg-yellow-50 text-yellow-700'
-  }
-
-  if (status === 'in_progress') {
-    return 'border-purple-200 bg-purple-50 text-purple-700'
-  }
-
-  if (status === 'converted') {
-    return 'border-green-200 bg-green-50 text-green-700'
-  }
-
-  return 'border-gray-200 bg-gray-100 text-gray-600'
-}
-
 function formatPrice(value?: number | null) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '—'
   return `EGP ${Number(value).toLocaleString()}`
-}
-
-function formatRentalDuration(value?: string | null) {
-  if (value === 'daily') return '/ day'
-  if (value === 'monthly') return '/ month'
-  return ''
-}
-
-function getRequestedOptionLabel(optionCode?: string | null) {
-  switch (optionCode) {
-    case 'triple_room':
-      return 'Triple Room'
-    case 'double_room':
-      return 'Double Room'
-    case 'single_room':
-      return 'Single Room'
-    case 'full_apartment':
-      return 'Full Apartment'
-    default:
-      return '—'
-  }
 }
 
 function normalizeRoomOptionCode(value?: string | null): RequestedOptionCode {
@@ -619,6 +525,13 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
       active: false,
       badgeCount: 0,
     },
+    {
+      href: '/admin/change-password',
+      label: 'Password',
+      icon: <LockIcon />,
+      active: false,
+      badgeCount: 0,
+    },
   ]
 
   return (
@@ -631,7 +544,7 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
             <Link
               key={item.href}
               href={item.href}
-              className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+              className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
             >
               <span className={`relative flex items-center justify-center ${activeClass}`}>
                 {item.icon}
@@ -644,7 +557,7 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
               </span>
 
               <span
-                className={`text-[11px] leading-[1.1] ${activeClass} ${
+                className={`text-[10px] leading-[1.1] ${activeClass} ${
                   item.active ? 'font-semibold' : 'font-medium'
                 }`}
               >
@@ -662,7 +575,6 @@ export default async function PropertyBookingRequestsPage() {
   const adminContext = await requirePropertyBookingRequestsAccess()
   const supabase = createAdminClient()
   const admin = adminContext.admin
-  const brokerName = getAdminDisplayName(admin)
 
   let query = supabase
     .from('property_booking_requests')
@@ -1089,12 +1001,21 @@ export default async function PropertyBookingRequestsPage() {
                 </Link>
               )}
 
+              <Link
+                href="/admin/change-password"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Change Password
+              </Link>
+
               <AdminLogoutButton />
             </div>
           </div>
         </header>
 
         <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
+          <AdminPropertyBookingNotifications openRequestsCount={newReservationsCount} />
+
           {requests.length === 0 ? (
             <div className="mt-6">
               <EmptyState />
@@ -1178,13 +1099,6 @@ export default async function PropertyBookingRequestsPage() {
                     const requestedOptionCode =
                       (request.requested_option_code as RequestedOptionCode) ?? null
 
-                    const optionPrice = getOptionPrice(
-                      propertySellableOptions,
-                      propertyRooms,
-                      requestedOptionCode,
-                      property?.price_egp
-                    )
-
                     return (
                       <div
                         key={request.id}
@@ -1207,10 +1121,7 @@ export default async function PropertyBookingRequestsPage() {
                                 <h4 className="truncate text-lg font-semibold text-white">
                                   {propertyTitle}
                                 </h4>
-                               
                               </div>
-
-                             
                             </div>
                           </div>
                         </div>
@@ -1248,12 +1159,7 @@ export default async function PropertyBookingRequestsPage() {
                                 </div>
                               </div>
                             )}
-
                           </div>
-
-                          
-
-                         
 
                           <div className="mt-5 border-t border-slate-200 pt-5">
                             <BookingRequestActionsPanel

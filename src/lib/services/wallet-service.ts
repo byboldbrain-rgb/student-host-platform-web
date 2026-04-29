@@ -1,5 +1,6 @@
 import { createClient } from "@/src/lib/supabase/server";
 import { createAdminClient } from "@/src/lib/supabase/admin";
+import { notifyAdminsByRole } from "@/src/lib/notifications/admin-push";
 
 export type WalletDirection = "credit" | "debit";
 export type WalletTransactionType =
@@ -18,6 +19,32 @@ export type WalletDepositMethod =
   | "orange_cash"
   | "etisalat_cash"
   | "bank_transfer";
+
+function formatPushMoney(amount: number, currency = "EGP") {
+  return `${Number(amount || 0).toLocaleString("en-EG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`;
+}
+
+async function getPendingDepositRequestsCount() {
+  const admin = createAdminClient();
+
+  const { count, error } = await admin
+    .from("wallet_deposit_requests")
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
+    .eq("status", "pending");
+
+  if (error) {
+    console.warn("Failed to count pending deposit requests:", error.message);
+    return 0;
+  }
+
+  return count || 0;
+}
 
 export async function getMyWallet() {
   const supabase = await createClient();
@@ -145,6 +172,21 @@ export async function createWalletDepositRequest(input: {
 
   if (error) throw error;
 
+  const pendingDepositRequestsCount = await getPendingDepositRequestsCount();
+
+  await notifyAdminsByRole({
+    roles: ["AR", "super_admin"],
+    payload: {
+      title: "New Deposit Request",
+      body: `New wallet deposit request: ${formatPushMoney(input.amount)}`,
+      url: "/admin/finance/deposit-requests",
+      tag: `wallet-deposit-${data.id}`,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      badgeCount: pendingDepositRequestsCount,
+    },
+  });
+
   return data;
 }
 
@@ -162,6 +204,29 @@ export async function approveDepositRequestByAdmin(input: {
   });
 
   if (error) throw error;
+
+  const { data: depositRequest } = await admin
+    .from("wallet_deposit_requests")
+    .select("id, amount, status")
+    .eq("id", input.depositRequestId)
+    .maybeSingle();
+
+  if (depositRequest) {
+    await notifyAdminsByRole({
+      roles: ["AP", "super_admin"],
+      excludeAdminUserId: input.adminUserId,
+      payload: {
+        title: "New Owner Payable",
+        body: `A deposit was approved and may require owner settlement review: ${formatPushMoney(
+          Number(depositRequest.amount || 0)
+        )}`,
+        url: "/admin/finance/owner-settlements?tab=payables",
+        tag: `owner-payable-from-deposit-${depositRequest.id}`,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+      },
+    });
+  }
 
   return data;
 }

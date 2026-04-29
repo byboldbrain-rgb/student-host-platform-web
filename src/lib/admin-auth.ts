@@ -16,6 +16,7 @@ export type AdminRole =
   | 'super_admin'
   | 'admin'
   | 'AR'
+  | 'AP'
   | 'properties_super_admin'
   | 'property_adder'
   | 'property_editor'
@@ -130,21 +131,39 @@ export function isSuperAdmin(admin: AdminProfile) {
 }
 
 /* =========================
-   Finance / Deposit Requests
+   Finance / Deposit Requests / Owner Settlements
 ========================= */
 
 export function isARAdmin(admin: AdminProfile) {
   return admin.role === 'AR'
 }
 
+export function isAPAdmin(admin: AdminProfile) {
+  return admin.role === 'AP'
+}
+
 export function hasDepositRequestsAccess(admin: AdminProfile) {
   return isSuperAdmin(admin) || isARAdmin(admin)
+}
+
+export function hasOwnerSettlementsAccess(admin: AdminProfile) {
+  return isSuperAdmin(admin) || isAPAdmin(admin)
 }
 
 export async function requireDepositRequestsAccess() {
   const adminContext = await requireAdmin()
 
   if (!hasDepositRequestsAccess(adminContext.admin)) {
+    redirect('/admin/unauthorized')
+  }
+
+  return adminContext
+}
+
+export async function requireOwnerSettlementsAccess() {
+  const adminContext = await requireAdmin()
+
+  if (!hasOwnerSettlementsAccess(adminContext.admin)) {
     redirect('/admin/unauthorized')
   }
 
@@ -474,6 +493,10 @@ export function getDefaultAdminRoute(admin: AdminProfile) {
 
   if (admin.role === 'AR') {
     return '/admin/finance/deposit-requests'
+  }
+
+  if (admin.role === 'AP') {
+    return '/admin/finance/owner-settlements'
   }
 
   if (admin.role === 'properties_super_admin') {

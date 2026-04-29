@@ -70,7 +70,11 @@ function getAdminDisplayName(admin: any) {
 
 function BrandLogo() {
   return (
-    <Link href="/admin/properties" className="navienty-logo" aria-label="Navienty admin home">
+    <Link
+      href="/admin/properties"
+      className="navienty-logo"
+      aria-label="Navienty admin home"
+    >
       <img
         src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
         alt="Navienty icon"
@@ -155,6 +159,22 @@ function BuildingIcon() {
       <path d="M15 10h.01" />
       <path d="M9 14h.01" />
       <path d="M15 14h.01" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-[20px] w-[20px]"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </svg>
   )
 }
@@ -270,6 +290,13 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
       active: false,
       badgeCount: 0,
     },
+    {
+      href: '/admin/change-password',
+      label: 'Password',
+      icon: <LockIcon />,
+      active: false,
+      badgeCount: 0,
+    },
   ]
 
   return (
@@ -282,7 +309,7 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
             <Link
               key={item.href}
               href={item.href}
-              className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+              className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
             >
               <span className={`relative flex items-center justify-center ${activeClass}`}>
                 {item.icon}
@@ -295,7 +322,7 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
               </span>
 
               <span
-                className={`text-[11px] leading-[1.1] ${activeClass} ${
+                className={`text-[10px] leading-[1.1] ${activeClass} ${
                   item.active ? 'font-semibold' : 'font-medium'
                 }`}
               >
@@ -630,6 +657,13 @@ export default async function AdminPropertiesPage() {
                 </Link>
               )}
 
+              <Link
+                href="/admin/change-password"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Change Password
+              </Link>
+
               <AdminLogoutButton />
             </div>
           </div>
@@ -674,7 +708,9 @@ export default async function AdminPropertiesPage() {
                         </div>
 
                         <div className="p-5">
-                          <h4 className="text-lg font-semibold text-slate-900">{title}</h4>
+                          <h4 className="text-lg font-semibold text-slate-900">
+                            {title}
+                          </h4>
 
                           <div className="mt-5">
                             <Link
@@ -704,12 +740,12 @@ export default async function AdminPropertiesPage() {
             <div className="mx-auto flex h-[74px] max-w-md items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
               <Link
                 href="/admin/properties"
-                className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
               >
                 <span className="relative flex items-center justify-center text-[#155dfc]">
                   <GridIcon />
                 </span>
-                <span className="text-[11px] font-semibold leading-[1.1] text-[#155dfc]">
+                <span className="text-[10px] font-semibold leading-[1.1] text-[#155dfc]">
                   Properties
                 </span>
               </Link>
@@ -717,16 +753,28 @@ export default async function AdminPropertiesPage() {
               {isSuperAdmin(admin) && (
                 <Link
                   href="/admin/properties/review"
-                  className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+                  className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
                 >
                   <span className="relative flex items-center justify-center text-[#6b7280]">
                     <ClipboardListIcon />
                   </span>
-                  <span className="text-[11px] font-medium leading-[1.1] text-[#6b7280]">
+                  <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
                     Review
                   </span>
                 </Link>
               )}
+
+              <Link
+                href="/admin/change-password"
+                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
+              >
+                <span className="relative flex items-center justify-center text-[#6b7280]">
+                  <LockIcon />
+                </span>
+                <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
+                  Password
+                </span>
+              </Link>
             </div>
           </nav>
         )}

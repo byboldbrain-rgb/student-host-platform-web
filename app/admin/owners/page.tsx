@@ -827,12 +827,13 @@ export default async function OwnerPortalPage({
     university_ids: ownerUniversityIds,
   }
 
-  const { data: ownerPropertyLinks, error: ownerPropertyLinksError } = await supabase
-    .from('owner_properties')
-    .select('property_id_ref, broker_id')
-    .eq('owner_id', ownerId)
-    .eq('is_active', true)
-    .returns<OwnerPropertyLinkRow[]>()
+  const { data: ownerPropertyLinks, error: ownerPropertyLinksError } =
+    await supabase
+      .from('owner_properties')
+      .select('property_id_ref, broker_id')
+      .eq('owner_id', ownerId)
+      .eq('is_active', true)
+      .returns<OwnerPropertyLinkRow[]>()
 
   if (ownerPropertyLinksError) throw new Error(ownerPropertyLinksError.message)
 
@@ -947,7 +948,9 @@ export default async function OwnerPortalPage({
     brokerIds.length > 0
       ? supabase
           .from('brokers')
-          .select('id, full_name, company_name, phone_number, whatsapp_number, email')
+          .select(
+            'id, full_name, company_name, phone_number, whatsapp_number, email'
+          )
           .in('id', brokerIds)
       : Promise.resolve({ data: [] as BrokerRow[], error: null }),
     propertyIds.length > 0
@@ -1052,9 +1055,19 @@ export default async function OwnerPortalPage({
   return (
     <main className="min-h-screen bg-[#f4f6f8] text-slate-800">
       <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm">
-        <div className="mx-auto flex h-full w-full max-w-[1920px] items-center justify-between px-4 md:px-6">
+        <div className="mx-auto flex h-full w-full max-w-[1920px] items-center justify-between gap-3 px-4 md:px-6">
           <BrandLogo />
-          <AdminLogoutButton />
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <Link
+              href="/admin/change-password"
+              className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-medium text-blue-600 transition hover:bg-blue-50 sm:px-4 sm:text-sm"
+            >
+              Change Password
+            </Link>
+
+            <AdminLogoutButton />
+          </div>
         </div>
       </header>
 
@@ -1068,13 +1081,13 @@ export default async function OwnerPortalPage({
             <StatCard
               label="Properties"
               value={String(properties.length)}
-              helper="Total properties linked to your profile"
+              helper=""
               tone="blue"
             />
             <StatCard
               label="Listed Value"
               value={formatMoney(totalPropertyValue)}
-              helper="Based on current property prices"
+              helper=""
               tone="slate"
             />
             <StatCard
@@ -1130,7 +1143,9 @@ export default async function OwnerPortalPage({
                           <p className="font-black">Broker</p>
                           <p className="mt-1">
                             {broker?.full_name || '—'}
-                            {broker?.company_name ? ` - ${broker.company_name}` : ''}
+                            {broker?.company_name
+                              ? ` - ${broker.company_name}`
+                              : ''}
                           </p>
                         </div>
                       </div>
@@ -1220,7 +1235,7 @@ export default async function OwnerPortalPage({
                     <StatCard
                       label="Paid Settlements"
                       value={formatMoney(totalSettled)}
-                      helper="Total paid settlement records"
+                      helper=""
                       tone="emerald"
                     />
                     <StatCard
@@ -1523,54 +1538,54 @@ export default async function OwnerPortalPage({
         ) : null}
 
         {activeTab === 'profile' ? (
-  <SectionCard title="" subtitle="">
-    <style>
-      {`
-        .owner-profile-form-clean :is(
-          div:has(input[name="tax_id"]),
-          div:has(input[name="national_id"]),
-          div:has(input[name="taxId"]),
-          div:has(input[name="nationalId"])
-        ) {
-          display: none !important;
-        }
-      `}
-    </style>
+          <SectionCard title="" subtitle="">
+            <style>
+              {`
+                .owner-profile-form-clean :is(
+                  div:has(input[name="tax_id"]),
+                  div:has(input[name="national_id"]),
+                  div:has(input[name="taxId"]),
+                  div:has(input[name="nationalId"])
+                ) {
+                  display: none !important;
+                }
+              `}
+            </style>
 
-    <div className="grid grid-cols-1 gap-8 xl:grid-cols-[360px_1fr]">
-      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-        <div className="min-w-0">
-          <p className="text-lg font-black text-slate-950">
-            {owner.full_name}
-          </p>
-        </div>
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-[360px_1fr]">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div className="min-w-0">
+                  <p className="text-lg font-black text-slate-950">
+                    {owner.full_name}
+                  </p>
+                </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3">
-          <InfoPill label="Email" value={owner.email} />
-          <InfoPill
-            label="Phone"
-            value={owner.phone_number || owner.whatsapp_number}
-          />
-          <InfoPill
-            label="Universities"
-            value={
-              ownerUniversityNames ||
-              `${ownerUniversityIds.length} selected universities`
-            }
-          />
-        </div>
-      </div>
+                <div className="mt-5 grid grid-cols-1 gap-3">
+                  <InfoPill label="Email" value={owner.email} />
+                  <InfoPill
+                    label="Phone"
+                    value={owner.phone_number || owner.whatsapp_number}
+                  />
+                  <InfoPill
+                    label="Universities"
+                    value={
+                      ownerUniversityNames ||
+                      `${ownerUniversityIds.length} selected universities`
+                    }
+                  />
+                </div>
+              </div>
 
-      <div className="owner-profile-form-clean">
-        <OwnerProfileForm
-          owner={ownerWithServiceArea}
-          cities={allCities}
-          universities={allUniversities}
-        />
-      </div>
-    </div>
-  </SectionCard>
-) : null}
+              <div className="owner-profile-form-clean">
+                <OwnerProfileForm
+                  owner={ownerWithServiceArea}
+                  cities={allCities}
+                  universities={allUniversities}
+                />
+              </div>
+            </div>
+          </SectionCard>
+        ) : null}
       </div>
     </main>
   )

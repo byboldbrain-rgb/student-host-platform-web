@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notifyCommunitySubscribers } from "@/src/lib/notifications/community-push";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -232,6 +233,55 @@ async function parseCreatePayload(req: Request): Promise<{
   };
 }
 
+async function getPublishedCommunityPostsCount() {
+  const { count, error } = await supabase
+    .from("community_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("is_published", true);
+
+  if (error) {
+    console.warn("Failed to count published community posts:", error.message);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+async function notifyNewCommunityPost(params: {
+  postId: number;
+  title: string;
+  excerpt?: string | null;
+  content?: string | null;
+  isPublished: boolean;
+}) {
+  if (!params.isPublished) return;
+
+  try {
+    const badgeCount = await getPublishedCommunityPostsCount();
+
+    await notifyCommunitySubscribers({
+      payload: {
+        title: "New Community Post",
+        body:
+          params.excerpt?.trim() ||
+          params.content?.trim() ||
+          params.title ||
+          "A new post is live in Community.",
+        url: "/community",
+        tag: `community-post-${params.postId}`,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        badgeCount,
+      },
+    });
+  } catch (notificationError) {
+    console.warn(
+      "Community post was created, but push notification failed:",
+      notificationError
+    );
+  }
+}
+
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -353,6 +403,14 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    await notifyNewCommunityPost({
+      postId: post.id,
+      title: titleEn,
+      excerpt: excerptEn,
+      content: contentEn,
+      isPublished,
+    });
 
     return NextResponse.json(
       {

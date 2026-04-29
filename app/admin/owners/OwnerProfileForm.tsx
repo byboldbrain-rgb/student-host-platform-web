@@ -227,10 +227,7 @@ export default function OwnerProfileForm({ owner, cities, universities }: Props)
               </option>
             ))}
           </select>
-          <p className="mt-2 text-xs font-medium text-slate-500">
-            Use this to filter the universities list. The owner can still have
-            universities from different cities.
-          </p>
+          
         </div>
 
         <div>

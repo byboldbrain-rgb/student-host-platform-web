@@ -1,11 +1,13 @@
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { createAdminClient } from '@/src/lib/supabase/admin'
 import {
-  requirePropertiesSectionAccess,
+  requireOwnerSettlementsAccess,
   isSuperAdmin,
-  canReceivePropertyBookingRequests,
+  isAPAdmin,
 } from '@/src/lib/admin-auth'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
+import AdminOwnerSettlementsNotifications from './AdminOwnerSettlementNotifications'
 import {
   approveOwnerSettlementAction,
   cancelOwnerSettlementAction,
@@ -118,10 +120,6 @@ type SettlementRow = {
   property_owners?: PropertyOwnerRow | null
 }
 
-type BookingRequestNotification = {
-  id: string
-}
-
 type GroupedPayables = {
   owner_id: string
   broker_id: string
@@ -140,10 +138,18 @@ type GroupedPayables = {
   net_payable_amount: number
 }
 
+type OwnerSettlementsPageProps = {
+  searchParams?: Promise<{
+    tab?: string
+  }>
+}
+
+type ActiveTab = 'payables' | 'settlements'
+
 function BrandLogo() {
   return (
     <Link
-      href="/admin/properties"
+      href="/admin/finance/owner-settlements"
       className="navienty-logo"
       aria-label="Navienty admin home"
     >
@@ -163,11 +169,11 @@ function BrandLogo() {
   )
 }
 
-function WalletIcon() {
+function WalletIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      className="h-5 w-5"
+      className={className}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -180,15 +186,15 @@ function WalletIcon() {
   )
 }
 
-function ClipboardListIcon() {
+function ClipboardListIcon({ className = 'h-6 w-6' }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      className="h-[20px] w-[20px]"
+      className={className}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
     >
       <rect x="9" y="2" width="6" height="4" rx="1" />
       <path d="M8 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
@@ -198,27 +204,73 @@ function ClipboardListIcon() {
   )
 }
 
-function MobileNavIcon({ src, alt }: { src: string; alt: string }) {
-  return <img src={src} alt={alt} className="h-[20px] w-[20px] object-contain" />
-}
-
-function NotificationBadge({ count }: { count: number }) {
-  if (count <= 0) return null
-
+function CheckIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
-    <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-[5px] text-[10px] font-bold leading-none text-white shadow-md">
-      {count > 99 ? '99+' : count}
-    </span>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
   )
 }
 
-function formatPrice(value?: number | null, currency = 'EGP') {
-  if (typeof value !== 'number' || Number.isNaN(value)) return `0 ${currency}`
+function ClockIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  )
+}
 
-  return `${Number(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency}`
+function AlertIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  )
+}
+
+function formatCurrency(
+  amount: number | string | null | undefined,
+  currency = 'EGP'
+) {
+  const value = Number(amount || 0)
+
+  try {
+    return new Intl.NumberFormat('en-EG', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+  } catch {
+    return `${value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${currency}`
+  }
 }
 
 function formatDate(date?: string | null) {
@@ -282,7 +334,7 @@ function getStatusClass(status: string) {
   }
 
   if (status === 'cancelled') {
-    return 'border-red-200 bg-red-50 text-red-700'
+    return 'border-rose-200 bg-rose-50 text-rose-700'
   }
 
   return 'border-slate-200 bg-slate-100 text-slate-700'
@@ -310,7 +362,9 @@ function normalizeOwnerPayableRows(rows: any[]): OwnerPayableRow[] {
   return rows.map((row) => ({
     ...row,
     brokers: normalizeSingleRelation<BrokerRow>(row.brokers),
-    property_owners: normalizeSingleRelation<PropertyOwnerRow>(row.property_owners),
+    property_owners: normalizeSingleRelation<PropertyOwnerRow>(
+      row.property_owners
+    ),
     properties: normalizeSingleRelation<PropertyRow>(row.properties),
     property_reservations: normalizeSingleRelation<PropertyReservationRow>(
       row.property_reservations
@@ -322,7 +376,9 @@ function normalizeSettlementRows(rows: any[]): SettlementRow[] {
   return rows.map((row) => ({
     ...row,
     brokers: normalizeSingleRelation<BrokerRow>(row.brokers),
-    property_owners: normalizeSingleRelation<PropertyOwnerRow>(row.property_owners),
+    property_owners: normalizeSingleRelation<PropertyOwnerRow>(
+      row.property_owners
+    ),
   })) as SettlementRow[]
 }
 
@@ -377,183 +433,381 @@ function groupPayablesByOwner(
   return Array.from(map.values())
 }
 
-function SummaryCard({
+function DetailItem({
   label,
   value,
-  hint,
+  mono = false,
 }: {
   label: string
-  value: string
-  hint?: string
+  value: ReactNode
+  mono?: boolean
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+    <div className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
         {label}
-      </p>
-      <p className="mt-2 text-xl font-bold text-slate-900">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+      </div>
+      <div
+        className={[
+          'mt-1.5 break-words text-sm font-bold text-slate-950',
+          mono ? 'font-mono text-[13px] tracking-tight' : '',
+        ].join(' ')}
+      >
+        {value}
+      </div>
     </div>
   )
 }
 
-function OwnerDetailsCard({
-  owner,
-  broker,
+function SectionTitle({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow?: string
+  title: string
+  description?: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        {eyebrow ? (
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-[#054aff]">
+            {eyebrow}
+          </p>
+        ) : null}
+
+        <h2 className="text-2xl font-black tracking-tight text-slate-950">
+          {title}
+        </h2>
+
+        {description ? (
+          <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-500">
+            {description}
+          </p>
+        ) : null}
+      </div>
+
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
+
+function TabsNav({
+  activeTab,
+  payablesCount,
+  settlementsCount,
+}: {
+  activeTab: ActiveTab
+  payablesCount: number
+  settlementsCount: number
+}) {
+  const tabs: {
+    id: ActiveTab
+    href: string
+    label: string
+    description: string
+    count: number
+    icon: ReactNode
+  }[] = [
+    {
+      id: 'payables',
+      href: '/admin/finance/owner-settlements?tab=payables',
+      label: 'Unsettled Payables',
+      description: 'Create owner settlements',
+      count: payablesCount,
+      icon: <WalletIcon className="h-5 w-5" />,
+    },
+    {
+      id: 'settlements',
+      href: '/admin/finance/owner-settlements?tab=settlements',
+      label: 'Settlements',
+      description: 'Approve and pay settlements',
+      count: settlementsCount,
+      icon: <ClipboardListIcon className="h-5 w-5" />,
+    },
+  ]
+
+  return (
+    <div className="mb-8 rounded-[30px] border border-white/80 bg-white/80 p-2 shadow-[0_18px_55px_rgba(15,23,42,0.08)] ring-1 ring-slate-900/[0.03] backdrop-blur">
+      <div className="grid gap-2 md:grid-cols-2">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id
+
+          return (
+            <Link
+              key={tab.id}
+              href={tab.href}
+              className={[
+                'group flex items-center justify-between gap-4 rounded-[24px] border px-4 py-4 transition duration-300 sm:px-5',
+                isActive
+                  ? 'border-[#054aff]/20 bg-[#054aff] text-white shadow-[0_14px_40px_rgba(5,74,255,0.28)]'
+                  : 'border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-sm',
+              ].join(' ')}
+            >
+              <span className="flex min-w-0 items-center gap-4">
+                <span
+                  className={[
+                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition',
+                    isActive
+                      ? 'border-white/20 bg-white/15 text-white'
+                      : 'border-slate-200 bg-white text-[#054aff]',
+                  ].join(' ')}
+                >
+                  {tab.icon}
+                </span>
+
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">{tab.label}</span>
+                  <span
+                    className={[
+                      'mt-1 block truncate text-xs font-semibold',
+                      isActive ? 'text-blue-100' : 'text-slate-400',
+                    ].join(' ')}
+                  >
+                    {tab.description}
+                  </span>
+                </span>
+              </span>
+
+              <span
+                className={[
+                  'inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-xs font-black',
+                  isActive
+                    ? 'bg-white text-[#054aff]'
+                    : 'bg-slate-100 text-slate-600 group-hover:bg-[#054aff]/10 group-hover:text-[#054aff]',
+                ].join(' ')}
+              >
+                {tab.count > 99 ? '99+' : tab.count}
+              </span>
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ActionButton({
+  children,
+  variant,
+}: {
+  children: ReactNode
+  variant: 'approve' | 'reject' | 'primary' | 'paid'
+}) {
+  const className =
+    variant === 'approve'
+      ? 'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-600/20'
+      : variant === 'reject'
+        ? 'bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-600/20'
+        : variant === 'paid'
+          ? 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600/20'
+          : 'bg-[#054aff] text-white hover:bg-[#003ed6] focus-visible:ring-[#054aff]/20'
+
+  return (
+    <button
+      type="submit"
+      className={`inline-flex h-12 w-full items-center justify-center rounded-2xl px-5 text-sm font-black shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus-visible:ring-4 ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TextInput({
+  name,
+  placeholder,
+  required = false,
+  disabled = false,
+  defaultValue,
+}: {
+  name: string
+  placeholder: string
+  required?: boolean
+  disabled?: boolean
+  defaultValue?: string | null
+}) {
+  return (
+    <input
+      name={name}
+      type="text"
+      required={required}
+      disabled={disabled}
+      defaultValue={defaultValue || ''}
+      placeholder={placeholder}
+      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-950 outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+    />
+  )
+}
+
+function SelectInput({
+  name,
+  required = false,
+  disabled = false,
+  defaultValue,
+  children,
+}: {
+  name: string
+  required?: boolean
+  disabled?: boolean
+  defaultValue?: string | null
+  children: ReactNode
+}) {
+  return (
+    <select
+      name={name}
+      required={required}
+      disabled={disabled}
+      defaultValue={defaultValue || ''}
+      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-950 outline-none transition focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+    >
+      {children}
+    </select>
+  )
+}
+
+function ReceiptUploadInput({ disabled = false }: { disabled?: boolean }) {
+  return (
+    <div>
+      <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+        Upload Receipt
+      </label>
+
+      <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-sm">
+        <label
+          htmlFor="payout_receipt_file"
+          className={[
+            'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[16px] border-2 border-dashed p-4 text-center transition',
+            disabled
+              ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+              : 'border-blue-200 bg-blue-50/40 text-slate-700 hover:border-[#054aff] hover:bg-blue-50',
+          ].join(' ')}
+        >
+          <span className="text-sm font-black">Choose receipt image</span>
+
+          <span className="text-xs font-semibold text-slate-500">
+            PNG, JPG, JPEG, WEBP
+          </span>
+
+          <input
+            id="payout_receipt_file"
+            name="payout_receipt_file"
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            disabled={disabled}
+            className="mt-2 block w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-bold text-slate-700 file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-[#054aff] file:px-4 file:py-2 file:text-xs file:font-black file:text-white hover:file:bg-[#003ed6] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          />
+        </label>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <section className="rounded-[32px] border border-dashed border-slate-300 bg-white/90 p-10 text-center shadow-[0_18px_55px_rgba(15,23,42,0.06)] sm:p-14">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
+        <ClipboardListIcon />
+      </div>
+
+      <h2 className="mt-5 text-2xl font-black tracking-tight text-slate-950">
+        {title}
+      </h2>
+
+      <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-slate-500">
+        {description}
+      </p>
+    </section>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-xs font-black capitalize ${getStatusClass(
+        status
+      )}`}
+    >
+      {status}
+    </span>
+  )
+}
+
+function PayoutDetailsCard({
   payoutAccount,
   isSnapshot = false,
 }: {
-  owner?: PropertyOwnerRow | null
-  broker?: BrokerRow | null
   payoutAccount?: OwnerPayoutAccountRow | null
   isSnapshot?: boolean
 }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Owner Details
-        </p>
+  if (!payoutAccount) {
+    return (
+      <div className="rounded-[26px] border border-rose-100 bg-rose-50/80 p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-rose-600 shadow-sm">
+            <AlertIcon />
+          </div>
 
-        <div className="mt-3 space-y-1.5 text-sm text-slate-700">
-          <p>
-            <span className="font-medium text-slate-900">Owner:</span>{' '}
-            {owner?.full_name || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">Phone:</span>{' '}
-            {owner?.phone_number || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">WhatsApp:</span>{' '}
-            {owner?.whatsapp_number || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">Email:</span>{' '}
-            {owner?.email || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">Tax ID:</span>{' '}
-            {owner?.tax_id || '—'}
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Broker Details
-        </p>
-
-        <div className="mt-3 space-y-1.5 text-sm text-slate-700">
-          <p>
-            <span className="font-medium text-slate-900">Broker:</span>{' '}
-            {broker?.company_name || broker?.full_name || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">Phone:</span>{' '}
-            {broker?.phone_number || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">WhatsApp:</span>{' '}
-            {broker?.whatsapp_number || '—'}
-          </p>
-          <p>
-            <span className="font-medium text-slate-900">Email:</span>{' '}
-            {broker?.email || '—'}
-          </p>
-        </div>
-      </div>
-
-      <div
-        className={`rounded-2xl border p-4 ${
-          payoutAccount
-            ? 'border-emerald-100 bg-emerald-50'
-            : 'border-red-100 bg-red-50'
-        }`}
-      >
-        <p
-          className={`text-xs font-semibold uppercase tracking-[0.14em] ${
-            payoutAccount ? 'text-emerald-700' : 'text-red-700'
-          }`}
-        >
-          Owner Payout Details
-        </p>
-
-        {payoutAccount ? (
-          <div className="mt-3 space-y-1.5 text-sm text-slate-700">
-            {isSnapshot ? (
-              <p className="mb-2 inline-flex rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-bold text-emerald-700">
-                Paid using captured payout snapshot
-              </p>
-            ) : null}
-
-            <p>
-              <span className="font-medium text-slate-900">Method:</span>{' '}
-              {formatPayoutMethod(payoutAccount.payout_method)}
+          <div>
+            <h3 className="text-sm font-black text-rose-950">
+              Missing payout details
+            </h3>
+            <p className="mt-1 text-sm font-medium leading-6 text-rose-800/80">
+              Add active payout details before marking this settlement as paid.
             </p>
-
-            {payoutAccount.account_holder_name ? (
-              <p>
-                <span className="font-medium text-slate-900">Account Holder:</span>{' '}
-                {payoutAccount.account_holder_name}
-              </p>
-            ) : null}
-
-            {payoutAccount.phone_number ? (
-              <p>
-                <span className="font-medium text-slate-900">Phone:</span>{' '}
-                {payoutAccount.phone_number}
-              </p>
-            ) : null}
-
-            {payoutAccount.instapay_handle ? (
-              <p>
-                <span className="font-medium text-slate-900">Instapay:</span>{' '}
-                {payoutAccount.instapay_handle}
-              </p>
-            ) : null}
-
-            {payoutAccount.wallet_number ? (
-              <p>
-                <span className="font-medium text-slate-900">Wallet Number:</span>{' '}
-                {payoutAccount.wallet_number}
-              </p>
-            ) : null}
-
-            {payoutAccount.bank_name ? (
-              <p>
-                <span className="font-medium text-slate-900">Bank:</span>{' '}
-                {payoutAccount.bank_name}
-              </p>
-            ) : null}
-
-            {payoutAccount.bank_account_number ? (
-              <p>
-                <span className="font-medium text-slate-900">Account Number:</span>{' '}
-                {payoutAccount.bank_account_number}
-              </p>
-            ) : null}
-
-            {payoutAccount.iban ? (
-              <p>
-                <span className="font-medium text-slate-900">IBAN:</span>{' '}
-                {payoutAccount.iban}
-              </p>
-            ) : null}
-
-            {payoutAccount.captured_at ? (
-              <p>
-                <span className="font-medium text-slate-900">Captured:</span>{' '}
-                {formatDate(payoutAccount.captured_at)}
-              </p>
-            ) : null}
           </div>
-        ) : (
-          <div className="mt-3 text-sm font-medium text-red-700">
-            No payout details added for this owner. Add payout details before marking
-            settlement as paid.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-[26px] border border-emerald-100 bg-emerald-50/80 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div>
+            <h3 className="text-sm font-black text-emerald-950">
+              Payout details ready
+            </h3>
           </div>
-        )}
+        </div>
+
+        {isSnapshot ? (
+          <span className="inline-flex w-fit rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-black text-emerald-700">
+            Snapshot
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <DetailItem
+          label="Method"
+          value={formatPayoutMethod(payoutAccount.payout_method)}
+        />
+        <DetailItem
+          label="Account Holder"
+          value={payoutAccount.account_holder_name || '—'}
+        />
+        <DetailItem label="Phone" value={payoutAccount.phone_number || '—'} mono />
+        <DetailItem
+          label="Instapay"
+          value={payoutAccount.instapay_handle || '—'}
+          mono
+        />
+        <DetailItem
+          label="Wallet Number"
+          value={payoutAccount.wallet_number || '—'}
+          mono
+        />
+        <DetailItem label="Bank" value={payoutAccount.bank_name || '—'} />
       </div>
     </div>
   )
@@ -564,13 +818,7 @@ function CreateSettlementForm({ group }: { group: GroupedPayables }) {
     <form action={createOwnerSettlementAction}>
       <input type="hidden" name="owner_id" value={group.owner_id} />
       <input type="hidden" name="broker_id" value={group.broker_id} />
-
-      <button
-        type="submit"
-        className="inline-flex w-full items-center justify-center rounded-full border border-[#155dfc] bg-[#155dfc] px-4 py-2.5 text-sm font-semibold text-white transition hover:border-[#0f4fe0] hover:bg-[#0f4fe0] md:w-auto"
-      >
-        Create Settlement
-      </button>
+      <ActionButton variant="primary">Create Settlement</ActionButton>
     </form>
   )
 }
@@ -579,13 +827,7 @@ function ApproveSettlementForm({ settlementId }: { settlementId: string }) {
   return (
     <form action={approveOwnerSettlementAction}>
       <input type="hidden" name="settlement_id" value={settlementId} />
-
-      <button
-        type="submit"
-        className="inline-flex w-full items-center justify-center rounded-full border border-blue-600 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-blue-700 hover:bg-blue-700"
-      >
-        Approve
-      </button>
+      <ActionButton variant="approve">Approve</ActionButton>
     </form>
   )
 }
@@ -594,14 +836,12 @@ function CancelSettlementForm({ settlementId }: { settlementId: string }) {
   return (
     <form action={cancelOwnerSettlementAction}>
       <input type="hidden" name="settlement_id" value={settlementId} />
-      <input type="hidden" name="cancel_reason" value="Cancelled from finance page" />
-
-      <button
-        type="submit"
-        className="inline-flex w-full items-center justify-center rounded-full border border-red-600 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-      >
-        Cancel
-      </button>
+      <input
+        type="hidden"
+        name="cancel_reason"
+        value="Cancelled from finance page"
+      />
+      <ActionButton variant="reject">Cancel</ActionButton>
     </form>
   )
 }
@@ -616,55 +856,63 @@ function MarkSettlementPaidForm({
   const defaultPayoutMethod = payoutAccount?.payout_method || 'bank_transfer'
 
   return (
-    <form action={markOwnerSettlementPaidAction} className="space-y-3">
+    <form action={markOwnerSettlementPaidAction} className="space-y-4">
       <input type="hidden" name="settlement_id" value={settlementId} />
 
       {!payoutAccount ? (
-        <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-700">
-          This owner has no active payout details. Add payout details before marking
-          this settlement as paid.
+        <div className="rounded-3xl border border-rose-100 bg-rose-50 p-5">
+          <div className="text-sm font-black text-rose-950">
+            Missing payout details
+          </div>
+          <p className="mt-1 text-sm font-medium leading-6 text-rose-800/80">
+            This owner has no active payout details. Add payout details before
+            marking this settlement as paid.
+          </p>
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <select
-          name="payout_method"
-          required
-          defaultValue={defaultPayoutMethod}
-          disabled={!payoutAccount}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#155dfc] focus:ring-2 focus:ring-[#155dfc]/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-        >
-          <option value="bank_transfer">Bank Transfer</option>
-          <option value="instapay">Instapay</option>
-          <option value="vodafone_cash">Vodafone Cash</option>
-          <option value="orange_cash">Orange Cash</option>
-          <option value="etisalat_cash">Etisalat Cash</option>
-          <option value="cash">Cash</option>
-        </select>
+      <div className="grid gap-3">
+        <div>
+          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+            Payout Method
+          </label>
+          <SelectInput
+            name="payout_method"
+            required
+            defaultValue={defaultPayoutMethod}
+            disabled={!payoutAccount}
+          >
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="instapay">Instapay</option>
+            <option value="vodafone_cash">Vodafone Cash</option>
+            <option value="orange_cash">Orange Cash</option>
+            <option value="etisalat_cash">Etisalat Cash</option>
+            <option value="cash">Cash</option>
+          </SelectInput>
+        </div>
 
-        <input
-          name="payout_reference"
-          required
-          disabled={!payoutAccount}
-          placeholder="Transfer reference"
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#155dfc] focus:ring-2 focus:ring-[#155dfc]/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-        />
+        <div>
+          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+            Transfer Reference
+          </label>
+          <TextInput
+            name="payout_reference"
+            placeholder="Enter transfer reference"
+            required
+            disabled={!payoutAccount}
+          />
+        </div>
 
-        <input
-          name="payout_receipt_url"
-          disabled={!payoutAccount}
-          placeholder="Receipt URL optional"
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#155dfc] focus:ring-2 focus:ring-[#155dfc]/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-        />
+        <ReceiptUploadInput disabled={!payoutAccount} />
       </div>
 
       <button
         type="submit"
         disabled={!payoutAccount}
-        className={`inline-flex w-full items-center justify-center rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+        className={`inline-flex h-12 w-full items-center justify-center rounded-2xl px-5 text-sm font-black shadow-sm transition focus:outline-none focus-visible:ring-4 ${
           payoutAccount
-            ? 'border-emerald-600 bg-emerald-600 text-white hover:border-emerald-700 hover:bg-emerald-700'
-            : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+            ? 'bg-emerald-600 text-white hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-lg focus-visible:ring-emerald-600/20'
+            : 'cursor-not-allowed bg-slate-100 text-slate-400'
         }`}
       >
         Mark as Paid
@@ -673,82 +921,117 @@ function MarkSettlementPaidForm({
   )
 }
 
-function MobileBottomNav({ newReservationsCount }: { newReservationsCount: number }) {
-  const items = [
-    {
-      href: '/admin/properties/booking-requests',
-      label: 'New Reservations',
-      icon: (
-        <MobileNavIcon
-          src="https://i.ibb.co/hxXpLKv3/add-event-6756388.png"
-          alt="New Reservations"
-        />
-      ),
-      active: false,
-      badgeCount: newReservationsCount,
-    },
-    {
-      href: '/admin/properties',
-      label: 'Properties',
-      icon: (
-        <MobileNavIcon
-          src="https://i.ibb.co/Dfs0dvX3/property-11608478.png"
-          alt="Properties"
-        />
-      ),
-      active: false,
-      badgeCount: 0,
-    },
-    {
-      href: '/admin/finance/owner-settlements',
-      label: 'Finance',
-      icon: <WalletIcon />,
-      active: true,
-      badgeCount: 0,
-    },
-  ]
-
+function OwnerSummaryGrid({
+  owner,
+  broker,
+}: {
+  owner?: PropertyOwnerRow | null
+  broker?: BrokerRow | null
+}) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e8e8ee] bg-white md:hidden">
-      <div className="mx-auto flex h-[74px] max-w-md items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
-        {items.map((item) => {
-          const activeClass = item.active ? 'text-[#155dfc]' : 'text-[#6b7280]'
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
-            >
-              <span className={`relative flex items-center justify-center ${activeClass}`}>
-                {item.icon}
-
-                {item.badgeCount > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-[5px] text-[10px] font-bold text-white shadow-md">
-                    {item.badgeCount > 99 ? '99+' : item.badgeCount}
-                  </span>
-                )}
-              </span>
-
-              <span
-                className={`text-[11px] leading-[1.1] ${activeClass} ${
-                  item.active ? 'font-semibold' : 'font-medium'
-                }`}
-              >
-                {item.label}
-              </span>
-            </Link>
-          )
-        })}
-      </div>
-    </nav>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <DetailItem label="Owner" value={owner?.full_name || '—'} />
+      <DetailItem label="Owner Phone" value={owner?.phone_number || '—'} mono />
+      <DetailItem
+        label="Broker"
+        value={broker?.company_name || broker?.full_name || '—'}
+      />
+      <DetailItem label="Broker Phone" value={broker?.phone_number || '—'} mono />
+    </div>
   )
 }
 
-export default async function OwnerSettlementsPage() {
-  const adminContext = await requirePropertiesSectionAccess()
+function PayablesTable({ payables }: { payables: OwnerPayableRow[] }) {
+  return (
+    <div className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
+            <tr>
+              <th className="px-5 py-4 font-black">Property</th>
+              <th className="px-5 py-4 font-black">Customer</th>
+              <th className="px-5 py-4 font-black">Source</th>
+              <th className="px-5 py-4 font-black">Gross</th>
+              <th className="px-5 py-4 font-black">Fees</th>
+              <th className="px-5 py-4 font-black">Tax</th>
+              <th className="px-5 py-4 font-black">Net</th>
+              <th className="px-5 py-4 font-black">Created</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-slate-100">
+            {payables.map((payable) => (
+              <tr
+                key={payable.id}
+                className="align-top transition hover:bg-slate-50/70"
+              >
+                <td className="px-5 py-4">
+                  <p className="font-black text-slate-950">
+                    {payable.properties?.title_en ||
+                      payable.properties?.title_ar ||
+                      'Property'}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    {payable.properties?.property_id || '—'}
+                  </p>
+                </td>
+
+                <td className="px-5 py-4">
+                  <p className="font-bold text-slate-950">
+                    {payable.property_reservations?.customer_name || '—'}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    {payable.property_reservations?.customer_phone || '—'}
+                  </p>
+                </td>
+
+                <td className="px-5 py-4 font-bold text-slate-600">
+                  {payable.source_type}
+                </td>
+
+                <td className="px-5 py-4 font-black text-slate-950">
+                  {formatCurrency(payable.gross_rent_amount, payable.currency)}
+                </td>
+
+                <td className="px-5 py-4 font-bold text-slate-600">
+                  {formatCurrency(
+                    Number(payable.service_fee_amount || 0) +
+                      Number(payable.payment_fee_amount || 0),
+                    payable.currency
+                  )}
+                </td>
+
+                <td className="px-5 py-4 font-bold text-slate-600">
+                  {formatCurrency(payable.tax_amount, payable.currency)}
+                </td>
+
+                <td className="px-5 py-4 font-black text-emerald-700">
+                  {formatCurrency(payable.net_payable_amount, payable.currency)}
+                </td>
+
+                <td className="px-5 py-4 font-bold text-slate-500">
+                  {formatDate(payable.created_at)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export default async function OwnerSettlementsPage({
+  searchParams,
+}: OwnerSettlementsPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const activeTab: ActiveTab =
+    resolvedSearchParams.tab === 'settlements' ? 'settlements' : 'payables'
+
+  const adminContext = await requireOwnerSettlementsAccess()
   const supabase = createAdminClient()
   const admin = adminContext.admin
+  const hasGlobalOwnerSettlementsAccess = isSuperAdmin(admin) || isAPAdmin(admin)
 
   let payablesQuery = supabase
     .from('owner_payables')
@@ -844,7 +1127,7 @@ export default async function OwnerSettlementsPage() {
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false })
 
-  if (!isSuperAdmin(admin)) {
+  if (!hasGlobalOwnerSettlementsAccess) {
     if (!admin.broker_id) {
       throw new Error('Editor account is missing broker assignment')
     }
@@ -878,99 +1161,60 @@ export default async function OwnerSettlementsPage() {
 
   const payoutAccountsMap = new Map<string, OwnerPayoutAccountRow>()
 
-if (ownerIds.length > 0) {
-  let payoutAccountsQuery = supabase
-    .from('owner_payout_accounts')
-    .select(`
-      id,
-      owner_id,
-      broker_id,
-      payout_method,
-      account_holder_name,
-      phone_number,
-      bank_name,
-      bank_account_number,
-      iban,
-      wallet_number,
-      instapay_handle,
-      is_default,
-      is_active,
-      notes
-    `)
-    .in('owner_id', ownerIds)
-    .eq('is_active', true)
-    .order('is_default', { ascending: false })
-    .order('created_at', { ascending: false })
-
-  if (!isSuperAdmin(admin)) {
-    payoutAccountsQuery = payoutAccountsQuery.eq('broker_id', admin.broker_id)
-  }
-
-  const { data: payoutAccountsData, error: payoutAccountsError } =
-    await payoutAccountsQuery
-
-  if (payoutAccountsError) {
-    throw new Error(payoutAccountsError.message)
-  }
-
-  ;((payoutAccountsData || []) as any[]).forEach((account) => {
-    const normalizedAccount = account as OwnerPayoutAccountRow
-    const mapKey = getPayoutAccountMapKey(
-      normalizedAccount.owner_id,
-      normalizedAccount.broker_id
-    )
-
-    if (!payoutAccountsMap.has(mapKey)) {
-      payoutAccountsMap.set(mapKey, normalizedAccount)
-    }
-  })
-}
-
-  const groupedPayables = groupPayablesByOwner(payables, payoutAccountsMap)
-
-  const totalUnsettledGross = payables.reduce(
-    (sum, row) => sum + Number(row.gross_rent_amount || 0),
-    0
-  )
-  const totalUnsettledNet = payables.reduce(
-    (sum, row) => sum + Number(row.net_payable_amount || 0),
-    0
-  )
-  const totalPlatformFees = payables.reduce(
-    (sum, row) =>
-      sum +
-      Number(row.service_fee_amount || 0) +
-      Number(row.payment_fee_amount || 0),
-    0
-  )
-  const totalTax = payables.reduce(
-    (sum, row) => sum + Number(row.tax_amount || 0),
-    0
-  )
-
-  let newReservationsCount = 0
-
-  if (canReceivePropertyBookingRequests(admin)) {
-    let bookingRequestsQuery = supabase
-      .from('property_booking_requests')
-      .select('id')
-      .in('status', ['new', 'contacted', 'in_progress'])
+  if (ownerIds.length > 0) {
+    let payoutAccountsQuery = supabase
+      .from('owner_payout_accounts')
+      .select(`
+        id,
+        owner_id,
+        broker_id,
+        payout_method,
+        account_holder_name,
+        phone_number,
+        bank_name,
+        bank_account_number,
+        iban,
+        wallet_number,
+        instapay_handle,
+        is_default,
+        is_active,
+        notes
+      `)
+      .in('owner_id', ownerIds)
+      .eq('is_active', true)
+      .order('is_default', { ascending: false })
       .order('created_at', { ascending: false })
 
-    if (!isSuperAdmin(admin)) {
-      bookingRequestsQuery = bookingRequestsQuery.eq('broker_id', admin.broker_id)
+    if (!hasGlobalOwnerSettlementsAccess) {
+      payoutAccountsQuery = payoutAccountsQuery.eq('broker_id', admin.broker_id)
     }
 
-    const { data: bookingRequestsData, error: bookingRequestsError } =
-      await bookingRequestsQuery
+    const { data: payoutAccountsData, error: payoutAccountsError } =
+      await payoutAccountsQuery
 
-    if (bookingRequestsError) {
-      throw new Error(bookingRequestsError.message)
+    if (payoutAccountsError) {
+      throw new Error(payoutAccountsError.message)
     }
 
-    const bookingRequests = (bookingRequestsData || []) as BookingRequestNotification[]
-    newReservationsCount = bookingRequests.length
+    ;((payoutAccountsData || []) as any[]).forEach((account) => {
+      const normalizedAccount = account as OwnerPayoutAccountRow
+      const mapKey = getPayoutAccountMapKey(
+        normalizedAccount.owner_id,
+        normalizedAccount.broker_id
+      )
+
+      if (!payoutAccountsMap.has(mapKey)) {
+        payoutAccountsMap.set(mapKey, normalizedAccount)
+      }
+    })
   }
+
+  const groupedPayables = groupPayablesByOwner(payables, payoutAccountsMap)
+  const approvedSettlementsCount = settlements.filter(
+    (settlement) => settlement.status === 'approved'
+  ).length
+  const notificationsEnabledForAdmin =
+    adminContext.admin.role === 'AP' || adminContext.admin.role === 'super_admin'
 
   return (
     <>
@@ -1033,7 +1277,7 @@ if (ownerIds.length > 0) {
           line-height: 1;
           border: none;
           background: none;
-          font-weight: 600;
+          font-weight: 700;
           font-family: 'Poppins', sans-serif;
           padding: 8px 0;
           transition: color 0.3s ease;
@@ -1070,15 +1314,6 @@ if (ownerIds.length > 0) {
           color: #054aff;
         }
 
-        .desktop-header-nav-button-inactive {
-          color: #20212a;
-        }
-
-        .desktop-header-nav-button-inactive:hover,
-        .desktop-header-nav-button-inactive:focus-visible {
-          color: #054aff;
-        }
-
         @media (max-width: 768px) {
           .navienty-logo {
             transform: none;
@@ -1100,408 +1335,266 @@ if (ownerIds.length > 0) {
         }
       `}</style>
 
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef4ff,_#f8fafc_45%,_#f8fafc_100%)] pb-24 text-slate-700 md:pb-8">
-        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
-          <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe,_transparent_32%),radial-gradient(circle_at_top_right,_#dcfce7,_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#eef2f7_100%)] pb-10 text-slate-950">
+        <header className="sticky top-0 z-[110] border-b border-white/60 bg-white/75 backdrop-blur-xl">
+          <div className="mobile-header-inner flex h-[76px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <BrandLogo />
 
             <div className="hidden items-center gap-6 md:flex">
-              {canReceivePropertyBookingRequests(admin) && (
-                <Link
-                  href="/admin/properties/booking-requests"
-                  className="desktop-header-nav-button desktop-header-nav-button-inactive"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span>New Reservations</span>
-                    <NotificationBadge count={newReservationsCount} />
-                  </span>
-                </Link>
-              )}
-
-              <Link
-                href="/admin/properties"
-                className="desktop-header-nav-button desktop-header-nav-button-inactive"
-              >
-                Properties
-              </Link>
-
-              <Link
-                href="/admin/properties/reservations"
-                className="desktop-header-nav-button desktop-header-nav-button-inactive"
-              >
-                Manage Reservations
-              </Link>
-
               <Link
                 href="/admin/finance/owner-settlements"
                 className="desktop-header-nav-button desktop-header-nav-button-active"
               >
-                Finance
+                Owner Settlements
               </Link>
 
-              {isSuperAdmin(admin) && (
-                <Link
-                  href="/admin/properties/review"
-                  className="desktop-header-nav-button desktop-header-nav-button-inactive"
-                >
-                  Review Queue
-                </Link>
-              )}
+              <Link
+                href="/admin/change-password"
+                className="desktop-header-nav-button"
+              >
+                Change Password
+              </Link>
+
+              <AdminOwnerSettlementsNotifications
+                enabled={notificationsEnabledForAdmin}
+                initialPayablesCount={groupedPayables.length}
+                initialSettlementsCount={approvedSettlementsCount}
+              />
 
               <AdminLogoutButton />
             </div>
           </div>
         </header>
 
-        <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Owner Settlements
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Manage owner payables, settlements, platform fees, payout details, and payout records.
-              Brokers and owners are separated: the broker manages properties, while the owner receives payouts.
-            </p>
-          </div>
+        <section className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="mb-6 flex items-center justify-between gap-3 md:hidden">
+            <Link
+              href="/admin/change-password"
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm"
+            >
+              Change Password
+            </Link>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              label="Unsettled Gross Rent"
-              value={formatPrice(totalUnsettledGross)}
-              hint={`${payables.length} payable records`}
-            />
-            <SummaryCard
-              label="Net Payable"
-              value={formatPrice(totalUnsettledNet)}
-              hint="Amount payable to owners"
-            />
-            <SummaryCard
-              label="Platform Fees"
-              value={formatPrice(totalPlatformFees)}
-              hint="Service + payment fees"
-            />
-            <SummaryCard
-              label="Tax"
-              value={formatPrice(totalTax)}
-              hint="Tax on platform fees"
+            <AdminOwnerSettlementsNotifications
+              enabled={notificationsEnabledForAdmin}
+              initialPayablesCount={groupedPayables.length}
+              initialSettlementsCount={approvedSettlementsCount}
             />
           </div>
 
-          <section className="mt-6 rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-            <div className="border-b border-slate-200 px-5 py-5 md:px-7">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Unsettled Owner Payables
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Create a settlement for each owner when you are ready to transfer money.
-                  </p>
-                </div>
+          <TabsNav
+            activeTab={activeTab}
+            payablesCount={groupedPayables.length}
+            settlementsCount={settlements.length}
+          />
 
-                <div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-[#155dfc]/10 text-[#155dfc] md:flex">
-                  <WalletIcon />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 md:p-6">
+          {activeTab === 'payables' ? (
+            <section>
               {groupedPayables.length === 0 ? (
-                <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-14 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm">
-                    <WalletIcon />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    No unsettled payables
-                  </h3>
-                  <p className="mt-2 text-sm text-slate-500">
-                    New paid reservations and renewals will appear here automatically.
-                  </p>
-                </div>
+                <EmptyState
+                  title="No unsettled payables"
+                  description="New paid reservations and renewals will appear here automatically."
+                />
               ) : (
-                <div className="space-y-5">
+                <div className="grid gap-6">
                   {groupedPayables.map((group) => (
                     <article
-                      key={group.owner_id}
-                      className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+                      key={`${group.owner_id}:${group.broker_id}`}
+                      className="overflow-hidden rounded-[34px] border border-white/80 bg-white/90 shadow-[0_22px_70px_rgba(15,23,42,0.09)] ring-1 ring-slate-900/[0.03] backdrop-blur"
                     >
-                      <div className="border-b border-slate-100 bg-slate-50 p-5">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                              Owner
-                            </p>
-                            <h3 className="mt-1 text-lg font-bold text-slate-900">
-                              {group.owner_name}
-                            </h3>
-                            <p className="mt-1 text-sm text-slate-500">
-                              Broker: {group.broker_name} • {group.payables.length} unsettled payable records
-                            </p>
-                          </div>
-
-                          <CreateSettlementForm group={group} />
-                        </div>
-
-                        <div className="mt-5">
-                          <OwnerDetailsCard
+                      <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+                        <div className="p-5 sm:p-6 lg:p-7">
+                          <OwnerSummaryGrid
                             owner={group.owner}
                             broker={group.broker}
-                            payoutAccount={group.payout_account}
                           />
+
+                          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <DetailItem
+                              label="Gross"
+                              value={formatCurrency(
+                                group.gross_rent_amount,
+                                group.currency
+                              )}
+                            />
+                            <DetailItem
+                              label="Service Fee"
+                              value={formatCurrency(
+                                group.service_fee_amount,
+                                group.currency
+                              )}
+                            />
+                            <DetailItem
+                              label="Payment Fee"
+                              value={formatCurrency(
+                                group.payment_fee_amount,
+                                group.currency
+                              )}
+                            />
+                            <DetailItem
+                              label="Tax"
+                              value={formatCurrency(group.tax_amount, group.currency)}
+                            />
+                          </div>
+
+                          <div className="mt-6">
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <h4 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500">
+                                Payable Records
+                              </h4>
+                            </div>
+
+                            <PayablesTable payables={group.payables} />
+                          </div>
                         </div>
 
-                        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-                          <div className="rounded-2xl bg-white p-3">
-                            <p className="text-xs text-slate-500">Gross</p>
-                            <p className="mt-1 text-sm font-bold text-slate-900">
-                              {formatPrice(group.gross_rent_amount, group.currency)}
-                            </p>
+                        <aside className="border-t border-slate-200/70 bg-slate-50/80 p-5 sm:p-6 xl:border-l xl:border-t-0">
+                          <div className="sticky top-28 space-y-5">
+                            <div className="rounded-[28px] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
+                              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
+                                Net Payable
+                              </p>
+                              <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+                                {formatCurrency(
+                                  group.net_payable_amount,
+                                  group.currency
+                                )}
+                              </p>
+                              <p className="mt-2 text-xs font-semibold text-slate-500">
+                                Final amount payable to this owner.
+                              </p>
+                            </div>
+
+                            <PayoutDetailsCard
+                              payoutAccount={group.payout_account}
+                            />
+
+                            <CreateSettlementForm group={group} />
                           </div>
-
-                          <div className="rounded-2xl bg-white p-3">
-                            <p className="text-xs text-slate-500">Service Fee</p>
-                            <p className="mt-1 text-sm font-bold text-slate-900">
-                              {formatPrice(group.service_fee_amount, group.currency)}
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl bg-white p-3">
-                            <p className="text-xs text-slate-500">Payment Fee</p>
-                            <p className="mt-1 text-sm font-bold text-slate-900">
-                              {formatPrice(group.payment_fee_amount, group.currency)}
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl bg-white p-3">
-                            <p className="text-xs text-slate-500">Tax</p>
-                            <p className="mt-1 text-sm font-bold text-slate-900">
-                              {formatPrice(group.tax_amount, group.currency)}
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl bg-white p-3">
-                            <p className="text-xs text-slate-500">Net Payable</p>
-                            <p className="mt-1 text-sm font-bold text-emerald-700">
-                              {formatPrice(group.net_payable_amount, group.currency)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-left text-sm">
-                          <thead className="bg-white text-xs uppercase tracking-[0.12em] text-slate-500">
-                            <tr>
-                              <th className="px-5 py-3 font-semibold">Property</th>
-                              <th className="px-5 py-3 font-semibold">Customer</th>
-                              <th className="px-5 py-3 font-semibold">Source</th>
-                              <th className="px-5 py-3 font-semibold">Gross</th>
-                              <th className="px-5 py-3 font-semibold">Fees</th>
-                              <th className="px-5 py-3 font-semibold">Tax</th>
-                              <th className="px-5 py-3 font-semibold">Net</th>
-                              <th className="px-5 py-3 font-semibold">Created</th>
-                            </tr>
-                          </thead>
-
-                          <tbody className="divide-y divide-slate-100">
-                            {group.payables.map((payable) => (
-                              <tr key={payable.id} className="align-top">
-                                <td className="px-5 py-4">
-                                  <p className="font-semibold text-slate-900">
-                                    {payable.properties?.title_en ||
-                                      payable.properties?.title_ar ||
-                                      'Property'}
-                                  </p>
-                                  <p className="mt-1 text-xs text-slate-500">
-                                    {payable.properties?.property_id || '—'}
-                                  </p>
-                                </td>
-
-                                <td className="px-5 py-4">
-                                  <p className="font-medium text-slate-900">
-                                    {payable.property_reservations?.customer_name || '—'}
-                                  </p>
-                                  <p className="mt-1 text-xs text-slate-500">
-                                    {payable.property_reservations?.customer_phone || '—'}
-                                  </p>
-                                </td>
-
-                                <td className="px-5 py-4 text-slate-700">
-                                  {payable.source_type}
-                                </td>
-
-                                <td className="px-5 py-4 font-semibold text-slate-900">
-                                  {formatPrice(
-                                    Number(payable.gross_rent_amount || 0),
-                                    payable.currency
-                                  )}
-                                </td>
-
-                                <td className="px-5 py-4 text-slate-700">
-                                  {formatPrice(
-                                    Number(payable.service_fee_amount || 0) +
-                                      Number(payable.payment_fee_amount || 0),
-                                    payable.currency
-                                  )}
-                                </td>
-
-                                <td className="px-5 py-4 text-slate-700">
-                                  {formatPrice(
-                                    Number(payable.tax_amount || 0),
-                                    payable.currency
-                                  )}
-                                </td>
-
-                                <td className="px-5 py-4 font-bold text-emerald-700">
-                                  {formatPrice(
-                                    Number(payable.net_payable_amount || 0),
-                                    payable.currency
-                                  )}
-                                </td>
-
-                                <td className="px-5 py-4 text-slate-500">
-                                  {formatDate(payable.created_at)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        </aside>
                       </div>
                     </article>
                   ))}
                 </div>
               )}
-            </div>
-          </section>
+            </section>
+          ) : null}
 
-          <section className="mt-6 rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-            <div className="border-b border-slate-200 px-5 py-5 md:px-7">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Settlements
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Approve draft settlements, issue platform fee invoices, then mark owner payouts as paid.
-              </p>
-            </div>
+          {activeTab === 'settlements' ? (
+            <section>
+              <SectionTitle eyebrow="" title="Settlements" description="" />
 
-            <div className="p-4 md:p-6">
               {settlements.length === 0 ? (
-                <div className="rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-14 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm">
-                    <ClipboardListIcon />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    No settlements yet
-                  </h3>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Create your first owner settlement from unsettled payables above.
-                  </p>
-                </div>
+                <EmptyState
+                  title="No settlements yet"
+                  description="Create your first owner settlement from unsettled payables above."
+                />
               ) : (
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                <div className="grid gap-6 xl:grid-cols-2">
                   {settlements.map((settlement) => {
                     const paidSnapshot = getPaidPayoutSnapshot(settlement)
                     const livePayoutAccount =
                       payoutAccountsMap.get(
-                        getPayoutAccountMapKey(settlement.owner_id, settlement.broker_id)
+                        getPayoutAccountMapKey(
+                          settlement.owner_id,
+                          settlement.broker_id
+                        )
                       ) || null
                     const payoutAccount = paidSnapshot || livePayoutAccount
 
                     return (
                       <article
                         key={settlement.id}
-                        className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+                        className="overflow-hidden rounded-[34px] border border-white/80 bg-white/90 shadow-[0_22px_70px_rgba(15,23,42,0.09)] ring-1 ring-slate-900/[0.03] backdrop-blur"
                       >
-                        <div className="border-b border-slate-100 bg-gradient-to-br from-[#eef4ff] via-[#f8fbff] to-[#edf2ff] p-5">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                {settlement.settlement_number}
-                              </p>
-                              <h3 className="mt-2 text-lg font-bold text-slate-900">
-                                {getOwnerName(settlement)}
-                              </h3>
-                              <p className="mt-1 text-sm text-slate-500">
-                                Broker: {getBrokerName(settlement)}
-                              </p>
-                              <p className="mt-1 text-sm text-slate-500">
-                                {formatDate(settlement.period_start)} -{' '}
-                                {formatDate(settlement.period_end)}
-                              </p>
-                            </div>
+                        <div className="relative overflow-hidden bg-slate-950 p-6 text-white">
+                          <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-emerald-400/20 blur-3xl" />
+                          <div className="absolute -bottom-20 left-8 h-52 w-52 rounded-full bg-blue-500/20 blur-3xl" />
 
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize ${getStatusClass(
-                                settlement.status
-                              )}`}
-                            >
-                              {settlement.status}
-                            </span>
+                          <div className="relative w-full rounded-[30px] border border-white/10 bg-white/10 p-6 backdrop-blur sm:p-8">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">
+                              Net Payout
+                            </p>
+
+                            <p className="mt-3 text-4xl font-black tracking-tight text-white sm:text-5xl">
+                              {formatCurrency(
+                                settlement.net_payout_amount,
+                                settlement.currency
+                              )}
+                            </p>
                           </div>
                         </div>
 
-                        <div className="p-5">
-                          <OwnerDetailsCard
+                        <div className="space-y-5 p-5 sm:p-6">
+                          <OwnerSummaryGrid
                             owner={settlement.property_owners}
                             broker={settlement.brokers}
+                          />
+
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <DetailItem
+                              label="Gross"
+                              value={formatCurrency(
+                                settlement.gross_rent_collected,
+                                settlement.currency
+                              )}
+                            />
+                            <DetailItem
+                              label="Fees"
+                              value={formatCurrency(
+                                Number(settlement.service_fee_amount || 0) +
+                                  Number(settlement.payment_fee_amount || 0),
+                                settlement.currency
+                              )}
+                            />
+                            <DetailItem
+                              label="Tax"
+                              value={formatCurrency(
+                                settlement.tax_amount,
+                                settlement.currency
+                              )}
+                            />
+                            <DetailItem
+                              label="Created"
+                              value={formatDate(settlement.created_at)}
+                            />
+                          </div>
+
+                          <PayoutDetailsCard
                             payoutAccount={payoutAccount}
                             isSnapshot={Boolean(paidSnapshot)}
                           />
 
-                          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-                            <div className="rounded-2xl bg-slate-50 p-3">
-                              <p className="text-xs text-slate-500">Gross</p>
-                              <p className="mt-1 text-sm font-bold text-slate-900">
-                                {formatPrice(
-                                  Number(settlement.gross_rent_collected || 0),
-                                  settlement.currency
-                                )}
-                              </p>
-                            </div>
-
-                            <div className="rounded-2xl bg-slate-50 p-3">
-                              <p className="text-xs text-slate-500">Fees</p>
-                              <p className="mt-1 text-sm font-bold text-slate-900">
-                                {formatPrice(
-                                  Number(settlement.service_fee_amount || 0) +
-                                    Number(settlement.payment_fee_amount || 0),
-                                  settlement.currency
-                                )}
-                              </p>
-                            </div>
-
-                            <div className="rounded-2xl bg-slate-50 p-3">
-                              <p className="text-xs text-slate-500">Tax</p>
-                              <p className="mt-1 text-sm font-bold text-slate-900">
-                                {formatPrice(
-                                  Number(settlement.tax_amount || 0),
-                                  settlement.currency
-                                )}
-                              </p>
-                            </div>
-
-                            <div className="rounded-2xl bg-emerald-50 p-3 md:col-span-3">
-                              <p className="text-xs text-emerald-700">
-                                Net Payout
-                              </p>
-                              <p className="mt-1 text-lg font-bold text-emerald-800">
-                                {formatPrice(
-                                  Number(settlement.net_payout_amount || 0),
-                                  settlement.currency
-                                )}
-                              </p>
-                            </div>
-                          </div>
-
                           {settlement.status === 'draft' ? (
-                            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
-                              <ApproveSettlementForm settlementId={settlement.id} />
-                              <CancelSettlementForm settlementId={settlement.id} />
+                            <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-4">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <ApproveSettlementForm
+                                  settlementId={settlement.id}
+                                />
+                                <CancelSettlementForm
+                                  settlementId={settlement.id}
+                                />
+                              </div>
                             </div>
                           ) : null}
 
                           {settlement.status === 'approved' ? (
-                            <div className="mt-5">
+                            <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-4">
+                              <div className="mb-4 flex items-start gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                                  <WalletIcon />
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-black text-slate-950">
+                                    Ready for payout
+                                  </h4>
+                                  <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                                    Enter the transfer reference after paying the
+                                    owner.
+                                  </p>
+                                </div>
+                              </div>
+
                               <MarkSettlementPaidForm
                                 settlementId={settlement.id}
                                 payoutAccount={livePayoutAccount}
@@ -1510,32 +1603,49 @@ if (ownerIds.length > 0) {
                           ) : null}
 
                           {settlement.status === 'paid' ? (
-                            <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
-                              <p>
-                                <span className="font-semibold">Paid at:</span>{' '}
-                                {formatDate(settlement.paid_at)}
-                              </p>
-                              <p className="mt-1">
-                                <span className="font-semibold">Method:</span>{' '}
-                                {formatPayoutMethod(settlement.payout_method)}
-                              </p>
-                              <p className="mt-1">
-                                <span className="font-semibold">Reference:</span>{' '}
-                                {settlement.payout_reference || '—'}
-                              </p>
-                              {settlement.payout_receipt_url ? (
-                                <p className="mt-1">
-                                  <span className="font-semibold">Receipt:</span>{' '}
-                                  <a
-                                    href={settlement.payout_receipt_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="font-semibold underline"
-                                  >
-                                    Open receipt
-                                  </a>
-                                </p>
-                              ) : null}
+                            <div className="rounded-[28px] border border-emerald-100 bg-emerald-50/80 p-5">
+                              <div className="mb-4 flex items-start gap-3">
+                                <div>
+                                  <h4 className="text-sm font-black text-emerald-950">
+                                    Payment completed
+                                  </h4>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <DetailItem
+                                  label="Paid At"
+                                  value={formatDate(settlement.paid_at)}
+                                />
+                                <DetailItem
+                                  label="Method"
+                                  value={formatPayoutMethod(
+                                    settlement.payout_method
+                                  )}
+                                />
+                                <DetailItem
+                                  label="Reference"
+                                  value={settlement.payout_reference || '—'}
+                                  mono
+                                />
+                                <DetailItem
+                                  label="Receipt"
+                                  value={
+                                    settlement.payout_receipt_url ? (
+                                      <a
+                                        href={settlement.payout_receipt_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-black text-[#054aff] underline"
+                                      >
+                                        Open receipt
+                                      </a>
+                                    ) : (
+                                      '—'
+                                    )
+                                  }
+                                />
+                              </div>
                             </div>
                           ) : null}
                         </div>
@@ -1544,11 +1654,9 @@ if (ownerIds.length > 0) {
                   })}
                 </div>
               )}
-            </div>
-          </section>
+            </section>
+          ) : null}
         </section>
-
-        <MobileBottomNav newReservationsCount={newReservationsCount} />
       </main>
     </>
   )

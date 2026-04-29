@@ -186,6 +186,10 @@ async function getDefaultAdminRoute(
     return '/admin/finance/deposit-requests'
   }
 
+  if (admin.role === 'AP') {
+    return '/admin/finance/owner-settlements'
+  }
+
   if (admin.role === 'properties_super_admin') {
     return '/admin/properties'
   }
@@ -358,6 +362,9 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminLoginRoute = pathname === '/admin/login'
   const isUnauthorizedRoute = pathname === '/admin/unauthorized'
+  const isAdminChangePasswordRoute =
+    pathname === '/admin/change-password' ||
+    pathname.startsWith('/admin/change-password/')
 
   const isUserProtectedRoute = pathname === '/account'
   const isUserGuestOnlyRoute = pathname === '/login' || pathname === '/signup'
@@ -416,7 +423,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (isUnauthorizedRoute) {
+  if (isUnauthorizedRoute || isAdminChangePasswordRoute) {
     return response
   }
 
@@ -436,6 +443,20 @@ export async function middleware(request: NextRequest) {
 
   if (adminUser.role === 'AR') {
     const allowedPath = '/admin/finance/deposit-requests'
+    const isAllowedPath =
+      pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+
+    if (!isAllowedPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/unauthorized'
+      return NextResponse.redirect(url)
+    }
+
+    return response
+  }
+
+  if (adminUser.role === 'AP') {
+    const allowedPath = '/admin/finance/owner-settlements'
     const isAllowedPath =
       pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notifyCommunitySubscribers } from "@/src/lib/notifications/community-push";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -242,6 +243,52 @@ async function parsePatchPayload(req: Request): Promise<{
   };
 }
 
+async function getPublishedCommunityPostsCount() {
+  const { count, error } = await supabase
+    .from("community_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("is_published", true);
+
+  if (error) {
+    console.warn("Failed to count published community posts:", error.message);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+async function notifyPublishedCommunityPost(params: {
+  postId: number;
+  title: string;
+  excerpt?: string | null;
+  content?: string | null;
+}) {
+  try {
+    const badgeCount = await getPublishedCommunityPostsCount();
+
+    await notifyCommunitySubscribers({
+      payload: {
+        title: "New Community Post",
+        body:
+          params.excerpt?.trim() ||
+          params.content?.trim() ||
+          params.title ||
+          "A new post is live in Community.",
+        url: "/community",
+        tag: `community-post-${params.postId}`,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        badgeCount,
+      },
+    });
+  } catch (notificationError) {
+    console.warn(
+      "Community post was published, but push notification failed:",
+      notificationError
+    );
+  }
+}
+
 export async function GET(
   _req: Request,
   context: { params: Promise<{ id: string }> }
@@ -298,11 +345,35 @@ export async function PATCH(
     const { id } = await context.params;
     const postId = Number(id);
 
+    const { data: existingPost, error: existingPostError } = await supabase
+      .from("community_posts")
+      .select("id, title_en, excerpt_en, content_en, is_published")
+      .eq("id", postId)
+      .maybeSingle();
+
+    if (existingPostError) {
+      console.error("Load existing post error:", existingPostError);
+      return NextResponse.json(
+        { error: "Failed to load existing post" },
+        { status: 500 }
+      );
+    }
+
+    if (!existingPost) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    const wasPublished = Boolean(existingPost.is_published);
+
     const { body, assets: parsedAssets } = await parsePatchPayload(req);
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
+
+    let nextTitle = existingPost.title_en || "Community post";
+    let nextExcerpt = existingPost.excerpt_en || null;
+    let nextContent = existingPost.content_en || null;
 
     if (typeof body.titleEn === "string") {
       const titleEn = body.titleEn.trim();
@@ -313,22 +384,45 @@ export async function PATCH(
         );
       }
       updateData.title_en = titleEn;
+      nextTitle = titleEn;
     }
 
     if ("titleAr" in body) updateData.title_ar = body.titleAr?.trim() || null;
-    if ("excerptEn" in body)
+
+    if ("excerptEn" in body) {
       updateData.excerpt_en = body.excerptEn?.trim() || null;
-    if ("excerptAr" in body)
+      nextExcerpt = body.excerptEn?.trim() || null;
+    }
+
+    if ("excerptAr" in body) {
       updateData.excerpt_ar = body.excerptAr?.trim() || null;
-    if ("contentEn" in body)
+    }
+
+    if ("contentEn" in body) {
       updateData.content_en = body.contentEn?.trim() || null;
-    if ("contentAr" in body)
+      nextContent = body.contentEn?.trim() || null;
+    }
+
+    if ("contentAr" in body) {
       updateData.content_ar = body.contentAr?.trim() || null;
-    if ("authorName" in body)
+    }
+
+    if ("authorName" in body) {
       updateData.author_name = body.authorName?.trim() || null;
-    if ("publishedAt" in body) updateData.published_at = body.publishedAt || null;
-    if ("isFeatured" in body) updateData.is_featured = Boolean(body.isFeatured);
-    if ("isPublished" in body) updateData.is_published = Boolean(body.isPublished);
+    }
+
+    if ("publishedAt" in body) {
+      updateData.published_at = body.publishedAt || null;
+    }
+
+    if ("isFeatured" in body) {
+      updateData.is_featured = Boolean(body.isFeatured);
+    }
+
+    if ("isPublished" in body) {
+      updateData.is_published = Boolean(body.isPublished);
+    }
+
     if ("socialMediaLink" in body) {
       updateData.social_media_link = body.socialMediaLink?.trim() || null;
     }
@@ -404,6 +498,20 @@ export async function PATCH(
         { error: "Failed to update post" },
         { status: 500 }
       );
+    }
+
+    const isNowPublished =
+      "isPublished" in body ? Boolean(body.isPublished) : wasPublished;
+
+    const shouldNotify = !wasPublished && isNowPublished;
+
+    if (shouldNotify) {
+      await notifyPublishedCommunityPost({
+        postId,
+        title: nextTitle,
+        excerpt: nextExcerpt,
+        content: nextContent,
+      });
     }
 
     return NextResponse.json(

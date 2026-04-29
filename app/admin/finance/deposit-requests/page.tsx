@@ -324,6 +324,13 @@ export default async function AdminDepositRequestsPage() {
                 Deposit Requests
               </Link>
 
+              <Link
+                href="/admin/change-password"
+                className="desktop-header-nav-button"
+              >
+                Change Password
+              </Link>
+
               <AdminDepositNotifications
                 enabled={notificationsEnabledForAdmin}
                 initialPendingCount={pendingRequestsCount}
@@ -335,7 +342,14 @@ export default async function AdminDepositRequestsPage() {
         </header>
 
         <section className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mb-4 flex justify-end md:hidden">
+          <div className="mb-4 flex items-center justify-between gap-3 md:hidden">
+            <Link
+              href="/admin/change-password"
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm"
+            >
+              Change Password
+            </Link>
+
             <AdminDepositNotifications
               enabled={notificationsEnabledForAdmin}
               initialPendingCount={pendingRequestsCount}

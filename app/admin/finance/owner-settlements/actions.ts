@@ -3,9 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/src/lib/supabase/admin'
 import {
-  requirePropertyBookingRequestsAccess,
+  requireOwnerSettlementsAccess,
   isSuperAdmin,
+  isAPAdmin,
 } from '@/src/lib/admin-auth'
+import { notifyAdminsByRole } from '@/src/lib/notifications/admin-push'
 
 type SettlementStatus = 'draft' | 'approved' | 'paid' | 'cancelled'
 
@@ -35,6 +37,15 @@ type SettlementMetadata = {
   [key: string]: any
 }
 
+const OWNER_SETTLEMENT_RECEIPTS_BUCKET = 'receipts'
+const OWNER_SETTLEMENT_RECEIPTS_FOLDER = 'owner-settlement-receipts'
+const ALLOWED_RECEIPT_FILE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+]
+
 function parseRequiredString(value: FormDataEntryValue | null, label: string) {
   const parsed = String(value || '').trim()
 
@@ -54,8 +65,70 @@ function roundMoney(value: number) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
 }
 
+function hasGlobalOwnerSettlementsAccess(admin: any) {
+  return isSuperAdmin(admin) || isAPAdmin(admin)
+}
+
+function formatPushMoney(amount: number, currency = 'EGP') {
+  return `${Number(amount || 0).toLocaleString('en-EG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`
+}
+
+function sanitizeFileExtension(fileName: string, fallback = 'jpg') {
+  const extension = fileName.split('.').pop()?.trim().toLowerCase()
+
+  if (!extension) return fallback
+
+  if (extension === 'jpeg') return 'jpg'
+
+  if (['png', 'jpg', 'webp'].includes(extension)) {
+    return extension
+  }
+
+  return fallback
+}
+
+async function uploadOwnerSettlementReceipt(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  settlementId: string
+  file: File | null
+}) {
+  const { supabase, settlementId, file } = params
+
+  if (!file || file.size <= 0) {
+    return null
+  }
+
+  if (!ALLOWED_RECEIPT_FILE_TYPES.includes(file.type)) {
+    throw new Error('Receipt file must be PNG, JPG, JPEG, or WEBP')
+  }
+
+  const fileExtension = sanitizeFileExtension(file.name)
+  const filePath = `${OWNER_SETTLEMENT_RECEIPTS_FOLDER}/${settlementId}-${Date.now()}.${fileExtension}`
+  const fileBuffer = await file.arrayBuffer()
+
+  const { error: uploadError } = await supabase.storage
+    .from(OWNER_SETTLEMENT_RECEIPTS_BUCKET)
+    .upload(filePath, fileBuffer, {
+      contentType: file.type,
+      upsert: false,
+    })
+
+  if (uploadError) {
+    throw new Error(uploadError.message)
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(OWNER_SETTLEMENT_RECEIPTS_BUCKET)
+    .getPublicUrl(filePath)
+
+  return publicUrlData.publicUrl || null
+}
+
 async function getAuthorizedFinanceContext() {
-  const adminContext = await requirePropertyBookingRequestsAccess()
+  const adminContext = await requireOwnerSettlementsAccess()
   const supabase = createAdminClient()
   const admin = adminContext.admin
 
@@ -71,7 +144,7 @@ async function assertBrokerAccess(params: {
 }) {
   const { admin, brokerId } = params
 
-  if (isSuperAdmin(admin)) return
+  if (hasGlobalOwnerSettlementsAccess(admin)) return
 
   if (!admin.broker_id) {
     throw new Error('Editor account is missing broker assignment')
@@ -625,6 +698,30 @@ export async function createOwnerSettlementAction(formData: FormData) {
     },
   })
 
+  try {
+    await notifyAdminsByRole({
+      roles: ['AP', 'super_admin'],
+      excludeAdminUserId: admin.id,
+      payload: {
+        title: 'Owner settlement created',
+        body: `A new owner settlement draft was created for ${owner.full_name}: ${formatPushMoney(
+          netPayoutAmount,
+          currency
+        )}.`,
+        url: '/admin/finance/owner-settlements?tab=settlements',
+        tag: `owner-settlement-created-${settlement.id}`,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        badgeCount: 1,
+      },
+    })
+  } catch (notificationError) {
+    console.warn(
+      'Owner settlement was created, but push notification failed:',
+      notificationError
+    )
+  }
+
   revalidatePath('/admin/finance/owner-settlements')
 }
 
@@ -830,6 +927,30 @@ export async function approveOwnerSettlementAction(formData: FormData) {
     },
   })
 
+  try {
+    await notifyAdminsByRole({
+      roles: ['AP', 'super_admin'],
+      excludeAdminUserId: admin.id,
+      payload: {
+        title: 'Owner settlement approved',
+        body: `Settlement ${settlement.settlement_number} is ready for payout: ${formatPushMoney(
+          Number(settlement.net_payout_amount || 0),
+          settlement.currency
+        )}.`,
+        url: '/admin/finance/owner-settlements?tab=settlements',
+        tag: `owner-settlement-approved-${settlement.id}`,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        badgeCount: 1,
+      },
+    })
+  } catch (notificationError) {
+    console.warn(
+      'Owner settlement was approved, but push notification failed:',
+      notificationError
+    )
+  }
+
   revalidatePath('/admin/finance/owner-settlements')
 }
 
@@ -846,7 +967,8 @@ export async function markOwnerSettlementPaidAction(formData: FormData) {
     formData.get('payout_reference'),
     'Payout reference'
   )
-  const payoutReceiptUrl = parseOptionalString(formData.get('payout_receipt_url'))
+
+  const payoutReceiptFile = formData.get('payout_receipt_file') as File | null
 
   const { supabase, admin } = await getAuthorizedFinanceContext()
 
@@ -879,6 +1001,12 @@ export async function markOwnerSettlementPaidAction(formData: FormData) {
       `Selected payout method does not match owner default payout method: ${payoutAccount.payout_method}`
     )
   }
+
+  const payoutReceiptUrl = await uploadOwnerSettlementReceipt({
+    supabase,
+    settlementId: settlement.id,
+    file: payoutReceiptFile,
+  })
 
   const payoutAccountSnapshot = {
     id: payoutAccount.id,

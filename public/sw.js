@@ -1,3 +1,30 @@
+function parseBadgeCount(value) {
+  const count = Number(value || 0)
+
+  if (!Number.isFinite(count) || count < 0) {
+    return 0
+  }
+
+  return Math.floor(count)
+}
+
+async function updateAppBadge(count) {
+  try {
+    if (!self.registration) return
+
+    if (count > 0 && 'setAppBadge' in self.registration) {
+      await self.registration.setAppBadge(count)
+      return
+    }
+
+    if (count <= 0 && 'clearAppBadge' in self.registration) {
+      await self.registration.clearAppBadge()
+    }
+  } catch {
+    // Badge API is not supported on all browsers/devices.
+  }
+}
+
 self.addEventListener('push', function (event) {
   let data = {}
 
@@ -12,6 +39,8 @@ self.addEventListener('push', function (event) {
     }
   }
 
+  const badgeCount = parseBadgeCount(data.badgeCount)
+
   const title = data.title || 'Navienty'
   const options = {
     body: data.body || 'You have a new notification.',
@@ -19,13 +48,19 @@ self.addEventListener('push', function (event) {
     badge: data.badge || '/icon-192.png',
     tag: data.tag || 'navienty-notification',
     data: {
-      url: data.url || '/admin/finance/deposit-requests',
+      url: data.url || '/admin',
+      badgeCount,
     },
     vibrate: [120, 60, 120],
     requireInteraction: true,
   }
 
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil(
+    Promise.all([
+      updateAppBadge(badgeCount),
+      self.registration.showNotification(title, options),
+    ])
+  )
 })
 
 self.addEventListener('notificationclick', function (event) {
@@ -34,21 +69,45 @@ self.addEventListener('notificationclick', function (event) {
   const urlToOpen =
     event.notification && event.notification.data && event.notification.data.url
       ? event.notification.data.url
-      : '/admin/finance/deposit-requests'
+      : '/admin'
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-      for (const client of clientList) {
-        if (client.url.includes(urlToOpen) && 'focus' in client) {
-          return client.focus()
+    clients
+      .matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+      .then(function (clientList) {
+        for (const client of clientList) {
+          const clientUrl = new URL(client.url)
+          const targetUrl = new URL(urlToOpen, self.location.origin)
+
+          if (
+            clientUrl.origin === targetUrl.origin &&
+            clientUrl.pathname === targetUrl.pathname &&
+            'focus' in client
+          ) {
+            return client.focus()
+          }
         }
-      }
 
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen)
-      }
+        if (clients.openWindow) {
+          return clients.openWindow(urlToOpen)
+        }
 
-      return undefined
-    })
+        return undefined
+      })
   )
+})
+
+self.addEventListener('message', function (event) {
+  const data = event.data || {}
+
+  if (data.type === 'SET_APP_BADGE') {
+    event.waitUntil(updateAppBadge(parseBadgeCount(data.count)))
+  }
+
+  if (data.type === 'CLEAR_APP_BADGE') {
+    event.waitUntil(updateAppBadge(0))
+  }
 })

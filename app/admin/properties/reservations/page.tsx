@@ -228,6 +228,22 @@ function InboxIcon() {
   )
 }
 
+function LockIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-[20px] w-[20px]"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  )
+}
+
 function MobileNavIcon({
   src,
   alt,
@@ -435,6 +451,13 @@ function MobileBottomNav({
       active: true,
       badgeCount: 0,
     },
+    {
+      href: '/admin/change-password',
+      label: 'Password',
+      icon: <LockIcon />,
+      active: false,
+      badgeCount: 0,
+    },
   ]
 
   return (
@@ -447,7 +470,7 @@ function MobileBottomNav({
             <Link
               key={item.href}
               href={item.href}
-              className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+              className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
             >
               <span className={`relative flex items-center justify-center ${activeClass}`}>
                 {item.icon}
@@ -460,7 +483,7 @@ function MobileBottomNav({
               </span>
 
               <span
-                className={`text-[11px] leading-[1.1] ${activeClass} ${
+                className={`text-[10px] leading-[1.1] ${activeClass} ${
                   item.active ? 'font-semibold' : 'font-medium'
                 }`}
               >
@@ -1295,6 +1318,13 @@ export default async function PropertyReservationsPage({
                 </Link>
               )}
 
+              <Link
+                href="/admin/change-password"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                Change Password
+              </Link>
+
               <AdminLogoutButton />
             </div>
           </div>
@@ -1440,14 +1470,18 @@ export default async function PropertyReservationsPage({
                             <div className="mt-3 space-y-2 text-sm text-slate-700">
                               {reservation.customer_phone ? (
                                 <p>
-                                  <span className="font-medium text-slate-900">Phone:</span>{' '}
+                                  <span className="font-medium text-slate-900">
+                                    Phone:
+                                  </span>{' '}
                                   {reservation.customer_phone}
                                 </p>
                               ) : null}
 
                               {reservation.customer_whatsapp ? (
                                 <p>
-                                  <span className="font-medium text-slate-900">WhatsApp:</span>{' '}
+                                  <span className="font-medium text-slate-900">
+                                    WhatsApp:
+                                  </span>{' '}
                                   {reservation.customer_whatsapp}
                                 </p>
                               ) : null}
@@ -1455,7 +1489,9 @@ export default async function PropertyReservationsPage({
                               {!reservation.customer_phone &&
                               !reservation.customer_email &&
                               !reservation.customer_whatsapp ? (
-                                <p className="text-slate-500">No contact details available</p>
+                                <p className="text-slate-500">
+                                  No contact details available
+                                </p>
                               ) : null}
                             </div>
                           </div>
@@ -1492,24 +1528,24 @@ export default async function PropertyReservationsPage({
             <div className="mx-auto flex h-[74px] max-w-md items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
               <Link
                 href="/admin/properties"
-                className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
               >
                 <span className="relative flex items-center justify-center text-[#6b7280]">
                   <GridIcon />
                 </span>
-                <span className="text-[11px] font-medium leading-[1.1] text-[#6b7280]">
+                <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
                   Properties
                 </span>
               </Link>
 
               <Link
                 href="/admin/properties/reservations"
-                className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
               >
                 <span className="relative flex items-center justify-center text-[#155dfc]">
                   <BanIcon />
                 </span>
-                <span className="text-[11px] font-semibold leading-[1.1] text-[#155dfc]">
+                <span className="text-[10px] font-semibold leading-[1.1] text-[#155dfc]">
                   Reservations
                 </span>
               </Link>
@@ -1517,16 +1553,28 @@ export default async function PropertyReservationsPage({
               {isSuperAdmin(admin) && (
                 <Link
                   href="/admin/properties/review"
-                  className="flex min-w-[88px] flex-col items-center justify-center gap-1 px-2 py-2 text-center transition"
+                  className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
                 >
                   <span className="relative flex items-center justify-center text-[#6b7280]">
                     <ClipboardListIcon />
                   </span>
-                  <span className="text-[11px] font-medium leading-[1.1] text-[#6b7280]">
+                  <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
                     Review
                   </span>
                 </Link>
               )}
+
+              <Link
+                href="/admin/change-password"
+                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
+              >
+                <span className="relative flex items-center justify-center text-[#6b7280]">
+                  <LockIcon />
+                </span>
+                <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
+                  Password
+                </span>
+              </Link>
             </div>
           </nav>
         )}
