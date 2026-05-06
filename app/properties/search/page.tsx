@@ -10,10 +10,13 @@ const squadaOne = Squada_One({
   weight: '400',
 })
 
+const APP_LOGO_URL = 'https://i.ibb.co/sn0xS95/Navienty-2.jpg'
+
 type SearchParams = {
   rental_duration?: string
   city_id?: string
   university_id?: string
+  area_id?: string
   price_range?: string
   lang?: string
   currency?: string
@@ -32,6 +35,20 @@ type University = {
   name_en: string
   name_ar: string
   city_id: string | number
+}
+
+type PropertyArea = {
+  id: string | number
+  city_id: string | number
+  name_en: string
+  name_ar: string
+  is_active?: boolean | null
+}
+
+type UniversityArea = {
+  id?: string | number
+  university_id: string | number
+  area_id: string | number
 }
 
 type PropertyImage = {
@@ -59,6 +76,10 @@ type PropertyRoom = {
   property_room_sellable_options?: PropertyRoomSellableOption[] | null
 }
 
+type PropertyUniversityLink = {
+  university_id?: string | number | null
+}
+
 type Property = {
   id: string | number
   property_id: string
@@ -67,8 +88,11 @@ type Property = {
   price_egp: number
   rental_duration: string
   availability_status: string
+  gender?: 'boys' | 'girls' | string | null
   city_id?: string | number | null
   university_id?: string | number | null
+  area_id?: string | number | null
+  property_universities?: PropertyUniversityLink[] | null
   property_images?: PropertyImage[] | null
   property_sellable_options?: PropertySellableOption[] | null
   property_rooms?: PropertyRoom[] | null
@@ -101,6 +125,8 @@ type SupportedSort =
   | 'boys'
   | 'girls'
 
+type NormalizedGender = 'boys' | 'girls' | null
+
 type NormalizedAvailabilityStatus =
   | 'available'
   | 'reserved'
@@ -129,29 +155,36 @@ const TRANSLATIONS = {
     month: 'month',
     city: 'City',
     university: 'University',
+    area: 'Area',
     duration: 'Duration',
     searchCities: 'Search cities',
+    searchAreas: 'Search areas',
     chooseUniversity: 'Choose university',
+    chooseArea: 'Choose area',
     chooseDuration: 'Choose duration',
     selectCity: 'Select city',
     selectUniversity: 'Select university',
+    selectArea: 'Select area',
     selectDuration: 'Select duration',
     anyCity: 'Any city',
     anyUniversity: 'Any university',
+    anyArea: 'Any area',
     anyDuration: 'Any duration',
     daily: 'Daily',
     monthly: 'Monthly',
     available: 'Available',
     unavailable: 'Unavailable',
     reserved: 'Reserved',
+    boys: 'Stays for Boys',
+    girls: 'Stays for Girls',
+    boysMeta: 'Boys only',
+    girlsMeta: 'Girls only',
     startSearch: 'Start your search',
     noResults: 'No properties found matching your search.',
     sortBy: 'Sort By',
     newlyListed: 'Newly listed',
     lowestPrice: 'Lowest price',
     highestPrice: 'Highest price',
-    boys: 'Stays for Boys',
-    girls: 'Stays for Girls',
     close: 'Close',
     backToProperties: 'Back to properties',
     login: 'Log in or sign up',
@@ -178,21 +211,30 @@ const TRANSLATIONS = {
     month: 'شهر',
     city: 'المدينة',
     university: 'الجامعة',
+    area: 'المنطقة',
     duration: 'المدة',
     searchCities: 'ابحث عن مدينة',
+    searchAreas: 'ابحث عن منطقة',
     chooseUniversity: 'اختر الجامعة',
+    chooseArea: 'اختر المنطقة',
     chooseDuration: 'اختر المدة',
     selectCity: 'اختر المدينة',
     selectUniversity: 'اختر الجامعة',
+    selectArea: 'اختر المنطقة',
     selectDuration: 'اختر المدة',
     anyCity: 'أي مدينة',
     anyUniversity: 'أي جامعة',
+    anyArea: 'أي منطقة',
     anyDuration: 'أي مدة',
     daily: 'يومي',
     monthly: 'شهري',
     available: 'متاح',
     unavailable: 'غير متاح',
     reserved: 'محجوز',
+    boys: 'منازل للأولاد',
+    girls: 'منازل للبنات',
+    boysMeta: 'ولاد فقط',
+    girlsMeta: 'بنات فقط',
     startSearch: 'ابدأ بحثك',
     searchResults: 'نتائج البحث',
     noResults: 'لم يتم العثور على عقارات تطابق بحثك.',
@@ -200,8 +242,6 @@ const TRANSLATIONS = {
     newlyListed: 'الأحدث',
     lowestPrice: 'الأقل سعرًا',
     highestPrice: 'الأعلى سعرًا',
-    boys: 'منازل للأولاد',
-    girls: 'منازل للبنات',
     close: 'إغلاق',
     backToProperties: 'الرجوع إلى العقارات',
     login: 'سجّل الدخول أو أنشئ حسابًا',
@@ -241,6 +281,15 @@ function normalizeSort(value?: string): SupportedSort {
   if (value === 'boys') return 'boys'
   if (value === 'girls') return 'girls'
   return 'newly_listed'
+}
+
+function normalizeGender(value?: string | null): NormalizedGender {
+  const normalized = value?.toLowerCase().trim()
+
+  if (normalized === 'boys') return 'boys'
+  if (normalized === 'girls') return 'girls'
+
+  return null
 }
 
 function normalizeAvailabilityStatusForUi(
@@ -499,6 +548,17 @@ export default async function SearchResultsPage({
     .select('id, name_en, name_ar, city_id')
     .order('name_en', { ascending: true })
 
+  const { data: areas } = await supabase
+    .from('property_areas')
+    .select('id, city_id, name_en, name_ar, is_active')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name_en', { ascending: true })
+
+  const { data: universityAreas } = await supabase
+    .from('university_property_areas')
+    .select('id, university_id, area_id')
+
   let query = supabase
     .from('properties')
     .select(`
@@ -509,8 +569,13 @@ export default async function SearchResultsPage({
       price_egp,
       rental_duration,
       availability_status,
+      gender,
       city_id,
       university_id,
+      area_id,
+      property_universities!inner(
+        university_id
+      ),
       property_images(image_url),
       property_sellable_options(
         code,
@@ -535,10 +600,16 @@ export default async function SearchResultsPage({
     .neq('availability_status', 'unavailable')
 
   if (params.city_id) query = query.eq('city_id', params.city_id)
-  if (params.university_id)
-    query = query.eq('university_id', params.university_id)
-  if (params.rental_duration)
+
+  if (params.university_id) {
+    query = query.eq('property_universities.university_id', params.university_id)
+  }
+
+  if (params.area_id) query = query.eq('area_id', params.area_id)
+
+  if (params.rental_duration) {
     query = query.eq('rental_duration', params.rental_duration)
+  }
 
   if (selectedSort === 'boys' || selectedSort === 'girls') {
     query = query.eq('gender', selectedSort)
@@ -659,7 +730,7 @@ export default async function SearchResultsPage({
       label: isLoggedIn ? t.account : t.login,
       href: isLoggedIn
         ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/login'),
+        : buildSimpleNavLink('/account-login'),
     },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
@@ -686,8 +757,11 @@ export default async function SearchResultsPage({
   const searchBarProps = {
     cities: (cities as City[]) ?? [],
     universities: (universities as University[]) ?? [],
+    areas: (areas as PropertyArea[]) ?? [],
+    universityAreas: (universityAreas as UniversityArea[]) ?? [],
     initialCityId: params.city_id ?? '',
     initialUniversityId: params.university_id ?? '',
+    initialAreaId: params.area_id ?? '',
     initialRentalDuration: params.rental_duration ?? '',
     initialPriceRange: params.price_range ?? '',
     language: selectedLanguage,
@@ -695,15 +769,20 @@ export default async function SearchResultsPage({
     labels: {
       city: t.city,
       university: t.university,
+      area: t.area,
       duration: t.duration,
       searchCities: t.searchCities,
+      searchAreas: t.searchAreas,
       chooseUniversity: t.chooseUniversity,
+      chooseArea: t.chooseArea,
       chooseDuration: t.chooseDuration,
       selectCity: t.selectCity,
       selectUniversity: t.selectUniversity,
+      selectArea: t.selectArea,
       selectDuration: t.selectDuration,
       anyCity: t.anyCity,
       anyUniversity: t.anyUniversity,
+      anyArea: t.anyArea,
       anyDuration: t.anyDuration,
       daily: t.daily,
       monthly: t.monthly,
@@ -747,7 +826,7 @@ export default async function SearchResultsPage({
 
   const mobileAccountHref = isLoggedIn
     ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/login')
+    : buildSimpleNavLink('/account-login')
 
   const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
 
@@ -779,7 +858,7 @@ export default async function SearchResultsPage({
           propertyId={property.id}
         />
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/20 via-black/5 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/18 via-black/5 to-transparent" />
 
         {(isAvailable || isReserved) && (
           <div
@@ -791,6 +870,21 @@ export default async function SearchResultsPage({
           </div>
         )}
       </div>
+    )
+  }
+
+  const renderGenderMeta = (property: Property) => {
+    const gender = normalizeGender(property.gender)
+
+    if (!gender) return null
+
+    const label = gender === 'boys' ? t.boysMeta : t.girlsMeta
+
+    return (
+      <span className="property-meta-gender">
+        <span className="property-meta-dot" />
+        {label}
+      </span>
     )
   }
 
@@ -811,17 +905,20 @@ export default async function SearchResultsPage({
           )
         )}
 
-        <div className="mt-3 space-y-1 md:mt-4">
+        <div className="mt-2.5 space-y-1 md:mt-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
               {isArabic ? property.title_ar : property.title_en}
             </h3>
           </div>
 
-          <p className="truncate text-[12px] capitalize text-slate-500 md:text-[13px]">
-            {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
-            {t.stay}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-slate-500 md:text-[13px]">
+            <span className="truncate capitalize">
+              {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
+              {t.stay}
+            </span>
+            {renderGenderMeta(property)}
+          </div>
 
           <p className="truncate pt-0.5 text-[13px] md:pt-1 md:text-[14px]">
             <span className="font-semibold text-slate-950">
@@ -846,6 +943,131 @@ export default async function SearchResultsPage({
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0"
     >
+      <div className="pwa-install-banner" id="pwa-install-banner">
+        <button
+          type="button"
+          className="pwa-install-banner__close"
+          aria-label="Close app install banner"
+          id="pwa-install-banner-close"
+        >
+          ×
+        </button>
+
+        <img
+          src={APP_LOGO_URL}
+          alt="Navienty"
+          className="pwa-install-banner__logo"
+          draggable={false}
+        />
+
+        <div className="pwa-install-banner__content">
+          <p className="pwa-install-banner__title">Continue in the app!</p>
+        </div>
+
+        <button
+          type="button"
+          className="pwa-install-banner__button"
+          id="pwa-install-banner-button"
+        >
+          Get App
+        </button>
+
+        <div className="pwa-install-banner__ios-help" id="pwa-install-banner-ios-help">
+          On iPhone: tap Share, then choose Add to Home Screen.
+        </div>
+      </div>
+
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              var banner = document.getElementById('pwa-install-banner');
+              var closeButton = document.getElementById('pwa-install-banner-close');
+              var installButton = document.getElementById('pwa-install-banner-button');
+              var iosHelp = document.getElementById('pwa-install-banner-ios-help');
+              var deferredPrompt = null;
+
+              if (!banner) return;
+
+              function isStandalone() {
+                return window.matchMedia('(display-mode: standalone)').matches ||
+                  window.navigator.standalone === true;
+              }
+
+              function isIos() {
+                var ua = window.navigator.userAgent.toLowerCase();
+                var platform = (window.navigator.platform || '').toLowerCase();
+                return /iphone|ipad|ipod/.test(ua) ||
+                  (platform === 'macintel' && window.navigator.maxTouchPoints > 1);
+              }
+
+              function hideBanner() {
+                banner.style.display = 'none';
+              }
+
+              function showBanner() {
+                banner.style.display = 'grid';
+              }
+
+              if (isStandalone()) {
+                hideBanner();
+                return;
+              }
+
+              if (localStorage.getItem('pwa-install-banner-dismissed') === 'true') {
+                hideBanner();
+                return;
+              }
+
+              if (isIos()) {
+                showBanner();
+              }
+
+              window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                deferredPrompt = event;
+                showBanner();
+              });
+
+              window.addEventListener('appinstalled', function () {
+                localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                hideBanner();
+                deferredPrompt = null;
+              });
+
+              if (closeButton) {
+                closeButton.addEventListener('click', function () {
+                  localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                  hideBanner();
+                });
+              }
+
+              if (installButton) {
+                installButton.addEventListener('click', function () {
+                  if (isIos()) {
+                    if (iosHelp) {
+                      iosHelp.classList.toggle('pwa-install-banner__ios-help--visible');
+                    }
+                    return;
+                  }
+
+                  if (!deferredPrompt) return;
+
+                  deferredPrompt.prompt();
+                  deferredPrompt.userChoice.then(function (choiceResult) {
+                    if (choiceResult && choiceResult.outcome === 'accepted') {
+                      localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                      hideBanner();
+                    }
+                    deferredPrompt = null;
+                  });
+                });
+              }
+            })();
+          `,
+        }}
+      />
+
       <input
         id="nav-menu-toggle"
         type="checkbox"
@@ -858,6 +1080,95 @@ export default async function SearchResultsPage({
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
+        }
+
+        .pwa-install-banner {
+          position: sticky;
+          top: 0;
+          z-index: 160;
+          display: none;
+          grid-template-columns: 26px 46px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 9px;
+          min-height: 62px;
+          background: #ffffff;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+          padding: 8px 12px;
+        }
+
+        .pwa-install-banner__close {
+          width: 26px;
+          height: 26px;
+          border: 0;
+          background: transparent;
+          color: #111827;
+          font-size: 28px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 0;
+        }
+
+        .pwa-install-banner__logo {
+          width: 46px;
+          height: 46px;
+          border-radius: 12px;
+          object-fit: cover;
+          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          display: block;
+        }
+
+        .pwa-install-banner__content {
+          min-width: 0;
+        }
+
+        .pwa-install-banner__title {
+          margin: 0;
+          color: #111827;
+          font-size: 15px;
+          line-height: 1.15;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .pwa-install-banner__button {
+          min-width: 86px;
+          height: 38px;
+          border: 0;
+          border-radius: 9px;
+          background: #054aff;
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          padding: 0 16px;
+        }
+
+        .pwa-install-banner__ios-help {
+          display: none;
+          grid-column: 1 / -1;
+          margin-top: 6px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          color: #334155;
+          padding: 8px 10px;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .pwa-install-banner__ios-help--visible {
+          display: block;
+        }
+
+        @media (display-mode: standalone) {
+          .pwa-install-banner {
+            display: none !important;
+          }
         }
 
         .navienty-logo {
@@ -1332,6 +1643,37 @@ export default async function SearchResultsPage({
             inset 0 1px 0 rgba(255, 255, 255, 0.26);
         }
 
+        .property-meta-gender {
+          display: inline-flex;
+          min-width: 0;
+          align-items: center;
+          gap: 6px;
+          color: #64748b;
+          font-size: 12px;
+          line-height: 1.25;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          transition: color 0.2s ease;
+        }
+
+        .property-meta-dot {
+          width: 3px;
+          height: 3px;
+          border-radius: 999px;
+          background: currentColor;
+          opacity: 0.55;
+          flex-shrink: 0;
+        }
+
+        .group:hover .property-meta-gender {
+          color: #334155;
+        }
+
+        [dir='rtl'] .property-meta-gender {
+          flex-direction: row;
+        }
+
         .mobile-bottom-nav {
           position: fixed;
           left: 0;
@@ -1622,6 +1964,10 @@ export default async function SearchResultsPage({
           .status-ribbon--reserved::after {
             box-shadow: 100px -100px #8f1239;
           }
+
+          .property-meta-gender {
+            font-size: 12px;
+          }
         }
 
         @media (max-width: 768px) {
@@ -1705,6 +2051,12 @@ export default async function SearchResultsPage({
 
           .status-ribbon--reserved::after {
             box-shadow: 104px -104px #8f1239;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .pwa-install-banner {
+            display: none !important;
           }
         }
       `}</style>

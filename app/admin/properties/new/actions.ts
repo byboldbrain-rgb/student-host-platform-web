@@ -284,16 +284,131 @@ async function validateOwner({
   }
 }
 
-async function validateOwnerServiceArea({
+async function validatePropertyArea({
+  supabase,
+  areaId,
+  cityId,
+}: {
+  supabase: AdminSupabaseClient
+  areaId: string
+  cityId: string
+}) {
+  if (!areaId) {
+    throw new Error('Area is required')
+  }
+
+  if (!cityId) {
+    throw new Error('City is required')
+  }
+
+  const { data: area, error: areaError } = await supabase
+    .from('property_areas')
+    .select('id, city_id, is_active')
+    .eq('id', areaId)
+    .eq('city_id', cityId)
+    .maybeSingle()
+
+  if (areaError) {
+    throw new Error(areaError.message)
+  }
+
+  if (!area) {
+    throw new Error('Selected area was not found for the selected city')
+  }
+
+  if (area.is_active === false) {
+    throw new Error('Selected area is inactive')
+  }
+}
+
+async function validateUniversitiesForCity({
+  supabase,
+  cityId,
+  universityIds,
+}: {
+  supabase: AdminSupabaseClient
+  cityId: string
+  universityIds: string[]
+}) {
+  if (!cityId) {
+    throw new Error('City is required')
+  }
+
+  const uniqueUniversityIds = Array.from(new Set(universityIds.filter(Boolean)))
+
+  if (uniqueUniversityIds.length === 0) {
+    throw new Error('At least one university is required')
+  }
+
+  const { data: universities, error: universitiesError } = await supabase
+    .from('universities')
+    .select('id, city_id')
+    .in('id', uniqueUniversityIds)
+
+  if (universitiesError) {
+    throw new Error(universitiesError.message)
+  }
+
+  if (!universities || universities.length !== uniqueUniversityIds.length) {
+    throw new Error('One or more selected universities were not found')
+  }
+
+  const invalidUniversity = universities.find(
+    (university) => university.city_id !== cityId
+  )
+
+  if (invalidUniversity) {
+    throw new Error('All selected universities must belong to the selected city')
+  }
+}
+
+async function validateBrokerUniversities({
+  supabase,
+  brokerId,
+  universityIds,
+}: {
+  supabase: AdminSupabaseClient
+  brokerId: string
+  universityIds: string[]
+}) {
+  if (!brokerId) {
+    throw new Error('Broker is required')
+  }
+
+  const uniqueUniversityIds = Array.from(new Set(universityIds.filter(Boolean)))
+
+  if (uniqueUniversityIds.length === 0) {
+    throw new Error('At least one university is required')
+  }
+
+  const { data: rows, error } = await supabase
+    .from('broker_universities')
+    .select('university_id')
+    .eq('broker_id', brokerId)
+    .in('university_id', uniqueUniversityIds)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const coveredIds = new Set((rows ?? []).map((row) => row.university_id))
+  const missingIds = uniqueUniversityIds.filter((id) => !coveredIds.has(id))
+
+  if (missingIds.length > 0) {
+    throw new Error('Selected broker is not assigned to all selected universities')
+  }
+}
+
+async function validateOwnerServiceAreas({
   supabase,
   ownerId,
   cityId,
-  universityId,
+  universityIds,
 }: {
   supabase: AdminSupabaseClient
   ownerId: string
   cityId: string
-  universityId: string
+  universityIds: string[]
 }) {
   if (!ownerId) {
     throw new Error('Owner is required')
@@ -303,70 +418,118 @@ async function validateOwnerServiceArea({
     throw new Error('City is required')
   }
 
-  if (!universityId) {
-    throw new Error('University is required')
+  const uniqueUniversityIds = Array.from(new Set(universityIds.filter(Boolean)))
+
+  if (uniqueUniversityIds.length === 0) {
+    throw new Error('At least one university is required')
   }
 
-  const { data: serviceArea, error: serviceAreaError } = await supabase
-    .from('owner_service_areas')
-    .select('id')
+  const { data: rows, error } = await supabase
+    .from('property_owner_service_areas')
+    .select('university_id')
     .eq('owner_id', ownerId)
     .eq('city_id', cityId)
-    .eq('university_id', universityId)
     .eq('is_active', true)
-    .maybeSingle()
+    .in('university_id', uniqueUniversityIds)
 
-  if (serviceAreaError) {
-    throw new Error(serviceAreaError.message)
+  if (error) {
+    throw new Error(error.message)
   }
 
-  if (!serviceArea) {
+  const coveredIds = new Set((rows ?? []).map((row) => row.university_id))
+  const missingIds = uniqueUniversityIds.filter((id) => !coveredIds.has(id))
+
+  if (missingIds.length > 0) {
     throw new Error(
-      'Selected owner is not assigned to the selected city and university'
+      'Selected owner is not assigned to the selected city and all selected universities'
     )
   }
 }
 
-async function validateBrokerOwnerLink({
+async function createNewOwner({
   supabase,
-  brokerId,
-  ownerId,
+  adminId,
+  cityId,
+  universityIds,
+  fullName,
+  companyName,
+  phoneNumber,
+  whatsappNumber,
+  email,
+  taxId,
+  nationalId,
 }: {
   supabase: AdminSupabaseClient
-  brokerId: string
-  ownerId: string
+  adminId: string
+  cityId: string
+  universityIds: string[]
+  fullName: string
+  companyName: string
+  phoneNumber: string
+  whatsappNumber: string
+  email: string
+  taxId: string
+  nationalId: string
 }) {
-  const { data: existingLink, error: linkError } = await supabase
-    .from('broker_property_owners')
-    .select('id, status')
-    .eq('broker_id', brokerId)
-    .eq('owner_id', ownerId)
-    .maybeSingle()
-
-  if (linkError) {
-    throw new Error(linkError.message)
+  if (!fullName.trim()) {
+    throw new Error('New owner full name is required')
   }
 
-  if (existingLink && existingLink.status === 'blocked') {
-    throw new Error('This owner is blocked for the selected broker')
+  if (!phoneNumber.trim() && !whatsappNumber.trim() && !email.trim()) {
+    throw new Error(
+      'New owner must have at least one contact method: phone, WhatsApp, or email'
+    )
   }
 
-  if (!existingLink) {
-    const { error: insertLinkError } = await supabase
-      .from('broker_property_owners')
-      .insert({
-        broker_id: brokerId,
-        owner_id: ownerId,
-        relationship_type: 'managed_by',
-        status: 'active',
-      })
+  const uniqueUniversityIds = Array.from(new Set(universityIds.filter(Boolean)))
 
-    if (insertLinkError) {
-      throw new Error(
-        `Failed to link owner with broker: ${insertLinkError.message}`
-      )
-    }
+  if (uniqueUniversityIds.length === 0) {
+    throw new Error('At least one university is required')
   }
+
+  const { data: insertedOwner, error: ownerInsertError } = await supabase
+    .from('property_owners')
+    .insert({
+      full_name: fullName.trim(),
+      company_name: companyName.trim() || null,
+      phone_number: phoneNumber.trim() || null,
+      whatsapp_number: whatsappNumber.trim() || null,
+      email: email.trim() || null,
+      tax_id: taxId.trim() || null,
+      national_id: nationalId.trim() || null,
+      is_active: true,
+      created_by_admin_id: adminId,
+      updated_by_admin_id: adminId,
+    })
+    .select('id')
+    .single()
+
+  if (ownerInsertError || !insertedOwner) {
+    throw new Error(
+      `Failed to create owner: ${ownerInsertError?.message || 'Unknown error'}`
+    )
+  }
+
+  const serviceAreaRows = uniqueUniversityIds.map((universityId) => ({
+    owner_id: insertedOwner.id,
+    city_id: cityId,
+    university_id: universityId,
+    is_active: true,
+    created_by_admin_id: adminId,
+    updated_by_admin_id: adminId,
+  }))
+
+  const { error: serviceAreaInsertError } = await supabase
+    .from('property_owner_service_areas')
+    .insert(serviceAreaRows)
+
+  if (serviceAreaInsertError) {
+    throw new Error(
+      `Failed to assign owner to city and universities: ${serviceAreaInsertError.message}`
+    )
+  }
+
+  return insertedOwner.id as string
 }
 
 export async function createPropertyAction(formData: FormData) {
@@ -380,9 +543,44 @@ export async function createPropertyAction(formData: FormData) {
   const description_en = String(formData.get('description_en') || '').trim()
   const rawDescriptionAr = String(formData.get('description_ar') || '').trim()
   const city_id = String(formData.get('city_id') || '').trim()
-  const university_id = String(formData.get('university_id') || '').trim()
+  const area_id = String(formData.get('area_id') || '').trim()
   const submittedBrokerId = String(formData.get('broker_id') || '').trim()
-  const owner_id = String(formData.get('owner_id') || '').trim()
+
+  const submittedUniversityIds = formData
+    .getAll('university_ids')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+
+  const university_ids = Array.from(
+    new Set([
+      ...submittedUniversityIds,
+      String(formData.get('university_id') || '').trim(),
+    ].filter(Boolean))
+  )
+
+  const primary_university_id = university_ids[0] || ''
+
+  const ownerMode = String(formData.get('owner_mode') || 'existing').trim()
+  const submittedOwnerId = String(formData.get('owner_id') || '').trim()
+
+  const newOwnerFullName = String(
+    formData.get('new_owner_full_name') || ''
+  ).trim()
+  const newOwnerCompanyName = String(
+    formData.get('new_owner_company_name') || ''
+  ).trim()
+  const newOwnerPhoneNumber = String(
+    formData.get('new_owner_phone_number') || ''
+  ).trim()
+  const newOwnerWhatsappNumber = String(
+    formData.get('new_owner_whatsapp_number') || ''
+  ).trim()
+  const newOwnerEmail = String(formData.get('new_owner_email') || '').trim()
+  const newOwnerTaxId = String(formData.get('new_owner_tax_id') || '').trim()
+  const newOwnerNationalId = String(
+    formData.get('new_owner_national_id') || ''
+  ).trim()
+
   const rental_duration = normalizeRentalDuration(
     String(formData.get('rental_duration') || 'monthly').trim()
   )
@@ -413,25 +611,61 @@ export async function createPropertyAction(formData: FormData) {
     brokerId: broker_id,
   })
 
-  await validateOwner({
+  await validatePropertyArea({
     supabase,
-    ownerId: owner_id,
-  })
-
-  await validateOwnerServiceArea({
-    supabase,
-    ownerId: owner_id,
+    areaId: area_id,
     cityId: city_id,
-    universityId: university_id,
   })
 
-  await validateBrokerOwnerLink({
+  await validateUniversitiesForCity({
+    supabase,
+    cityId: city_id,
+    universityIds: university_ids,
+  })
+
+  await validateBrokerUniversities({
     supabase,
     brokerId: broker_id,
-    ownerId: owner_id,
+    universityIds: university_ids,
   })
 
+  let owner_id = submittedOwnerId
+
+  if (ownerMode === 'new') {
+    owner_id = await createNewOwner({
+      supabase,
+      adminId: admin.id,
+      cityId: city_id,
+      universityIds: university_ids,
+      fullName: newOwnerFullName,
+      companyName: newOwnerCompanyName,
+      phoneNumber: newOwnerPhoneNumber,
+      whatsappNumber: newOwnerWhatsappNumber,
+      email: newOwnerEmail,
+      taxId: newOwnerTaxId,
+      nationalId: newOwnerNationalId,
+    })
+  } else {
+    await validateOwner({
+      supabase,
+      ownerId: owner_id,
+    })
+
+    await validateOwnerServiceAreas({
+      supabase,
+      ownerId: owner_id,
+      cityId: city_id,
+      universityIds: university_ids,
+    })
+  }
+
   const price_egp = toNullableNumber(formData.get('price_egp'))
+  const floor_number = toNumberOrDefault(formData.get('floor_number'), 0)
+
+  if (floor_number < 0) {
+    throw new Error('Floor number must be 0 or greater')
+  }
+
   const uploadedImages = formData
     .getAll('images')
     .filter((item): item is File => item instanceof File && item.size > 0)
@@ -618,7 +852,12 @@ export async function createPropertyAction(formData: FormData) {
     }
 
     if (!city_id) throw new Error('City is required')
-    if (!university_id) throw new Error('University is required')
+
+    if (university_ids.length === 0) {
+      throw new Error('At least one university is required')
+    }
+
+    if (!area_id) throw new Error('Area is required')
     if (!broker_id) throw new Error('Broker is required')
     if (!owner_id) throw new Error('Owner is required')
 
@@ -661,10 +900,12 @@ export async function createPropertyAction(formData: FormData) {
     description_en,
     description_ar,
     city_id,
-    university_id,
+    university_id: primary_university_id,
+    area_id,
     broker_id,
     owner_id,
     price_egp,
+    floor_number,
     rental_duration,
     availability_status: 'available',
     address_en,
@@ -694,6 +935,22 @@ export async function createPropertyAction(formData: FormData) {
   }
 
   const propertyIdRef = insertedProperty.id
+
+  const propertyUniversityRows = university_ids.map((universityId) => ({
+    property_id: propertyIdRef,
+    university_id: universityId,
+  }))
+
+  const { error: propertyUniversitiesError } = await supabase
+    .from('property_universities')
+    .insert(propertyUniversityRows)
+
+  if (propertyUniversitiesError) {
+    throw new Error(
+      `Failed to insert property universities: ${propertyUniversitiesError.message}`
+    )
+  }
+
   const coverIndex = Number(String(formData.get('cover_index') || '0'))
 
   if (uploadedImages.length > 0) {
@@ -720,7 +977,9 @@ export async function createPropertyAction(formData: FormData) {
 
       if (uploadError) {
         throw new Error(
-          `Failed to upload property image: ${uploadError.message || 'Unknown error'}`
+          `Failed to upload property image: ${
+            uploadError.message || 'Unknown error'
+          }`
         )
       }
 
@@ -836,7 +1095,9 @@ export async function createPropertyAction(formData: FormData) {
 
       if (roomError || !insertedRoom) {
         throw new Error(
-          `Failed to insert property room: ${roomError?.message || 'Unknown error'}`
+          `Failed to insert property room: ${
+            roomError?.message || 'Unknown error'
+          }`
         )
       }
 
@@ -854,7 +1115,9 @@ export async function createPropertyAction(formData: FormData) {
       )
 
       if (bedRows.length > 0) {
-        const { error: bedsError } = await supabase.from('room_beds').insert(bedRows)
+        const { error: bedsError } = await supabase
+          .from('room_beds')
+          .insert(bedRows)
 
         if (bedsError) {
           throw new Error(`Failed to insert room beds: ${bedsError.message}`)
@@ -916,6 +1179,26 @@ export async function createPropertyAction(formData: FormData) {
     }
   }
 
+  const { error: ownerPropertyError } = await supabase
+    .from('owner_properties')
+    .insert({
+      owner_id,
+      property_id_ref: propertyIdRef,
+      broker_id,
+      ownership_percentage: 100,
+      payout_percentage: 100,
+      is_primary_owner: true,
+      is_active: true,
+      created_by_admin_id: admin.id,
+      updated_by_admin_id: admin.id,
+    })
+
+  if (ownerPropertyError) {
+    throw new Error(
+      `Failed to link property owner: ${ownerPropertyError.message}`
+    )
+  }
+
   await supabase.from('admin_audit_logs').insert({
     admin_user_id: admin.id,
     action_type: 'property_created',
@@ -925,8 +1208,12 @@ export async function createPropertyAction(formData: FormData) {
       property_id,
       broker_id,
       owner_id,
+      owner_mode: ownerMode,
       city_id,
-      university_id,
+      university_id: primary_university_id,
+      university_ids,
+      area_id,
+      floor_number,
       admin_status,
     },
   })

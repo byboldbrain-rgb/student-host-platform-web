@@ -25,7 +25,7 @@ const featuredLogos = [
   },
   {
     name: "Navienty",
-    src: "https://i.ibb.co/7x8MqQ01/Navienty-16.png",
+    src: "https://i.ibb.co/0yfQn58k/Navienty-20.png",
   },
   {
     name: "EELU",

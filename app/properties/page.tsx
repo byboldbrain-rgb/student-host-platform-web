@@ -9,10 +9,13 @@ const squadaOne = Squada_One({
   weight: '400',
 })
 
+const APP_LOGO_URL = 'https://i.ibb.co/sn0xS95/Navienty-2.jpg'
+
 type SearchParams = {
   rental_duration?: string
   city_id?: string
   university_id?: string
+  area_id?: string
   price_range?: string
   lang?: string
   currency?: string
@@ -29,6 +32,20 @@ type University = {
   name_en: string
   name_ar: string
   city_id: string | number
+}
+
+type PropertyArea = {
+  id: string | number
+  city_id: string | number
+  name_en: string
+  name_ar: string
+  is_active?: boolean | null
+}
+
+type UniversityArea = {
+  id?: string | number
+  university_id: string | number
+  area_id: string | number
 }
 
 type PropertyImage = {
@@ -54,6 +71,10 @@ type PropertyRoom = {
   property_room_sellable_options?: PropertyRoomSellableOption[] | null
 }
 
+type PropertyUniversityLink = {
+  university_id?: string | number | null
+}
+
 type Property = {
   id: string | number
   property_id: string
@@ -62,8 +83,11 @@ type Property = {
   price_egp: number
   rental_duration: string
   availability_status: string
+  gender?: 'boys' | 'girls' | string | null
   city_id?: string | number | null
   university_id?: string | number | null
+  area_id?: string | number | null
+  property_universities?: PropertyUniversityLink[] | null
   property_images?: PropertyImage[] | null
   property_sellable_options?: PropertySellableOption[] | null
   property_rooms?: PropertyRoom[] | null
@@ -95,6 +119,8 @@ type NormalizedAvailabilityStatus =
   | 'unavailable'
   | 'unknown'
 
+type NormalizedGender = 'boys' | 'girls' | null
+
 type MenuFooterLink = {
   label: string
   href: string
@@ -120,21 +146,28 @@ const TRANSLATIONS = {
     month: 'month',
     city: 'City',
     university: 'University',
+    area: 'Area',
     duration: 'Duration',
     searchCities: 'Search cities',
+    searchAreas: 'Search areas',
     chooseUniversity: 'Choose university',
+    chooseArea: 'Choose area',
     chooseDuration: 'Choose duration',
     selectCity: 'Select city',
     selectUniversity: 'Select university',
+    selectArea: 'Select area',
     selectDuration: 'Select duration',
     anyCity: 'Any city',
     anyUniversity: 'Any university',
+    anyArea: 'Any area',
     anyDuration: 'Any duration',
     daily: 'Daily',
     monthly: 'Monthly',
     available: 'Available',
     unavailable: 'Unavailable',
     reserved: 'Reserved',
+    boys: 'Boys',
+    girls: 'Girls',
     startSearch: 'Start your search',
     pricesIncludeFees: 'Prices include all fees',
     help: 'Contact Us',
@@ -164,33 +197,40 @@ const TRANSLATIONS = {
   },
   ar: {
     seeAll: 'عرض الكل',
-    popularHomesIn: 'منازل شائعة في',
-    popularHomesNear: 'منازل شائعة بالقرب من',
+    popularHomesIn: 'إقامات شائعة في',
+    popularHomesNear: 'إقامات شائعة بالقرب من',
     stay: 'إقامة',
     night: 'ليلة',
     month: 'شهر',
     city: 'المدينة',
     university: 'الجامعة',
+    area: 'المنطقة',
     duration: 'المدة',
     searchCities: 'ابحث عن مدينة',
+    searchAreas: 'ابحث عن منطقة',
     chooseUniversity: 'اختر الجامعة',
+    chooseArea: 'اختر المنطقة',
     chooseDuration: 'اختر المدة',
     selectCity: 'اختر المدينة',
     selectUniversity: 'اختر الجامعة',
+    selectArea: 'اختر المنطقة',
     selectDuration: 'اختر المدة',
     anyCity: 'أي مدينة',
     anyUniversity: 'أي جامعة',
+    anyArea: 'أي منطقة',
     anyDuration: 'أي مدة',
     daily: 'يومي',
     monthly: 'شهري',
     available: 'متاح',
     unavailable: 'غير متاح',
     reserved: 'محجوز',
+    boys: 'ولاد',
+    girls: 'بنات',
     startSearch: 'ابدأ بحثك',
     pricesIncludeFees: 'الأسعار تشمل جميع الرسوم',
     help: 'مساعدة',
     signUp: 'إنشاء حساب',
-    community: 'ي',
+    community: 'المجتمع',
     logIn: 'تسجيل الدخول',
     language: 'اللغة',
     english: 'English',
@@ -228,6 +268,15 @@ function normalizeCurrency(value?: string): SupportedCurrency {
   return SUPPORTED_CURRENCIES.includes(upper as SupportedCurrency)
     ? (upper as SupportedCurrency)
     : 'EGP'
+}
+
+function normalizeGender(value?: string | null): NormalizedGender {
+  const normalized = value?.toLowerCase().trim()
+
+  if (normalized === 'boys') return 'boys'
+  if (normalized === 'girls') return 'girls'
+
+  return null
 }
 
 function normalizeAvailabilityStatusForUi(
@@ -304,7 +353,6 @@ function normalizeOptionCode(value?: string | null) {
 
 function getOptionPriority(code?: string | null) {
   const normalizedCode = normalizeOptionCode(code)
-
   const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode)
 
   return index === -1 ? Number.POSITIVE_INFINITY : index
@@ -435,6 +483,7 @@ export default async function PropertiesPage({
     rental_duration,
     city_id,
     university_id,
+    area_id,
     price_range,
     lang,
     currency,
@@ -463,6 +512,17 @@ export default async function PropertiesPage({
     .select('id, name_en, name_ar, city_id')
     .order('name_en', { ascending: true })
 
+  const { data: areas } = await supabase
+    .from('property_areas')
+    .select('id, city_id, name_en, name_ar, is_active')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name_en', { ascending: true })
+
+  const { data: universityAreas } = await supabase
+    .from('university_property_areas')
+    .select('id, university_id, area_id')
+
   const { data: allPopularSource } = await supabase
     .from('properties')
     .select(`
@@ -473,8 +533,13 @@ export default async function PropertiesPage({
       price_egp,
       rental_duration,
       availability_status,
+      gender,
       city_id,
       university_id,
+      area_id,
+      property_universities(
+        university_id
+      ),
       property_images(image_url),
       property_sellable_options(
         code,
@@ -495,7 +560,7 @@ export default async function PropertiesPage({
     .eq('admin_status', 'published')
     .eq('is_active', true)
     .order('created_at', { ascending: false })
-    .limit(120)
+    .limit(200)
 
   const buildPageLink = (updates: Partial<SearchParams> = {}) => {
     const params = new URLSearchParams()
@@ -506,20 +571,28 @@ export default async function PropertiesPage({
         : rental_duration
 
     const nextCityId = updates.city_id !== undefined ? updates.city_id : city_id
+
     const nextUniversityId =
       updates.university_id !== undefined
         ? updates.university_id
         : university_id
+
+    const nextAreaId =
+      updates.area_id !== undefined ? updates.area_id : area_id
+
     const nextPriceRange =
       updates.price_range !== undefined ? updates.price_range : price_range
+
     const nextLang =
       updates.lang !== undefined ? updates.lang : selectedLanguage
+
     const nextCurrency =
       updates.currency !== undefined ? updates.currency : selectedCurrency
 
     if (nextRentalDuration) params.set('rental_duration', nextRentalDuration)
     if (nextCityId) params.set('city_id', nextCityId)
     if (nextUniversityId) params.set('university_id', nextUniversityId)
+    if (nextAreaId) params.set('area_id', nextAreaId)
     if (nextPriceRange) params.set('price_range', nextPriceRange)
     if (nextLang) params.set('lang', nextLang)
     if (nextCurrency) params.set('currency', nextCurrency)
@@ -559,6 +632,14 @@ export default async function PropertiesPage({
     )
   }
 
+  const areaMap = new Map<string, string>()
+  for (const area of (areas as PropertyArea[]) ?? []) {
+    areaMap.set(
+      String(area.id),
+      isArabic ? area.name_ar || area.name_en : area.name_en
+    )
+  }
+
   const sourceProperties = (((allPopularSource as Property[]) ?? [])
     .filter(
       (property) =>
@@ -571,42 +652,59 @@ export default async function PropertiesPage({
         getAvailabilityRank(b.availability_status)
     ))
 
-  const citySectionsMap = new Map<string, Property[]>()
+  const POPULAR_SECTION_ITEM_LIMIT = 10
+  const POPULAR_SECTIONS_LIMIT = 10
+
+  const areaSectionsMap = new Map<string, Property[]>()
   const universitySectionsMap = new Map<string, Property[]>()
 
   for (const property of sourceProperties) {
-    if (property.city_id) {
-      const key = String(property.city_id)
-      const existing = citySectionsMap.get(key) ?? []
-      if (existing.length < 5) {
+    if (property.area_id) {
+      const areaKey = String(property.area_id)
+      const existing = areaSectionsMap.get(areaKey) ?? []
+
+      if (existing.length < POPULAR_SECTION_ITEM_LIMIT) {
         existing.push(property)
-        citySectionsMap.set(key, existing)
+        areaSectionsMap.set(areaKey, existing)
       }
     }
 
-    if (property.university_id) {
-      const key = String(property.university_id)
-      const existing = universitySectionsMap.get(key) ?? []
-      if (existing.length < 5) {
+    const linkedUniversityIds =
+      property.property_universities
+        ?.map((item) => item.university_id)
+        .filter(Boolean)
+        .map((id) => String(id)) ?? []
+
+    const universityIdsForSections =
+      linkedUniversityIds.length > 0
+        ? Array.from(new Set(linkedUniversityIds))
+        : property.university_id
+          ? [String(property.university_id)]
+          : []
+
+    for (const linkedUniversityId of universityIdsForSections) {
+      const existing = universitySectionsMap.get(linkedUniversityId) ?? []
+
+      if (existing.length < POPULAR_SECTION_ITEM_LIMIT) {
         existing.push(property)
-        universitySectionsMap.set(key, existing)
+        universitySectionsMap.set(linkedUniversityId, existing)
       }
     }
   }
 
-  const popularCitySections = Array.from(citySectionsMap.entries())
-    .filter(([key, items]) => cityMap.has(key) && items.length > 0)
-    .slice(0, 5)
+  const popularAreaSections = Array.from(areaSectionsMap.entries())
+    .filter(([key, items]) => areaMap.has(key) && items.length > 0)
+    .slice(0, POPULAR_SECTIONS_LIMIT)
     .map(([key, items]) => ({
       id: key,
-      type: 'city' as const,
-      title: `${t.popularHomesIn} ${cityMap.get(key)}`,
+      type: 'area' as const,
+      title: `${t.popularHomesIn} ${areaMap.get(key)}`,
       items,
     }))
 
   const popularUniversitySections = Array.from(universitySectionsMap.entries())
     .filter(([key, items]) => universityMap.has(key) && items.length > 0)
-    .slice(0, 5)
+    .slice(0, POPULAR_SECTIONS_LIMIT)
     .map(([key, items]) => ({
       id: key,
       type: 'university' as const,
@@ -614,10 +712,46 @@ export default async function PropertiesPage({
       items,
     }))
 
-  const buildSearchLink = (cityId?: string, universityId?: string) => {
+  const showcaseSections: Array<
+    | (typeof popularAreaSections)[number]
+    | (typeof popularUniversitySections)[number]
+  > = []
+
+  const maxPopularLength = Math.max(
+    popularAreaSections.length,
+    popularUniversitySections.length
+  )
+
+  for (let index = 0; index < maxPopularLength; index += 1) {
+    if (
+      popularAreaSections[index] &&
+      showcaseSections.length < POPULAR_SECTIONS_LIMIT
+    ) {
+      showcaseSections.push(popularAreaSections[index])
+    }
+
+    if (
+      popularUniversitySections[index] &&
+      showcaseSections.length < POPULAR_SECTIONS_LIMIT
+    ) {
+      showcaseSections.push(popularUniversitySections[index])
+    }
+
+    if (showcaseSections.length >= POPULAR_SECTIONS_LIMIT) {
+      break
+    }
+  }
+
+  const buildSearchLink = ({
+    areaId,
+    universityId,
+  }: {
+    areaId?: string
+    universityId?: string
+  }) => {
     const params = new URLSearchParams()
 
-    if (cityId) params.set('city_id', cityId)
+    if (areaId) params.set('area_id', areaId)
     if (universityId) params.set('university_id', universityId)
 
     params.set('lang', selectedLanguage)
@@ -633,9 +767,31 @@ export default async function PropertiesPage({
     return property.property_images[0]?.image_url || null
   }
 
+  const renderGenderMeta = (property: Property) => {
+    const gender = normalizeGender(property.gender)
+
+    if (!gender) return null
+
+    const label =
+      selectedLanguage === 'ar'
+        ? gender === 'boys'
+          ? 'ولاد فقط'
+          : 'بنات فقط'
+        : gender === 'boys'
+          ? 'Boys only'
+          : 'Girls only'
+
+    return (
+      <span className="property-meta-gender">
+        <span className="property-meta-dot" />
+        {label}
+      </span>
+    )
+  }
+
   const renderSeeAllCard = (
     sectionId: string,
-    isCity: boolean,
+    sectionType: 'area' | 'university',
     items: Property[]
   ) => {
     const images = items
@@ -645,11 +801,11 @@ export default async function PropertiesPage({
 
     return (
       <Link
-        key={`see-all-${sectionId}`}
-        href={buildSearchLink(
-          isCity ? sectionId : undefined,
-          isCity ? undefined : sectionId
-        )}
+        key={`see-all-${sectionType}-${sectionId}`}
+        href={buildSearchLink({
+          areaId: sectionType === 'area' ? sectionId : undefined,
+          universityId: sectionType === 'university' ? sectionId : undefined,
+        })}
         className="group block min-w-[150px] max-w-[150px] shrink-0 snap-start md:min-w-[160px] md:max-w-[160px]"
       >
         <div className="relative flex aspect-[4/3] w-full items-center justify-center rounded-xl transition duration-300 md:rounded-3xl">
@@ -691,11 +847,6 @@ export default async function PropertiesPage({
     )
   }
 
-  const showcaseSections = [
-    ...popularCitySections.slice(0, 2),
-    ...popularUniversitySections.slice(0, 2),
-  ]
-
   const renderPropertyImage = (property: Property, badgeText: string) => {
     const firstImage = getFirstImage(property)
     const normalizedStatus = normalizeAvailabilityStatusForUi(
@@ -717,7 +868,7 @@ export default async function PropertiesPage({
           <div className="absolute inset-0 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 transition duration-700 group-hover/image:scale-[1.03]" />
         )}
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/20 via-black/5 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/18 via-black/5 to-transparent" />
 
         {(isAvailable || isReserved) && (
           <div
@@ -749,17 +900,20 @@ export default async function PropertiesPage({
           )
         )}
 
-        <div className="mt-3 space-y-1.5 md:mt-4">
+        <div className="mt-2.5 space-y-1.5 md:mt-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
               {isArabic ? property.title_ar : property.title_en}
             </h3>
           </div>
 
-          <p className="truncate text-[13px] capitalize text-slate-500 md:text-[13px]">
-            {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
-            {t.stay}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 md:text-[13px]">
+            <span className="truncate capitalize">
+              {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
+              {t.stay}
+            </span>
+            {renderGenderMeta(property)}
+          </div>
 
           <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
             <span className="font-semibold text-slate-950">
@@ -784,7 +938,7 @@ export default async function PropertiesPage({
       label: isLoggedIn ? t.account : t.login,
       href: isLoggedIn
         ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/login'),
+        : buildSimpleNavLink('/account-login'),
     },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
@@ -809,8 +963,11 @@ export default async function PropertiesPage({
   const searchBarProps = {
     cities: (cities as City[]) ?? [],
     universities: (universities as University[]) ?? [],
+    areas: (areas as PropertyArea[]) ?? [],
+    universityAreas: (universityAreas as UniversityArea[]) ?? [],
     initialCityId: city_id ?? '',
     initialUniversityId: university_id ?? '',
+    initialAreaId: area_id ?? '',
     initialRentalDuration: rental_duration ?? '',
     initialPriceRange: price_range ?? '',
     language: selectedLanguage,
@@ -818,15 +975,20 @@ export default async function PropertiesPage({
     labels: {
       city: t.city,
       university: t.university,
+      area: t.area,
       duration: t.duration,
       searchCities: t.searchCities,
+      searchAreas: t.searchAreas,
       chooseUniversity: t.chooseUniversity,
+      chooseArea: t.chooseArea,
       chooseDuration: t.chooseDuration,
       selectCity: t.selectCity,
       selectUniversity: t.selectUniversity,
+      selectArea: t.selectArea,
       selectDuration: t.selectDuration,
       anyCity: t.anyCity,
       anyUniversity: t.anyUniversity,
+      anyArea: t.anyArea,
       anyDuration: t.anyDuration,
       daily: t.daily,
       monthly: t.monthly,
@@ -835,7 +997,7 @@ export default async function PropertiesPage({
 
   const mobileAccountHref = isLoggedIn
     ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/login')
+    : buildSimpleNavLink('/account-login')
 
   const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
 
@@ -844,6 +1006,131 @@ export default async function PropertiesPage({
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0"
     >
+      <div className="pwa-install-banner" id="pwa-install-banner">
+        <button
+          type="button"
+          className="pwa-install-banner__close"
+          aria-label="Close app install banner"
+          id="pwa-install-banner-close"
+        >
+          ×
+        </button>
+
+        <img
+          src={APP_LOGO_URL}
+          alt="Navienty"
+          className="pwa-install-banner__logo"
+          draggable={false}
+        />
+
+        <div className="pwa-install-banner__content">
+          <p className="pwa-install-banner__title">Continue in the app!</p>
+        </div>
+
+        <button
+          type="button"
+          className="pwa-install-banner__button"
+          id="pwa-install-banner-button"
+        >
+          Get App
+        </button>
+
+        <div className="pwa-install-banner__ios-help" id="pwa-install-banner-ios-help">
+          On iPhone: tap Share, then choose Add to Home Screen.
+        </div>
+      </div>
+
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              var banner = document.getElementById('pwa-install-banner');
+              var closeButton = document.getElementById('pwa-install-banner-close');
+              var installButton = document.getElementById('pwa-install-banner-button');
+              var iosHelp = document.getElementById('pwa-install-banner-ios-help');
+              var deferredPrompt = null;
+
+              if (!banner) return;
+
+              function isStandalone() {
+                return window.matchMedia('(display-mode: standalone)').matches ||
+                  window.navigator.standalone === true;
+              }
+
+              function isIos() {
+                var ua = window.navigator.userAgent.toLowerCase();
+                var platform = (window.navigator.platform || '').toLowerCase();
+                return /iphone|ipad|ipod/.test(ua) ||
+                  (platform === 'macintel' && window.navigator.maxTouchPoints > 1);
+              }
+
+              function hideBanner() {
+                banner.style.display = 'none';
+              }
+
+              function showBanner() {
+                banner.style.display = 'grid';
+              }
+
+              if (isStandalone()) {
+                hideBanner();
+                return;
+              }
+
+              if (localStorage.getItem('pwa-install-banner-dismissed') === 'true') {
+                hideBanner();
+                return;
+              }
+
+              if (isIos()) {
+                showBanner();
+              }
+
+              window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                deferredPrompt = event;
+                showBanner();
+              });
+
+              window.addEventListener('appinstalled', function () {
+                localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                hideBanner();
+                deferredPrompt = null;
+              });
+
+              if (closeButton) {
+                closeButton.addEventListener('click', function () {
+                  localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                  hideBanner();
+                });
+              }
+
+              if (installButton) {
+                installButton.addEventListener('click', function () {
+                  if (isIos()) {
+                    if (iosHelp) {
+                      iosHelp.classList.toggle('pwa-install-banner__ios-help--visible');
+                    }
+                    return;
+                  }
+
+                  if (!deferredPrompt) return;
+
+                  deferredPrompt.prompt();
+                  deferredPrompt.userChoice.then(function (choiceResult) {
+                    if (choiceResult && choiceResult.outcome === 'accepted') {
+                      localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                      hideBanner();
+                    }
+                    deferredPrompt = null;
+                  });
+                });
+              }
+            })();
+          `,
+        }}
+      />
+
       <input
         id="nav-menu-toggle"
         type="checkbox"
@@ -856,6 +1143,95 @@ export default async function PropertiesPage({
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
+        }
+
+        .pwa-install-banner {
+          position: sticky;
+          top: 0;
+          z-index: 160;
+          display: none;
+          grid-template-columns: 26px 46px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 9px;
+          min-height: 62px;
+          background: #ffffff;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+          padding: 8px 12px;
+        }
+
+        .pwa-install-banner__close {
+          width: 26px;
+          height: 26px;
+          border: 0;
+          background: transparent;
+          color: #111827;
+          font-size: 28px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 0;
+        }
+
+        .pwa-install-banner__logo {
+          width: 46px;
+          height: 46px;
+          border-radius: 12px;
+          object-fit: cover;
+          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          display: block;
+        }
+
+        .pwa-install-banner__content {
+          min-width: 0;
+        }
+
+        .pwa-install-banner__title {
+          margin: 0;
+          color: #111827;
+          font-size: 15px;
+          line-height: 1.15;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .pwa-install-banner__button {
+          min-width: 86px;
+          height: 38px;
+          border: 0;
+          border-radius: 9px;
+          background: #054aff;
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          padding: 0 16px;
+        }
+
+        .pwa-install-banner__ios-help {
+          display: none;
+          grid-column: 1 / -1;
+          margin-top: 6px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          color: #334155;
+          padding: 8px 10px;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .pwa-install-banner__ios-help--visible {
+          display: block;
+        }
+
+        @media (display-mode: standalone) {
+          .pwa-install-banner {
+            display: none !important;
+          }
         }
 
         .hide-scrollbar::-webkit-scrollbar {
@@ -1268,6 +1644,37 @@ export default async function PropertiesPage({
             inset 0 1px 0 rgba(255, 255, 255, 0.26);
         }
 
+        .property-meta-gender {
+          display: inline-flex;
+          min-width: 0;
+          align-items: center;
+          gap: 6px;
+          color: #64748b;
+          font-size: 13px;
+          line-height: 1.25;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          transition: color 0.2s ease;
+        }
+
+        .property-meta-dot {
+          width: 3px;
+          height: 3px;
+          border-radius: 999px;
+          background: currentColor;
+          opacity: 0.55;
+          flex-shrink: 0;
+        }
+
+        .group:hover .property-meta-gender {
+          color: #334155;
+        }
+
+        [dir='rtl'] .property-meta-gender {
+          flex-direction: row;
+        }
+
         .mobile-bottom-nav {
           position: fixed;
           left: 0;
@@ -1598,6 +2005,10 @@ export default async function PropertiesPage({
           .status-ribbon--reserved::after {
             box-shadow: 80px -80px #8f1239;
           }
+
+          .property-meta-gender {
+            font-size: 12.5px;
+          }
         }
 
         @media (max-width: 768px) {
@@ -1689,6 +2100,12 @@ export default async function PropertiesPage({
 
           .footer-esaf-copyright {
             font-size: 14px;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .pwa-install-banner {
+            display: none !important;
           }
         }
       `}</style>
@@ -1783,24 +2200,32 @@ export default async function PropertiesPage({
         {showcaseSections.length > 0 && (
           <section className="mb-10 space-y-10 md:mb-14 md:space-y-12">
             {showcaseSections.map((section) => (
-              <div key={section.title}>
+              <div key={`${section.type}-${section.id}`}>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-[19px] font-semibold tracking-tight text-gray-900 md:text-2xl">
                     <Link
-                      href={buildSearchLink(
-                        section.type === 'city' ? section.id : undefined,
-                        section.type === 'university' ? section.id : undefined
-                      )}
+                      href={buildSearchLink({
+                        areaId:
+                          section.type === 'area' ? section.id : undefined,
+                        universityId:
+                          section.type === 'university'
+                            ? section.id
+                            : undefined,
+                      })}
                     >
                       {section.title}
                     </Link>
                   </h2>
 
                   <Link
-                    href={buildSearchLink(
-                      section.type === 'city' ? section.id : undefined,
-                      section.type === 'university' ? section.id : undefined
-                    )}
+                    href={buildSearchLink({
+                      areaId:
+                        section.type === 'area' ? section.id : undefined,
+                      universityId:
+                        section.type === 'university'
+                          ? section.id
+                          : undefined,
+                    })}
                     className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 md:hidden"
                   >
                     <svg
@@ -1822,11 +2247,7 @@ export default async function PropertiesPage({
 
                 <div className="hide-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:gap-4">
                   {section.items.map((property) => renderPropertyCard(property))}
-                  {renderSeeAllCard(
-                    section.id,
-                    section.type === 'city',
-                    section.items
-                  )}
+                  {renderSeeAllCard(section.id, section.type, section.items)}
                 </div>
               </div>
             ))}

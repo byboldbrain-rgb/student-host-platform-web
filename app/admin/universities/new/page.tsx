@@ -11,6 +11,15 @@ type CityRow = {
   name_ar: string
 }
 
+type PropertyAreaRow = {
+  id: string
+  city_id: string
+  name_en: string
+  name_ar: string | null
+  is_active: boolean
+  sort_order: number | null
+}
+
 const primaryButtonClass =
   'inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_12px_26px_rgba(37,99,235,0.28)]'
 
@@ -22,6 +31,13 @@ const inputClass =
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) || '').trim()
+}
+
+function getStringArray(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
 }
 
 function BrandLogo() {
@@ -75,6 +91,7 @@ export default async function NewUniversityPage({
   await requirePropertiesSectionAccess()
 
   const supabase = await createClient()
+
   const { data: citiesData, error: citiesError } = await supabase
     .from('cities')
     .select('id, name_en, name_ar')
@@ -84,7 +101,19 @@ export default async function NewUniversityPage({
     throw new Error(citiesError.message)
   }
 
+  const { data: areasData, error: areasError } = await supabase
+    .from('property_areas')
+    .select('id, city_id, name_en, name_ar, is_active, sort_order')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name_en', { ascending: true })
+
+  if (areasError) {
+    throw new Error(areasError.message)
+  }
+
   const cities = (citiesData || []) as CityRow[]
+  const areas = (areasData || []) as PropertyAreaRow[]
 
   async function createUniversityAction(formData: FormData) {
     'use server'
@@ -94,6 +123,7 @@ export default async function NewUniversityPage({
     const city_id = getString(formData, 'city_id')
     const name_en = getString(formData, 'name_en')
     const name_ar = getString(formData, 'name_ar')
+    const selectedAreaIds = getStringArray(formData, 'area_ids')
 
     if (!city_id || !name_en || !name_ar) {
       redirect('/admin/universities/new?error=Please fill all required fields')
@@ -101,22 +131,96 @@ export default async function NewUniversityPage({
 
     const supabase = await createClient()
 
-    const { error } = await supabase.from('universities').insert({
-      city_id,
-      name_en,
-      name_ar,
-    })
+    let validAreaIds: string[] = []
 
-    if (error) {
-      redirect(`/admin/universities/new?error=${encodeURIComponent(error.message)}`)
+    if (selectedAreaIds.length > 0) {
+      const { data: validAreasData, error: validAreasError } = await supabase
+        .from('property_areas')
+        .select('id')
+        .eq('city_id', city_id)
+        .eq('is_active', true)
+        .in('id', selectedAreaIds)
+
+      if (validAreasError) {
+        redirect(
+          `/admin/universities/new?error=${encodeURIComponent(
+            validAreasError.message
+          )}`
+        )
+      }
+
+      validAreaIds = (validAreasData || []).map((area) => String(area.id))
+
+      if (validAreaIds.length !== selectedAreaIds.length) {
+        redirect(
+          '/admin/universities/new?error=Some selected areas do not belong to the selected city'
+        )
+      }
+    }
+
+    const { data: createdUniversity, error: universityError } = await supabase
+      .from('universities')
+      .insert({
+        city_id,
+        name_en,
+        name_ar,
+      })
+      .select('id')
+      .single()
+
+    if (universityError) {
+      redirect(
+        `/admin/universities/new?error=${encodeURIComponent(
+          universityError.message
+        )}`
+      )
+    }
+
+    if (!createdUniversity?.id) {
+      redirect('/admin/universities/new?error=University was not created')
+    }
+
+    if (validAreaIds.length > 0) {
+      const rows = validAreaIds.map((area_id) => ({
+        university_id: createdUniversity.id,
+        area_id,
+      }))
+
+      const { error: universityAreasError } = await supabase
+        .from('university_property_areas')
+        .insert(rows)
+
+      if (universityAreasError) {
+        redirect(
+          `/admin/universities/new?error=${encodeURIComponent(
+            universityAreasError.message
+          )}`
+        )
+      }
     }
 
     revalidatePath('/admin/properties')
+    revalidatePath('/admin/universities/new')
     redirect('/admin/properties')
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined
   const errorMessage = resolvedSearchParams?.error
+
+  const areasByCityId = areas.reduce<Record<string, PropertyAreaRow[]>>(
+    (acc, area) => {
+      const key = String(area.city_id)
+
+      if (!acc[key]) {
+        acc[key] = []
+      }
+
+      acc[key].push(area)
+
+      return acc
+    },
+    {}
+  )
 
   return (
     <>
@@ -370,6 +474,76 @@ export default async function NewUniversityPage({
                       className={inputClass}
                       required
                     />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <div className="mb-3 flex flex-col gap-1">
+                      <label className="block text-sm font-semibold text-[#222222]">
+                        University Areas
+                      </label>
+                      <p className="text-sm text-gray-500">
+                        Select the areas where students of this university usually live.
+                      </p>
+                    </div>
+
+                    {areas.length === 0 ? (
+                      <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                        No active property areas found. Create areas first from the property areas table/admin page.
+                      </div>
+                    ) : (
+                      <div className="rounded-[24px] border border-gray-200 bg-[#fafafa] p-4">
+                        <div className="space-y-5">
+                          {cities.map((city) => {
+                            const cityAreas = areasByCityId[String(city.id)] || []
+
+                            if (cityAreas.length === 0) {
+                              return null
+                            }
+
+                            return (
+                              <div
+                                key={city.id}
+                                className="rounded-[20px] border border-gray-200 bg-white p-4"
+                              >
+                                <div className="mb-3">
+                                  <h3 className="text-sm font-semibold text-[#222222]">
+                                    {city.name_en} — {city.name_ar}
+                                  </h3>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                  {cityAreas.map((area) => (
+                                    <label
+                                      key={area.id}
+                                      className="flex cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm transition hover:border-blue-200 hover:bg-blue-50/40"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        name="area_ids"
+                                        value={area.id}
+                                        className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                      />
+
+                                      <span className="min-w-0">
+                                        <span className="block font-semibold text-[#222222]">
+                                          {area.name_en}
+                                        </span>
+
+                                        {area.name_ar && (
+                                          <span className="mt-0.5 block text-gray-500">
+                                            {area.name_ar}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

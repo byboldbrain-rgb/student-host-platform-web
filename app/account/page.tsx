@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import { createClient } from '@/src/lib/supabase/client'
 import { signOutUser } from '@/src/lib/supabase/user-auth'
@@ -12,17 +12,7 @@ const squadaOne = Squada_One({
   weight: '400',
 })
 
-const socialMenuLinks = [
-  { label: 'Facebook', href: 'https://www.facebook.com/' },
-  { label: 'Instagram', href: 'https://www.instagram.com/' },
-  { label: 'LinkedIn', href: 'https://www.linkedin.com/' },
-]
-
-const footerQuickLinks = [
-  { label: 'About us', href: '/about' },
-  { label: 'Board', href: '/board' },
-  { label: 'Contact', href: '/contact' },
-]
+type SupportedLanguage = 'en' | 'ar'
 
 type MenuFooterLink = {
   label: string
@@ -35,26 +25,170 @@ type UserProfile = {
   full_name: string | null
   phone: string | null
   email?: string | null
-  referral_code?: string | null
   wallet_cached_balance?: number | null
 } | null
 
+const defaultCurrency = 'EGP'
+
+const TRANSLATIONS = {
+  en: {
+    welcome: 'Welcome',
+    guest: 'Guest',
+    logOut: 'Log Out',
+    loggingOut: 'Logging out...',
+    addBalance: 'Add Balance',
+    reservations: 'Reservations',
+    language: 'Language',
+    english: 'English',
+    arabic: 'العربية',
+    currentLanguage: 'Current language',
+    account: 'Account',
+    login: 'Log in or sign up',
+    community: 'Community',
+    search: 'Search',
+    close: 'Close',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    linkedIn: 'LinkedIn',
+    aboutUs: 'About us',
+    board: 'Board',
+    contact: 'Contact',
+    quickLinks: 'Quick Links',
+    contactUs: 'Contact Us',
+    footerTitle: 'Find your way to better student living',
+    copyright: 'All rights reserved.',
+    holder: 'Holder',
+    status: 'Status',
+    activeAccount: 'ACTIVE ACCOUNT',
+    email: 'Email',
+    totalBalance: 'Total Balance',
+    tapToHideBalance: 'Tap to hide balance',
+    tapToViewBalance: 'Tap to view balance',
+    walletAriaLabel: 'Show or hide wallet balance',
+  },
+  ar: {
+    welcome: 'مرحبًا',
+    guest: 'ضيفنا',
+    logOut: 'تسجيل الخروج',
+    loggingOut: 'جاري تسجيل الخروج...',
+    addBalance: 'إضافة رصيد',
+    reservations: 'الحجوزات',
+    language: 'اللغة',
+    english: 'English',
+    arabic: 'العربية',
+    currentLanguage: 'اللغة الحالية',
+    account: 'الحساب',
+    login: 'تسجيل الدخول أو إنشاء حساب',
+    community: 'المجتمع',
+    search: 'بحث',
+    close: 'إغلاق',
+    facebook: 'فيسبوك',
+    instagram: 'إنستجرام',
+    linkedIn: 'لينكدإن',
+    aboutUs: 'من نحن',
+    board: 'الإدارة',
+    contact: 'تواصل معنا',
+    quickLinks: 'روابط سريعة',
+    contactUs: 'تواصل معنا',
+    footerTitle: 'نظرة إلى المستقبل.',
+    copyright: 'جميع الحقوق محفوظة.',
+    holder: 'الاسم',
+    status: 'الحالة',
+    activeAccount: 'حساب نشط',
+    email: 'البريد الإلكتروني',
+    totalBalance: 'إجمالي الرصيد',
+    tapToHideBalance: 'اضغط لإخفاء الرصيد',
+    tapToViewBalance: 'اضغط لعرض الرصيد',
+    walletAriaLabel: 'إظهار أو إخفاء رصيد المحفظة',
+  },
+} as const
+
+function normalizeLanguage(value?: string | null): SupportedLanguage {
+  return value === 'ar' ? 'ar' : 'en'
+}
+
 export default function AccountPage() {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
   const currentYear = new Date().getFullYear()
 
+  const [language, setLanguage] = useState<SupportedLanguage>('en')
   const [profile, setProfile] = useState<UserProfile>(null)
   const [loading, setLoading] = useState(true)
   const [logoutLoading, setLogoutLoading] = useState(false)
   const [showWalletBalance, setShowWalletBalance] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const defaultLanguage = 'en'
-  const defaultCurrency = 'EGP'
-  const propertiesHref = `/properties?lang=${defaultLanguage}&currency=${defaultCurrency}`
-  const communityHref = `/community?lang=${defaultLanguage}&currency=${defaultCurrency}`
-  const accountHref = `/account?lang=${defaultLanguage}&currency=${defaultCurrency}`
+  const t = TRANSLATIONS[language]
+  const isArabic = language === 'ar'
+
+  useEffect(() => {
+    const urlLang = normalizeLanguage(searchParams.get('lang'))
+    const savedLang =
+      typeof window !== 'undefined'
+        ? normalizeLanguage(window.localStorage.getItem('navienty_lang'))
+        : 'en'
+
+    const nextLang = searchParams.get('lang') ? urlLang : savedLang
+
+    setLanguage(nextLang)
+    document.documentElement.lang = nextLang
+    document.documentElement.dir = nextLang === 'ar' ? 'rtl' : 'ltr'
+    document.cookie = `navienty_lang=${nextLang}; path=/; max-age=31536000; SameSite=Lax`
+  }, [searchParams])
+
+  const buildLocalizedHref = (
+    path: string,
+    updates: Record<string, string | undefined> = {}
+  ) => {
+    const params = new URLSearchParams()
+
+    params.set('lang', updates.lang ?? language)
+    params.set('currency', updates.currency ?? defaultCurrency)
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (key === 'lang' || key === 'currency') return
+      if (value) params.set(key, value)
+    })
+
+    return `${path}?${params.toString()}`
+  }
+
+  const propertiesHref = buildLocalizedHref('/properties')
+  const communityHref = buildLocalizedHref('/community')
+  const accountHref = buildLocalizedHref('/account')
+  const loginHref = buildLocalizedHref('/login')
+
+  const socialMenuLinks = [
+    { label: t.facebook, href: 'https://www.facebook.com/' },
+    { label: t.instagram, href: 'https://www.instagram.com/' },
+    { label: t.linkedIn, href: 'https://www.linkedin.com/' },
+  ]
+
+  const footerQuickLinks = [
+    { label: t.aboutUs, href: buildLocalizedHref('/about') },
+    { label: t.board, href: buildLocalizedHref('/board') },
+    { label: t.contact, href: buildLocalizedHref('/contact') },
+  ]
+
+  const primaryMenuLinks = [
+    {
+      label: !loading && profile ? t.account : t.login,
+      href: !loading && profile ? accountHref : loginHref,
+    },
+    { label: t.community, href: communityHref },
+  ]
+
+  const menuFooterLinks: MenuFooterLink[] = [
+    ...footerQuickLinks,
+    {
+      label: 'info@navienty.com',
+      href: 'mailto:info@navienty.com',
+      isEmail: true,
+    },
+  ]
 
   useEffect(() => {
     async function loadProfile() {
@@ -64,13 +198,13 @@ export default function AccountPage() {
         } = await supabase.auth.getUser()
 
         if (!user) {
-          router.replace('/login')
+          router.replace(loginHref)
           return
         }
 
         const { data: profileData } = await supabase
           .from('user_profiles')
-          .select('id, full_name, phone, referral_code, wallet_cached_balance')
+          .select('id, full_name, phone, wallet_cached_balance')
           .eq('id', user.id)
           .single()
 
@@ -78,19 +212,18 @@ export default function AccountPage() {
           id: user.id,
           full_name: profileData?.full_name ?? null,
           phone: profileData?.phone ?? null,
-          referral_code: profileData?.referral_code ?? null,
           wallet_cached_balance: profileData?.wallet_cached_balance ?? 0,
           email: user.email,
         })
       } catch {
-        router.replace('/login')
+        router.replace(loginHref)
       } finally {
         setLoading(false)
       }
     }
 
     loadProfile()
-  }, [router, supabase])
+  }, [router, supabase, loginHref])
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''
@@ -111,11 +244,27 @@ export default function AccountPage() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [])
 
+  function handleLanguageChange(nextLanguage: SupportedLanguage) {
+    setLanguage(nextLanguage)
+
+    window.localStorage.setItem('navienty_lang', nextLanguage)
+    document.cookie = `navienty_lang=${nextLanguage}; path=/; max-age=31536000; SameSite=Lax`
+    document.documentElement.lang = nextLanguage
+    document.documentElement.dir = nextLanguage === 'ar' ? 'rtl' : 'ltr'
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('lang', nextLanguage)
+    params.set('currency', params.get('currency') || defaultCurrency)
+
+    router.replace(`${pathname}?${params.toString()}`)
+    router.refresh()
+  }
+
   async function handleLogout() {
     try {
       setLogoutLoading(true)
       await signOutUser()
-      router.push('/login')
+      router.push(loginHref)
       router.refresh()
     } finally {
       setLogoutLoading(false)
@@ -124,24 +273,11 @@ export default function AccountPage() {
 
   const firstName = useMemo(() => {
     const name = profile?.full_name?.trim()
-    if (!name) return 'ضيفنا'
+    if (!name) return t.guest
     return name.split(' ')[0]
-  }, [profile?.full_name])
+  }, [profile?.full_name, t.guest])
 
   const walletBalance = Number(profile?.wallet_cached_balance ?? 0).toFixed(2)
-
-  const primaryMenuLinks = [
-    {
-      label: !loading && profile ? 'Account' : 'Log in or sign up',
-      href: !loading && profile ? accountHref : `/login?lang=${defaultLanguage}&currency=${defaultCurrency}`,
-    },
-    { label: 'Community', href: communityHref },
-  ]
-
-  const menuFooterLinks: MenuFooterLink[] = [
-    ...footerQuickLinks,
-    { label: 'info@navienty.com', href: 'mailto:info@navienty.com', isEmail: true },
-  ]
 
   return (
     <>
@@ -881,6 +1017,37 @@ export default function AccountPage() {
           display: block;
         }
 
+        .language-pill {
+          border: 1px solid rgba(5, 74, 255, 0.16);
+          background: #f7f9ff;
+          color: #111827;
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-size: 13px;
+          font-weight: 800;
+          transition:
+            background 0.2s ease,
+            color 0.2s ease,
+            border-color 0.2s ease,
+            transform 0.2s ease;
+        }
+
+        .language-pill:hover {
+          transform: translateY(-1px);
+          border-color: rgba(5, 74, 255, 0.28);
+          background: #eef3ff;
+        }
+
+        .language-pill.is-active {
+          background: #054aff;
+          color: #ffffff;
+          border-color: #054aff;
+        }
+
+        [dir='rtl'] .wallet-card-number-wrapper {
+          text-align: left;
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -1027,6 +1194,11 @@ export default function AccountPage() {
             gap: 8px;
           }
 
+          [dir='rtl'] .mega-menu-footer-links {
+            align-items: flex-end;
+            text-align: right;
+          }
+
           .mega-menu-footer-link {
             font-size: 16px;
           }
@@ -1075,7 +1247,10 @@ export default function AccountPage() {
         }
       `}</style>
 
-      <div className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0">
+      <div
+        dir={isArabic ? 'rtl' : 'ltr'}
+        className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0"
+      >
         <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <Link
@@ -1124,11 +1299,11 @@ export default function AccountPage() {
               <button
                 type="button"
                 className="mega-menu-close"
-                aria-label="Close menu"
+                aria-label={t.close}
                 onClick={() => setMenuOpen(false)}
               >
                 <span className="mega-menu-close-line" />
-                <span>Close</span>
+                <span>{t.close}</span>
               </button>
 
               <div className="mega-menu-logo">
@@ -1206,10 +1381,7 @@ export default function AccountPage() {
           </div>
         </div>
 
-        <main
-          dir="rtl"
-          className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] sm:px-6 lg:px-8"
-        >
+        <main className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] sm:px-6 lg:px-8">
           {loading ? (
             <div className="mx-auto max-w-6xl animate-pulse">
               <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-6">
@@ -1224,9 +1396,12 @@ export default function AccountPage() {
                   <div className="h-24 w-full rounded-[24px] bg-gray-100 lg:w-[320px]" />
                 </div>
 
-                <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                <div className="mt-6 grid gap-4 lg:grid-cols-2">
                   {[1, 2, 3].map((item) => (
-                    <div key={item} className="rounded-[28px] border border-gray-100 bg-white p-5">
+                    <div
+                      key={item}
+                      className="rounded-[28px] border border-gray-100 bg-white p-5"
+                    >
                       <div className="h-12 w-12 rounded-[18px] bg-gray-100" />
                       <div className="mt-4 h-5 w-36 rounded bg-gray-200" />
                       <div className="mt-3 h-4 w-full rounded bg-gray-100" />
@@ -1249,90 +1424,60 @@ export default function AccountPage() {
 
                     <div className="relative z-10">
                       <div className="flex flex-col gap-6">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex min-w-0 items-center gap-4">
-                            <div className="min-w-0">
-                              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl lg:text-[2rem]">
-                                Welcome {firstName}
-                              </h1>
+                        <div className="flex w-full items-start justify-between gap-4">
+                          <button
+                            type="button"
+                            onClick={handleLogout}
+                            disabled={logoutLoading}
+                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white/12 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/15 backdrop-blur-sm transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {logoutLoading ? (
+                              <>
+                                <svg
+                                  className="h-4 w-4 animate-spin"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  />
+                                  <path
+                                    className="opacity-90"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"
+                                  />
+                                </svg>
+                                <span>{t.loggingOut}</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  strokeWidth={1.9}
+                                  stroke="currentColor"
+                                  className="h-5 w-5"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-7.5a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 6 21h7.5a2.25 2.25 0 0 0 2.25-2.25V15M18 12H9m0 0 3.75-3.75M9 12l3.75 3.75"
+                                  />
+                                </svg>
+                                <span>{t.logOut}</span>
+                              </>
+                            )}
+                          </button>
 
-                              <button
-                                type="button"
-                                onClick={handleLogout}
-                                disabled={logoutLoading}
-                                className="mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-white/12 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/15 backdrop-blur-sm transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {logoutLoading ? (
-                                  <>
-                                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                                      <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                      />
-                                      <path
-                                        className="opacity-90"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"
-                                      />
-                                    </svg>
-                                    <span>Logging out...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      strokeWidth={1.9}
-                                      stroke="currentColor"
-                                      className="h-5 w-5"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-7.5a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 6 21h7.5a2.25 2.25 0 0 0 2.25-2.25V15M18 12H9m0 0 3.75-3.75M9 12l3.75 3.75"
-                                      />
-                                    </svg>
-                                    <span>Log Out</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="referral-hero-card rounded-[26px] border border-white/12 bg-white/[0.10] px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)] backdrop-blur-md sm:px-6 sm:py-6 lg:max-w-[420px]">
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-white/12 ring-1 ring-white/12 sm:h-16 sm:w-16">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={1.8}
-                                stroke="currentColor"
-                                className="h-6 w-6 text-white sm:h-7 sm:w-7"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M7.5 8.25h9m-9 3h6m-7.875 8.25h12.75A2.625 2.625 0 0 0 21 16.875V7.125A2.625 2.625 0 0 0 18.375 4.5H5.625A2.625 2.625 0 0 0 3 7.125v9.75A2.625 2.625 0 0 0 5.625 19.5Z"
-                                />
-                              </svg>
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-white/70 sm:text-[15px]">
-                                Referral Code
-                              </p>
-                              <p className="mt-2 referral-code-text truncate font-extrabold text-white">
-                                {profile?.referral_code ?? '-'}
-                              </p>
-                            </div>
-                          </div>
+                          <h1 className="mt-1 min-w-0 text-2xl font-extrabold tracking-tight text-white sm:text-3xl lg:text-[2rem]">
+                            {t.welcome} {firstName}
+                          </h1>
                         </div>
                       </div>
                     </div>
@@ -1343,7 +1488,7 @@ export default function AccountPage() {
                       type="button"
                       onClick={() => setShowWalletBalance((prev) => !prev)}
                       className="wallet-button-wrapper block w-full rounded-[24px] text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-[#054aff]"
-                      aria-label="إظهار أو إخفاء رصيد المحفظة"
+                      aria-label={t.walletAriaLabel}
                     >
                       <div className={`wallet-demo ${showWalletBalance ? 'is-open' : ''}`}>
                         <div className="wallet-back" />
@@ -1357,7 +1502,7 @@ export default function AccountPage() {
 
                             <div className="wallet-card-bottom">
                               <div className="wallet-card-info">
-                                <span className="label">Holder</span>
+                                <span className="label">{t.holder}</span>
                                 <span className="value">
                                   {profile?.full_name?.toUpperCase() ?? 'ACCOUNT USER'}
                                 </span>
@@ -1380,8 +1525,8 @@ export default function AccountPage() {
 
                             <div className="wallet-card-bottom">
                               <div className="wallet-card-info">
-                                <span className="label">Status</span>
-                                <span className="value">ACTIVE ACCOUNT</span>
+                                <span className="label">{t.status}</span>
+                                <span className="value">{t.activeAccount}</span>
                               </div>
 
                               <div className="wallet-card-number-wrapper">
@@ -1403,7 +1548,7 @@ export default function AccountPage() {
 
                             <div className="wallet-card-bottom">
                               <div className="wallet-card-info">
-                                <span className="label">Email</span>
+                                <span className="label">{t.email}</span>
                                 <span className="value">{profile?.email ?? 'hello@work.com'}</span>
                               </div>
 
@@ -1447,7 +1592,7 @@ export default function AccountPage() {
                               </div>
                             </div>
 
-                            <div className="wallet-balance-label">Total Balance</div>
+                            <div className="wallet-balance-label">{t.totalBalance}</div>
 
                             <div
                               className={`eye-icon-wrapper ${
@@ -1489,7 +1634,7 @@ export default function AccountPage() {
                             </div>
 
                             <span className="wallet-hover-hint">
-                              {showWalletBalance ? 'Tap to hide balance' : 'Tap to view balance'}
+                              {showWalletBalance ? t.tapToHideBalance : t.tapToViewBalance}
                             </span>
                           </div>
                         </div>
@@ -1499,9 +1644,9 @@ export default function AccountPage() {
                 </div>
 
                 <section className="mt-8">
-                  <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="grid gap-4 lg:grid-cols-2">
                     <Link
-                      href="/account/wallet"
+                      href={buildLocalizedHref('/account/wallet')}
                       className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)]"
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -1514,11 +1659,13 @@ export default function AccountPage() {
                         </div>
                       </div>
 
-                      <h3 className="mt-5 text-lg font-bold text-gray-900">Add Balance</h3>
+                      <h3 className="mt-5 text-lg font-bold text-gray-900">
+                        {t.addBalance}
+                      </h3>
                     </Link>
 
                     <Link
-                      href="/account/reservations"
+                      href={buildLocalizedHref('/account/reservations')}
                       className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)]"
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -1531,27 +1678,65 @@ export default function AccountPage() {
                         </div>
                       </div>
 
-                      <h3 className="mt-5 text-lg font-bold text-gray-900">Reservations</h3>
+                      <h3 className="mt-5 text-lg font-bold text-gray-900">
+                        {t.reservations}
+                      </h3>
                     </Link>
 
-                    <Link
-                      href="/account/referrals"
-                      className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)]"
-                    >
+                    <div className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] lg:col-span-2">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff]">
-                          <img
-                            src="https://i.ibb.co/67crQTMN/envelope.png"
-                            alt="Referrals and Invitations icon"
-                            className="account-menu-icon"
-                          />
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.9}
+                            stroke="currentColor"
+                            className="account-menu-icon text-[#054aff]"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="m10.5 21 5.25-11.25L21 21m-9-3h7.5M3 5.25h12M9 3v2.25m1.048 9.223A18.022 18.022 0 0 1 6.412 9m6.088 0h3m-10.5 0H3m3.412 0A18.022 18.022 0 0 0 12 16.5"
+                            />
+                          </svg>
                         </div>
                       </div>
 
-                      <h3 className="mt-5 text-lg font-bold text-gray-900">
-                        Referrals and Invitations
-                      </h3>
-                    </Link>
+                      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">
+                            {t.language}
+                          </h3>
+                          <p className="mt-1 text-sm font-medium text-gray-500">
+                            {t.currentLanguage}:{' '}
+                            {language === 'ar' ? t.arabic : t.english}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleLanguageChange('en')}
+                            className={`language-pill ${
+                              language === 'en' ? 'is-active' : ''
+                            }`}
+                          >
+                            {t.english}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleLanguageChange('ar')}
+                            className={`language-pill ${
+                              language === 'ar' ? 'is-active' : ''
+                            }`}
+                          >
+                            {t.arabic}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </section>
               </div>
@@ -1564,12 +1749,12 @@ export default function AccountPage() {
             <div className="footer-esaf-top">
               <div className="footer-esaf-top-left">
                 <h2 className={`${squadaOne.className} footer-esaf-title`}>
-                  Find your way to better student living
+                  {t.footerTitle}
                 </h2>
               </div>
 
               <div>
-                <h3 className="footer-esaf-heading">Quick Links</h3>
+                <h3 className="footer-esaf-heading">{t.quickLinks}</h3>
                 <div className="footer-esaf-links">
                   {footerQuickLinks.map((item) => (
                     <Link key={item.label} href={item.href} className="footer-esaf-link">
@@ -1580,7 +1765,7 @@ export default function AccountPage() {
               </div>
 
               <div>
-                <h3 className="footer-esaf-heading">Contact Us</h3>
+                <h3 className="footer-esaf-heading">{t.contactUs}</h3>
                 <a href="mailto:info@navienty.com" className="footer-esaf-email">
                   info@navienty.com
                 </a>
@@ -1589,7 +1774,7 @@ export default function AccountPage() {
 
             <div className="footer-esaf-bottom">
               <p className="footer-esaf-copyright">
-                © {currentYear} Navienty | All rights reserved.
+                © {currentYear} Navienty | {t.copyright}
               </p>
             </div>
           </div>
@@ -1609,7 +1794,7 @@ export default function AccountPage() {
                 <circle cx="11" cy="11" r="6.5" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 16l4 4" />
               </svg>
-              <span className="mobile-bottom-nav__label">Search</span>
+              <span className="mobile-bottom-nav__label">{t.search}</span>
             </Link>
 
             <Link href={communityHref} className="mobile-bottom-nav__item">
@@ -1618,10 +1803,13 @@ export default function AccountPage() {
                 alt="Community"
                 className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
               />
-              <span className="mobile-bottom-nav__label">Community</span>
+              <span className="mobile-bottom-nav__label">{t.community}</span>
             </Link>
 
-            <Link href={accountHref} className="mobile-bottom-nav__item mobile-bottom-nav__item--active">
+            <Link
+              href={accountHref}
+              className="mobile-bottom-nav__item mobile-bottom-nav__item--active"
+            >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -1641,7 +1829,7 @@ export default function AccountPage() {
                   d="M4.5 19.125a7.5 7.5 0 0 1 15 0"
                 />
               </svg>
-              <span className="mobile-bottom-nav__label">Account</span>
+              <span className="mobile-bottom-nav__label">{t.account}</span>
             </Link>
           </div>
         </nav>

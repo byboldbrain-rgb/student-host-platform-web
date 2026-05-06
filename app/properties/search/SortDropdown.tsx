@@ -20,6 +20,10 @@ type SortDropdownProps = {
   isArabic: boolean
   selectedSort: SupportedSort
   sortByLabel: string
+  genderLabel?: string
+  showResultsLabel?: string
+  clearAllLabel?: string
+  closeLabel?: string
   options: SortOption[]
 }
 
@@ -205,6 +209,10 @@ export default function SortDropdown({
   isArabic,
   selectedSort,
   sortByLabel,
+  genderLabel,
+  showResultsLabel,
+  clearAllLabel,
+  closeLabel,
   options,
 }: SortDropdownProps) {
   const router = useRouter()
@@ -213,6 +221,14 @@ export default function SortDropdown({
 
   const [isOpen, setIsOpen] = useState(false)
   const groupedOptions = useMemo(() => buildSectionedOptions(options), [options])
+
+  const labels = {
+    gender: genderLabel ?? (isArabic ? 'النوع' : 'Gender'),
+    sortBy: sortByLabel ?? (isArabic ? 'ترتيب حسب' : 'Sort by'),
+    clearAll: clearAllLabel ?? (isArabic ? 'مسح الكل' : 'Clear all'),
+    showResults: showResultsLabel ?? (isArabic ? 'عرض النتائج' : 'Show results'),
+    close: closeLabel ?? (isArabic ? 'إغلاق' : 'Close'),
+  }
 
   const genderParamKeys = useMemo(
     () => getParamKeys(groupedOptions.gender),
@@ -287,11 +303,6 @@ export default function SortDropdown({
     }
   }, [isOpen, currentGenderOption, currentSortOption])
 
-  const genderTitle = isArabic ? 'Gender' : 'Gender'
-  const sortSectionTitle = isArabic ? 'Sort by' : 'Sort by'
-  const clearAllLabel = isArabic ? 'Clear all' : 'Clear all'
-  const showResultsLabel = isArabic ? 'Show results' : 'Show results'
-
   const selectedGenderOption =
     groupedOptions.gender.find((option) => option.value === tempSelectedGender) ??
     null
@@ -328,10 +339,10 @@ export default function SortDropdown({
         onClick={() => setIsOpen(true)}
         dir={isArabic ? 'rtl' : 'ltr'}
         className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white p-0 text-[#222222] transition hover:shadow-sm md:h-[48px] md:w-auto md:gap-2 md:px-5"
-        aria-label={sortByLabel}
+        aria-label={labels.sortBy}
       >
         <FilterIcon />
-        <span className="hidden md:inline">{sortByLabel}</span>
+        <span className="hidden md:inline">{labels.sortBy}</span>
       </button>
 
       {isOpen && (
@@ -350,7 +361,7 @@ export default function SortDropdown({
           >
             <div className="relative flex h-[72px] shrink-0 items-center justify-center border-b border-[#ebebeb] px-5 sm:h-[76px] sm:px-6">
               <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222]">
-                {sortByLabel}
+                {labels.sortBy}
               </h3>
 
               <button
@@ -359,7 +370,7 @@ export default function SortDropdown({
                 className={`absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-[#222222] transition hover:bg-[#f7f7f7] ${
                   isArabic ? 'left-5 sm:left-6' : 'right-5 sm:right-6'
                 }`}
-                aria-label={isArabic ? 'إغلاق' : 'Close'}
+                aria-label={labels.close}
               >
                 <CloseIcon />
               </button>
@@ -368,7 +379,7 @@ export default function SortDropdown({
             <div className="overflow-y-auto px-5 py-6 sm:flex-1 sm:px-7 sm:py-7">
               <section className="border-b border-[#ebebeb] pb-7">
                 <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
-                  {genderTitle}
+                  {labels.gender}
                 </h4>
 
                 <div className="grid grid-cols-2 gap-4 sm:max-w-[360px]">
@@ -387,7 +398,7 @@ export default function SortDropdown({
 
               <section className="pt-7">
                 <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
-                  {sortSectionTitle}
+                  {labels.sortBy}
                 </h4>
 
                 <div className="rounded-[22px] border border-[#dddddd] bg-white p-[6px]">
@@ -424,7 +435,7 @@ export default function SortDropdown({
                   onClick={handleClearAll}
                   className="text-[14px] font-semibold text-[#8d8d8d] transition hover:text-[#0A46FF] sm:text-[15px]"
                 >
-                  {clearAllLabel}
+                  {labels.clearAll}
                 </button>
 
                 <button
@@ -432,7 +443,7 @@ export default function SortDropdown({
                   onClick={handleShowResults}
                   className="inline-flex h-[54px] min-w-[170px] items-center justify-center rounded-[16px] bg-[#0A46FF] px-5 text-[14px] font-semibold text-white transition hover:bg-[#0838cc] sm:h-[56px] sm:min-w-[210px] sm:px-6 sm:text-[15px]"
                 >
-                  {showResultsLabel}
+                  {labels.showResults}
                 </button>
               </div>
             </div>

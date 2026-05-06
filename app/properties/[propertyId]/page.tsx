@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 import { notFound } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import { createClient } from '../../../src/lib/supabase/server'
@@ -8,6 +7,8 @@ import DesktopPropertyGallery from './DesktopPropertyGallery'
 import MobilePropertySlider from './MobilePropertySlider'
 import PropertyAmenitiesSection from './PropertyAmenitiesSection'
 import PropertyEnquireButton from './PropertyEnquireButton'
+import './property-page.css'
+import PwaInstallBanner from '../../components/PwaInstallBanner'
 
 const squadaOne = Squada_One({
   subsets: ['latin'],
@@ -27,6 +28,7 @@ type SearchParams = {
   rental_duration?: string
   city_id?: string
   university_id?: string
+  area_id?: string
   price_range?: string
   lang?: string
   currency?: string
@@ -43,6 +45,20 @@ type University = {
   name_en: string
   name_ar: string
   city_id: string | number
+}
+
+type PropertyArea = {
+  id: string | number
+  city_id: string | number
+  name_en: string
+  name_ar?: string | null
+  is_active?: boolean | null
+}
+
+type UniversityArea = {
+  id?: string | number
+  university_id: string | number
+  area_id: string | number
 }
 
 type PropertyImage = {
@@ -137,8 +153,11 @@ type Property = {
   address_en?: string | null
   address_ar?: string | null
   broker_id?: string | null
+  city_id?: string | null
   university_id?: string | null
+  area_id?: string | null
   price_egp?: number | string | null
+  floor_number?: number | string | null
   rental_duration?: 'daily' | 'monthly' | null
   availability_status?:
     | 'available'
@@ -146,6 +165,7 @@ type Property = {
     | 'fully_reserved'
     | 'inactive'
     | null
+  gender?: 'boys' | 'girls' | string | null
   bedrooms_count?: number | null
   bathrooms_count?: number | null
   beds_count?: number | null
@@ -160,9 +180,12 @@ type SimilarProperty = {
   title_ar?: string | null
   address_en?: string | null
   address_ar?: string | null
+  city_id?: string | null
   university_id?: string | null
+  area_id?: string | null
   price_egp?: number | string | null
   rental_duration?: 'daily' | 'monthly' | null
+  gender?: 'boys' | 'girls' | string | null
   property_images?: PropertyImage[]
 }
 
@@ -226,6 +249,7 @@ const SUPPORTED_CURRENCIES = [
 
 type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
 type SupportedLanguage = 'en' | 'ar'
+type NormalizedGender = 'boys' | 'girls' | null
 
 const TRANSLATIONS = {
   en: {
@@ -255,9 +279,12 @@ const TRANSLATIONS = {
     rooms: 'Rooms',
     availableRooms: 'Available Rooms',
     enquire: 'Enquire',
+    book: 'Enquire',
     booked: 'Booked',
     noRooms: 'No rooms available for this property.',
     apartmentDetails: 'Apartment details',
+    floorNumber: 'Floor',
+    groundFloor: 'Ground floor',
     bedroomsCount: 'Bedrooms',
     bathroomsCount: 'Bathrooms',
     bedsCount: 'Beds',
@@ -277,6 +304,8 @@ const TRANSLATIONS = {
     roomStatusFull: 'Fully reserved',
     roomStatusInactive: 'Inactive',
     reserved: 'Reserved',
+    boysMeta: 'Boys only',
+    girlsMeta: 'Girls only',
     totalBeds: 'Total beds',
     availableBeds: 'Available beds',
     reservedBeds: 'Reserved beds',
@@ -292,15 +321,20 @@ const TRANSLATIONS = {
     stayOptions: 'Available Options',
     city: 'City',
     university: 'University',
+    area: 'Area',
     duration: 'Duration',
     searchCities: 'Search cities',
+    searchAreas: 'Search areas',
     chooseUniversity: 'Choose university',
+    chooseArea: 'Choose area',
     chooseDuration: 'Choose duration',
     selectCity: 'Select city',
     selectUniversity: 'Select university',
+    selectArea: 'Select area',
     selectDuration: 'Select duration',
     anyCity: 'Any city',
     anyUniversity: 'Any university',
+    anyArea: 'Any area',
     anyDuration: 'Any duration',
     daily: 'Daily',
     monthly: 'Monthly',
@@ -326,6 +360,7 @@ const TRANSLATIONS = {
     community: 'Community',
     account: 'Account',
     mobileLogin: 'Log in',
+    selectYourRoom: 'Select Your Room',
     copyright: `© ${new Date().getFullYear()} Navienty | All rights reserved.`,
   },
   ar: {
@@ -354,10 +389,12 @@ const TRANSLATIONS = {
     perDay: '/يوم',
     rooms: 'الغرف',
     availableRooms: 'الغرف المتاحة',
-    enquire: 'استفسر',
+    book: 'احجز',
     booked: 'محجوز',
     noRooms: 'لا توجد غرف متاحة لهذا العقار.',
     apartmentDetails: 'بيانات الشقة',
+    floorNumber: 'الدور',
+    groundFloor: 'الدور الأرضي',
     bedroomsCount: 'عدد الغرف',
     bathroomsCount: 'عدد الحمامات',
     bedsCount: 'عدد السراير',
@@ -377,6 +414,8 @@ const TRANSLATIONS = {
     roomStatusFull: 'محجوزة بالكامل',
     roomStatusInactive: 'غير نشطة',
     reserved: 'محجوز',
+    boysMeta: 'ولاد فقط',
+    girlsMeta: 'بنات فقط',
     totalBeds: 'إجمالي السراير',
     availableBeds: 'السراير المتاحة',
     reservedBeds: 'السراير المحجوزة',
@@ -392,15 +431,20 @@ const TRANSLATIONS = {
     stayOptions: 'خيارات السكن',
     city: 'المدينة',
     university: 'الجامعة',
+    area: 'المنطقة',
     duration: 'المدة',
     searchCities: 'ابحث عن مدينة',
+    searchAreas: 'ابحث عن منطقة',
     chooseUniversity: 'اختر الجامعة',
+    chooseArea: 'اختر المنطقة',
     chooseDuration: 'اختر المدة',
     selectCity: 'اختر المدينة',
     selectUniversity: 'اختر الجامعة',
+    selectArea: 'اختر المنطقة',
     selectDuration: 'اختر المدة',
     anyCity: 'أي مدينة',
     anyUniversity: 'أي جامعة',
+    anyArea: 'أي منطقة',
     anyDuration: 'أي مدة',
     daily: 'يومي',
     monthly: 'شهري',
@@ -425,9 +469,10 @@ const TRANSLATIONS = {
     contactUs: 'تواصل معنا',
     footerEmail: 'info@navienty.com',
     explore: 'استكشاف',
-    community: 'Community',
+    community: 'المجتمع',
     account: 'الحساب',
     mobileLogin: 'تسجيل الدخول',
+    selectYourRoom: 'اختر غرفتك',
     copyright: `© ${new Date().getFullYear()} نافينتي | جميع الحقوق محفوظة.`,
   },
 } as const
@@ -441,6 +486,15 @@ function normalizeCurrency(value?: string): SupportedCurrency {
   return SUPPORTED_CURRENCIES.includes(upper as SupportedCurrency)
     ? (upper as SupportedCurrency)
     : 'EGP'
+}
+
+function normalizeGender(value?: string | null): NormalizedGender {
+  const normalized = value?.toLowerCase().trim()
+
+  if (normalized === 'boys') return 'boys'
+  if (normalized === 'girls') return 'girls'
+
+  return null
 }
 
 function cleanPhone(value?: string | null) {
@@ -500,6 +554,19 @@ function formatCountLabel({
   plural: string
 }) {
   return `${value} ${value === 1 ? singular : plural}`
+}
+
+function formatFloorLabel({
+  value,
+  language,
+  t,
+}: {
+  value: number
+  language: SupportedLanguage
+  t: (typeof TRANSLATIONS)['en'] | (typeof TRANSLATIONS)['ar']
+}) {
+  if (value === 0) return t.groundFloor
+  return language === 'ar' ? `${t.floorNumber} ${value}` : `${t.floorNumber} ${value}`
 }
 
 function getDisplayOptionLabel(
@@ -733,17 +800,29 @@ function PropertyAddress({
   )
 }
 
-function FullyReservedBadge({
-  label = 'Reserved',
+function GenderMeta({
+  gender,
+  language,
   className = '',
+  showDot = true,
 }: {
-  label?: string
+  gender?: string | null
+  language: SupportedLanguage
   className?: string
+  showDot?: boolean
 }) {
+  const normalizedGender = normalizeGender(gender)
+
+  if (!normalizedGender) return null
+
+  const label =
+    normalizedGender === 'boys'
+      ? TRANSLATIONS[language].boysMeta
+      : TRANSLATIONS[language].girlsMeta
+
   return (
-    <span
-      className={`inline-flex items-center justify-center rounded-full px-2 py-1 md:px-2.5 md:py-1 text-[10px] md:text-[11px] font-semibold shadow-sm border bg-red-100 text-red-700 border-red-200 ${className}`}
-    >
+    <span className={`property-meta-gender ${className}`}>
+      {showDot && <span className="property-meta-dot" />}
       {label}
     </span>
   )
@@ -779,36 +858,12 @@ function WhatsAppIcon() {
   )
 }
 
-function MailIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path
-        d="M4 6h16v12H4z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m4 7 8 6 8-6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 function BrokerContactCard({
   brokerName,
   brokerImage,
   brokerPhone,
   brokerWhatsapp,
   t,
-  isArabic,
 }: {
   brokerName: string
   brokerCompany?: string | null
@@ -827,7 +882,7 @@ function BrokerContactCard({
     .toLowerCase()}`
 
   return (
-    <div className="broker-card-scene">
+    <div className="broker-card-scene" dir="ltr">
       <input
         id={flipId}
         type="checkbox"
@@ -848,11 +903,7 @@ function BrokerContactCard({
             }}
           >
             <div className="broker-card-front-overlay">
-              <div
-                className={`broker-card-top-info absolute top-3 ${
-                  isArabic ? 'right-4 broker-card-top-info--rtl' : 'left-4'
-                }`}
-              >
+              <div className="broker-card-top-info absolute left-4 top-3">
                 <div className="broker-card-avatar broker-card-avatar--large">
                   <img
                     src={brokerImage}
@@ -866,14 +917,10 @@ function BrokerContactCard({
                 </div>
               </div>
 
-              <div
-                className={`absolute top-1/2 ${
-                  isArabic ? 'right-4 text-right' : 'right-4 text-left'
-                } transform -translate-y-1/2`}
-              >
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-left">
                 <div className="flex flex-col gap-3">
                   {cleanedPhone && (
-                    <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
+                    <div className="flex flex-row items-center gap-2 rounded-xl bg-white/90 px-4 py-2 shadow-md backdrop-blur">
                       <PhoneIcon />
                       <span className="font-semibold text-sm text-gray-800">
                         {cleanedPhone}
@@ -882,7 +929,7 @@ function BrokerContactCard({
                   )}
 
                   {cleanedWhatsapp && (
-                    <div className="flex items-center gap-2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-md">
+                    <div className="flex flex-row items-center gap-2 rounded-xl bg-white/90 px-4 py-2 shadow-md backdrop-blur">
                       <WhatsAppIcon />
                       <span className="font-semibold text-sm text-gray-800">
                         {cleanedWhatsapp}
@@ -901,17 +948,8 @@ function BrokerContactCard({
             }}
           >
             <div className="broker-card-back-overlay">
-              <div
-                className={`broker-card-back-top ${
-                  isArabic ? 'broker-card-back-top--rtl' : ''
-                }`}
-              ></div>
-
-              <div
-                className={`broker-card-back-actions ${
-                  isArabic ? 'broker-card-back-actions--rtl' : ''
-                }`}
-              ></div>
+              <div className="broker-card-back-top" />
+              <div className="broker-card-back-actions" />
             </div>
           </div>
         </div>
@@ -932,6 +970,7 @@ export default async function PropertyPage({
     rental_duration,
     city_id,
     university_id,
+    area_id,
     price_range,
     lang,
     currency,
@@ -961,6 +1000,17 @@ export default async function PropertyPage({
     .select('id, name_en, name_ar, city_id')
     .order('name_en', { ascending: true })
 
+  const { data: areas } = await supabase
+    .from('property_areas')
+    .select('id, city_id, name_en, name_ar, is_active')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name_en', { ascending: true })
+
+  const { data: universityAreas } = await supabase
+    .from('university_property_areas')
+    .select('id, university_id, area_id')
+
   const { data: property, error } = await supabase
     .from('properties')
     .select(`
@@ -971,10 +1021,14 @@ export default async function PropertyPage({
       address_en,
       address_ar,
       broker_id,
+      city_id,
       university_id,
+      area_id,
       price_egp,
+      floor_number,
       rental_duration,
       availability_status,
+      gender,
       bedrooms_count,
       bathrooms_count,
       beds_count,
@@ -1004,11 +1058,16 @@ export default async function PropertyPage({
     const params = new URLSearchParams()
 
     if (rental_duration) params.set('rental_duration', rental_duration)
-    if (city_id) params.set('city_id', city_id)
+    if (city_id || typedProperty.city_id) {
+      params.set('city_id', city_id || String(typedProperty.city_id))
+    }
     if (typedProperty.university_id) {
       params.set('university_id', String(typedProperty.university_id))
     } else if (university_id) {
       params.set('university_id', university_id)
+    }
+    if (area_id || typedProperty.area_id) {
+      params.set('area_id', area_id || String(typedProperty.area_id))
     }
     if (price_range) params.set('price_range', price_range)
     params.set('lang', selectedLanguage)
@@ -1181,11 +1240,9 @@ export default async function PropertyPage({
     ])
   )
 
-  const hasAnyActiveRoomReservation = Array.from(roomOccupancyByRoomId.values()).some(
-    (roomState) => roomState.blocksEntireProperty
-  )
-
-  let offers: PropertyOfferItem[] = []
+  const hasAnyActiveRoomReservation = Array.from(
+    roomOccupancyByRoomId.values()
+  ).some((roomState) => roomState.blocksEntireProperty)
 
   const [
     allAmenitiesResponse,
@@ -1318,11 +1375,13 @@ export default async function PropertyPage({
       }))
     : []
 
-  offers = [...amenityItems, ...facilityItems, ...billItems].sort((a, b) => {
-    const categoryA = `${a.category_en || ''}-${a.sort_order ?? 0}-${a.name_en || ''}`
-    const categoryB = `${b.category_en || ''}-${b.sort_order ?? 0}-${b.name_en || ''}`
-    return categoryA.localeCompare(categoryB)
-  })
+  const offers = [...amenityItems, ...facilityItems, ...billItems].sort(
+    (a, b) => {
+      const categoryA = `${a.category_en || ''}-${a.sort_order ?? 0}-${a.name_en || ''}`
+      const categoryB = `${b.category_en || ''}-${b.sort_order ?? 0}-${b.name_en || ''}`
+      return categoryA.localeCompare(categoryB)
+    }
+  )
 
   let similarProperties: SimilarProperty[] = []
 
@@ -1336,9 +1395,12 @@ export default async function PropertyPage({
         title_ar,
         address_en,
         address_ar,
+        city_id,
         university_id,
+        area_id,
         price_egp,
         rental_duration,
+        gender,
         property_images (
           image_url,
           is_cover,
@@ -1390,20 +1452,28 @@ export default async function PropertyPage({
         : rental_duration
 
     const nextCityId = updates.city_id !== undefined ? updates.city_id : city_id
+
     const nextUniversityId =
       updates.university_id !== undefined
         ? updates.university_id
         : university_id
+
+    const nextAreaId =
+      updates.area_id !== undefined ? updates.area_id : area_id
+
     const nextPriceRange =
       updates.price_range !== undefined ? updates.price_range : price_range
+
     const nextLang =
       updates.lang !== undefined ? updates.lang : selectedLanguage
+
     const nextCurrency =
       updates.currency !== undefined ? updates.currency : selectedCurrency
 
     if (nextRentalDuration) params.set('rental_duration', nextRentalDuration)
     if (nextCityId) params.set('city_id', nextCityId)
     if (nextUniversityId) params.set('university_id', nextUniversityId)
+    if (nextAreaId) params.set('area_id', nextAreaId)
     if (nextPriceRange) params.set('price_range', nextPriceRange)
     if (nextLang) params.set('lang', nextLang)
     if (nextCurrency) params.set('currency', nextCurrency)
@@ -1422,18 +1492,26 @@ export default async function PropertyPage({
       )
     }
 
-    if (city_id) params.set('city_id', city_id)
+    if (city_id || typedProperty.city_id) {
+      params.set('city_id', city_id || String(typedProperty.city_id))
+    }
+
     if (typedProperty.university_id) {
       params.set('university_id', String(typedProperty.university_id))
     } else if (university_id) {
       params.set('university_id', university_id)
     }
+
+    if (area_id || typedProperty.area_id) {
+      params.set('area_id', area_id || String(typedProperty.area_id))
+    }
+
     if (price_range) params.set('price_range', price_range)
     params.set('lang', selectedLanguage)
     params.set('currency', selectedCurrency)
 
     const queryString = params.toString()
-    return queryString ? `/search?${queryString}` : '/search'
+    return queryString ? `/properties/search?${queryString}` : '/properties/search'
   }
 
   const buildSimpleNavLink = (
@@ -1450,8 +1528,11 @@ export default async function PropertyPage({
   const searchBarProps = {
     cities: (cities as City[]) ?? [],
     universities: (universities as University[]) ?? [],
+    areas: (areas as PropertyArea[]) ?? [],
+    universityAreas: (universityAreas as UniversityArea[]) ?? [],
     initialCityId: city_id ?? '',
     initialUniversityId: university_id ?? '',
+    initialAreaId: area_id ?? '',
     initialRentalDuration: rental_duration ?? '',
     initialPriceRange: price_range ?? '',
     language: selectedLanguage,
@@ -1459,15 +1540,20 @@ export default async function PropertyPage({
     labels: {
       city: t.city,
       university: t.university,
+      area: t.area,
       duration: t.duration,
       searchCities: t.searchCities,
+      searchAreas: t.searchAreas,
       chooseUniversity: t.chooseUniversity,
+      chooseArea: t.chooseArea,
       chooseDuration: t.chooseDuration,
       selectCity: t.selectCity,
       selectUniversity: t.selectUniversity,
+      selectArea: t.selectArea,
       selectDuration: t.selectDuration,
       anyCity: t.anyCity,
       anyUniversity: t.anyUniversity,
+      anyArea: t.anyArea,
       anyDuration: t.anyDuration,
       daily: t.daily,
       monthly: t.monthly,
@@ -1479,7 +1565,7 @@ export default async function PropertyPage({
       label: isSignedIn ? t.account : t.login,
       href: isSignedIn
         ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/login'),
+        : buildSimpleNavLink('/account-login'),
     },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
@@ -1503,7 +1589,7 @@ export default async function PropertyPage({
 
   const mobileAccountHref = isSignedIn
     ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/login')
+    : buildSimpleNavLink('/account-login')
 
   const mobileAccountLabel = isSignedIn ? t.account : t.mobileLogin
 
@@ -1528,8 +1614,14 @@ export default async function PropertyPage({
   const bedroomsCount = getCountValue(typedProperty.bedrooms_count)
   const bedsCount = getCountValue(typedProperty.beds_count)
   const bathroomsCount = getCountValue(typedProperty.bathrooms_count)
+  const floorNumber = getCountValue(typedProperty.floor_number)
 
   const apartmentSummaryItems = [
+    formatFloorLabel({
+      value: floorNumber,
+      language: selectedLanguage,
+      t,
+    }),
     formatCountLabel({
       value: guestsCount,
       singular: t.guest,
@@ -1554,134 +1646,68 @@ export default async function PropertyPage({
 
   const apartmentSummaryText = apartmentSummaryItems.join(' · ')
 
-  const availableTriplePrice =
-    rooms
-      .filter((room) =>
-        isRoomAvailableForOption(
-          room,
-          'triple_room',
-          roomOccupancyByRoomId.get(room.id) || {
-            roomId: room.id,
-            lockedMode: null,
-            activeReservationsCount: 0,
-            maxCapacity: 0,
-            hasAvailability: false,
-            blocksEntireProperty: false,
-          }
-        )
-      )
-      .map((room) =>
-        getMinimumActiveOptionPrice(room.room_sellable_options || [], 'triple_room')
-      )
-      .filter((price): price is number => price !== null)
-      .sort((a, b) => a - b)[0] ?? null
+  const tripleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
+    rooms,
+    'triple_room'
+  )
 
-  const availableDoublePrice =
-    rooms
-      .filter((room) =>
-        isRoomAvailableForOption(
-          room,
-          'double_room',
-          roomOccupancyByRoomId.get(room.id) || {
-            roomId: room.id,
-            lockedMode: null,
-            activeReservationsCount: 0,
-            maxCapacity: 0,
-            hasAvailability: false,
-            blocksEntireProperty: false,
-          }
-        )
-      )
-      .map((room) =>
-        getMinimumActiveOptionPrice(room.room_sellable_options || [], 'double_room')
-      )
-      .filter((price): price is number => price !== null)
-      .sort((a, b) => a - b)[0] ?? null
+  const doubleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
+    rooms,
+    'double_room'
+  )
 
-  const availableSinglePrice =
-    rooms
-      .filter((room) =>
-        isRoomAvailableForOption(
-          room,
-          'single_room',
-          roomOccupancyByRoomId.get(room.id) || {
-            roomId: room.id,
-            lockedMode: null,
-            activeReservationsCount: 0,
-            maxCapacity: 0,
-            hasAvailability: false,
-            blocksEntireProperty: false,
-          }
-        )
-      )
-      .map((room) =>
-        getMinimumActiveOptionPrice(room.room_sellable_options || [], 'single_room')
-      )
-      .filter((price): price is number => price !== null)
-      .sort((a, b) => a - b)[0] ?? null
+  const singleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
+    rooms,
+    'single_room'
+  )
 
-    const tripleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
-      rooms,
-      'triple_room'
+  const hasAvailableTriple = rooms.some((room) =>
+    isRoomAvailableForOption(
+      room,
+      'triple_room',
+      roomOccupancyByRoomId.get(room.id) || {
+        roomId: room.id,
+        lockedMode: null,
+        activeReservationsCount: 0,
+        maxCapacity: 0,
+        hasAvailability: false,
+        blocksEntireProperty: false,
+      }
     )
+  )
 
-    const doubleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
-      rooms,
-      'double_room'
+  const hasAvailableDouble = rooms.some((room) =>
+    isRoomAvailableForOption(
+      room,
+      'double_room',
+      roomOccupancyByRoomId.get(room.id) || {
+        roomId: room.id,
+        lockedMode: null,
+        activeReservationsCount: 0,
+        maxCapacity: 0,
+        hasAvailability: false,
+        blocksEntireProperty: false,
+      }
     )
+  )
 
-    const singleDisplayPrice = getMinimumActiveOptionPriceAcrossRooms(
-      rooms,
-      'single_room'
+  const hasAvailableSingle = rooms.some((room) =>
+    isRoomAvailableForOption(
+      room,
+      'single_room',
+      roomOccupancyByRoomId.get(room.id) || {
+        roomId: room.id,
+        lockedMode: null,
+        activeReservationsCount: 0,
+        maxCapacity: 0,
+        hasAvailability: false,
+        blocksEntireProperty: false,
+      }
     )
-
-    const hasAvailableTriple = rooms.some((room) =>
-      isRoomAvailableForOption(
-        room,
-        'triple_room',
-        roomOccupancyByRoomId.get(room.id) || {
-          roomId: room.id,
-          lockedMode: null,
-          activeReservationsCount: 0,
-          maxCapacity: 0,
-          hasAvailability: false,
-          blocksEntireProperty: false,
-        }
-      )
-    )
-
-    const hasAvailableDouble = rooms.some((room) =>
-      isRoomAvailableForOption(
-        room,
-        'double_room',
-        roomOccupancyByRoomId.get(room.id) || {
-          roomId: room.id,
-          lockedMode: null,
-          activeReservationsCount: 0,
-          maxCapacity: 0,
-          hasAvailability: false,
-          blocksEntireProperty: false,
-        }
-      )
-    )
-
-    const hasAvailableSingle = rooms.some((room) =>
-      isRoomAvailableForOption(
-        room,
-        'single_room',
-        roomOccupancyByRoomId.get(room.id) || {
-          roomId: room.id,
-          lockedMode: null,
-          activeReservationsCount: 0,
-          maxCapacity: 0,
-          hasAvailability: false,
-          blocksEntireProperty: false,
-        }
-      )
-    )
+  )
 
   const optionCards: DisplayOption[] = [
-        {
+    {
       code: 'triple_room',
       label: getDisplayOptionLabel('triple_room', t),
       price: tripleDisplayPrice,
@@ -1699,7 +1725,6 @@ export default async function PropertyPage({
       price: singleDisplayPrice,
       isBooked: !hasAvailableSingle,
     },
- 
     {
       code: 'full_apartment',
       label: getDisplayOptionLabel('full_apartment', t),
@@ -1716,9 +1741,11 @@ export default async function PropertyPage({
 
   return (
     <main
+
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-32 text-gray-700 md:pb-0"
     >
+       <PwaInstallBanner />
       <input
         id="nav-menu-toggle"
         type="checkbox"
@@ -1732,1377 +1759,6 @@ export default async function PropertyPage({
         className="mobile-rooms-toggle sr-only"
         aria-hidden="true"
       />
-
-      <style>{`
-        :root {
-          --menu-blue: #054aff;
-          --menu-cream: #f2ead8;
-          --menu-cream-soft: rgba(242, 234, 216, 0.92);
-        }
-
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-
-        .property-address {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 100%;
-  width: fit-content;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: rgba(248, 250, 252, 0.88);
-  color: #334155;
-  border-radius: 999px;
-  padding: 8px 14px 8px 10px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.property-address--rtl {
-  flex-direction: row-reverse;
-  padding: 8px 10px 8px 14px;
-}
-
-.property-address__icon-wrap {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 5px 14px rgba(5, 74, 255, 0.12);
-}
-
-.property-address__icon {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-  display: block;
-}
-
-.property-address__text {
-  min-width: 0;
-  max-width: 720px;
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 600;
-  color: #334155;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.property-address--compact {
-  gap: 7px;
-  padding: 6px 10px 6px 7px;
-  box-shadow: none;
-  background: rgba(248, 250, 252, 0.72);
-}
-
-.property-address--compact.property-address--rtl {
-  padding: 6px 7px 6px 10px;
-}
-
-.property-address--compact .property-address__icon-wrap {
-  width: 24px;
-  height: 24px;
-  flex-basis: 24px;
-  box-shadow: none;
-}
-
-.property-address--compact .property-address__icon {
-  width: 17px;
-  height: 17px;
-}
-
-.property-address--compact .property-address__text {
-  max-width: 220px;
-  font-size: 12px;
-  line-height: 1.35;
-  font-weight: 600;
-  -webkit-line-clamp: 1;
-}
-
-.property-address--mobile {
-  width: 100%;
-  justify-content: center;
-  border-radius: 22px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.property-address--mobile .property-address__icon-wrap {
-  width: 34px;
-  height: 34px;
-  flex-basis: 34px;
-}
-
-.property-address--mobile .property-address__icon {
-  width: 24px;
-  height: 24px;
-}
-
-.property-address--mobile .property-address__text {
-  max-width: 280px;
-  text-align: start;
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 700;
-}
-
-.property-address--mobile.property-address--rtl .property-address__text {
-  text-align: right;
-}
-
-@media (max-width: 768px) {
-  .property-address {
-    gap: 9px;
-  }
-
-  .property-address__text {
-    font-size: 13px;
-  }
-}
-
-        .navienty-logo {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          overflow: hidden;
-          text-decoration: none;
-          transform: translateY(-7px);
-        }
-
-        .navienty-logo-icon {
-          width: 56px;
-          height: 56px;
-          object-fit: contain;
-          flex-shrink: 0;
-          display: block;
-        }
-
-        .navienty-logo-text-wrap {
-          max-width: 0;
-          opacity: 0;
-          overflow: hidden;
-          transform: translateX(-6px);
-          transition:
-            max-width 0.35s ease,
-            opacity 0.25s ease,
-            transform 0.35s ease;
-          display: flex;
-          align-items: center;
-        }
-
-        .navienty-logo:hover .navienty-logo-text-wrap,
-        .navienty-logo:focus-visible .navienty-logo-text-wrap {
-          max-width: 120px;
-          opacity: 1;
-          transform: translateX(0);
-        }
-
-        .navienty-logo-text {
-          width: 112px;
-          min-width: 112px;
-          height: auto;
-          object-fit: contain;
-          display: block;
-          transform: translateY(-2px);
-        }
-
-        .navienty-logo-mobile {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          text-decoration: none;
-        }
-
-        .navienty-logo-mobile img {
-          width: 42px;
-          height: 42px;
-          object-fit: contain;
-          display: block;
-        }
-
-        .menu-trigger {
-          width: 40px;
-          height: 40px;
-          background: transparent;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-
-        .menu-trigger:hover {
-          background: rgba(255, 255, 255, 0.08);
-        }
-
-        .menu-trigger-lines {
-          position: relative;
-          width: 26px;
-          height: 10px;
-          display: block;
-        }
-
-        .menu-trigger-lines span {
-          position: absolute;
-          left: 0;
-          width: 100%;
-          height: 2px;
-          background: #000000;
-          border-radius: 2px;
-        }
-
-        .menu-trigger-lines span:nth-child(1) {
-          top: 0;
-        }
-
-        .menu-trigger-lines span:nth-child(2) {
-          bottom: 0;
-        }
-
-        .mega-menu-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 140;
-          background: var(--menu-blue);
-          color: var(--menu-cream);
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transform: translateY(-8px);
-          transition:
-            opacity 0.26s ease,
-            visibility 0.26s ease,
-            transform 0.26s ease;
-        }
-
-        .peer:checked ~ .mega-menu-overlay {
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
-          transform: translateY(0);
-        }
-
-        .mega-menu-wrap {
-          position: relative;
-          min-height: 100dvh;
-          padding: 38px 56px 38px;
-        }
-
-        .mega-menu-top {
-          position: absolute;
-          left: 56px;
-          right: 56px;
-          top: 36px;
-          height: 56px;
-          z-index: 3;
-        }
-
-        .mega-menu-close {
-          position: absolute;
-          right: 0;
-          top: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 16px;
-          cursor: pointer;
-          color: var(--menu-cream);
-          font-size: 18px;
-          font-weight: 600;
-          text-decoration: none;
-          letter-spacing: -0.02em;
-          z-index: 5;
-        }
-
-        .mega-menu-close--rtl {
-          right: auto;
-          left: 0;
-          flex-direction: row-reverse;
-        }
-
-        .mega-menu-close-line {
-          width: 46px;
-          height: 2px;
-          border-radius: 999px;
-          background: currentColor;
-          display: inline-block;
-          transform: translateY(-1px);
-        }
-
-        .mega-menu-logo {
-          position: absolute;
-          left: 50%;
-          top: -60px;
-          transform: translateX(-50%);
-          z-index: 2;
-        }
-
-        .mega-menu-logo img {
-          width: 160px;
-          height: auto;
-          object-fit: contain;
-          display: block;
-        }
-
-        .mega-menu-body {
-          position: relative;
-          min-height: calc(100dvh - 76px);
-          padding-top: 100px;
-          width: 100%;
-          padding-left: 56px;
-          padding-right: 56px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .mega-menu-left {
-          position: absolute;
-          left: 56px;
-          bottom: 36px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          width: 220px;
-          min-width: 220px;
-          min-height: auto;
-        }
-
-        .mega-menu-left-spacer {
-          display: none;
-        }
-
-        .mega-menu-left-bottom {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 10px;
-          width: 100%;
-          padding-bottom: 0;
-        }
-
-        .mega-menu-small-link {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-size: 22px;
-          line-height: 1.28;
-          font-weight: 600;
-          letter-spacing: -0.03em;
-          display: block;
-          width: fit-content;
-        }
-
-        .mega-menu-small-link:hover {
-          opacity: 0.88;
-        }
-
-        .mega-menu-right {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          min-width: 0;
-          padding-top: 0;
-          transform: translateY(-100px);
-        }
-
-        .mega-menu-main-links {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 0;
-          width: 100%;
-          max-width: 900px;
-          text-align: center;
-        }
-
-        .mega-menu-main-link {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 64px;
-          line-height: 1.15;
-          letter-spacing: -0.075em;
-          display: block;
-          width: fit-content;
-        }
-
-        .mega-menu-main-link:hover {
-          opacity: 0.9;
-        }
-
-        .mega-menu-footer-links {
-          position: absolute;
-          right: 56px;
-          bottom: 12px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 10px;
-          max-width: 240px;
-          text-align: right;
-        }
-
-        .mega-menu-footer-links--rtl {
-          right: auto;
-          left: 56px;
-          align-items: flex-start;
-          text-align: left;
-        }
-
-        .mega-menu-footer-link {
-          color: rgba(242, 234, 216, 0.88);
-          text-decoration: none;
-          font-size: 18px;
-          line-height: 1.35;
-          font-weight: 500;
-          letter-spacing: -0.02em;
-          transition:
-            opacity 0.2s ease,
-            transform 0.2s ease,
-            color 0.2s ease;
-        }
-
-        .mega-menu-footer-link:hover {
-          opacity: 1;
-          color: var(--menu-cream);
-          transform: translateX(-2px);
-        }
-
-        .mega-menu-footer-link--email {
-          margin-top: 8px;
-          opacity: 0.76;
-          font-size: 16px;
-        }
-
-        .mobile-bottom-nav {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 120;
-          display: none;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
-        }
-
-        .mobile-bottom-nav__inner {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          align-items: center;
-          height: 64px;
-          padding: 0 8px;
-        }
-
-        .mobile-bottom-nav__item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          text-decoration: none;
-          color: #6b7280;
-          min-height: 100%;
-          transition:
-            color 0.2s ease,
-            transform 0.2s ease;
-        }
-
-        .mobile-bottom-nav__item:hover {
-          color: #111827;
-        }
-
-        .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image {
-          filter: grayscale(1) brightness(0.2);
-        }
-
-        .mobile-bottom-nav__item--active {
-          color: #054aff;
-        }
-
-        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
-          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
-            hue-rotate(223deg) brightness(104%) contrast(106%);
-        }
-
-        .mobile-bottom-nav__icon {
-          width: 22px;
-          height: 22px;
-          display: block;
-        }
-
-        .mobile-bottom-nav__icon--image {
-          object-fit: contain;
-          filter: grayscale(1) brightness(0.55);
-          transition: filter 0.2s ease;
-        }
-
-        .mobile-bottom-nav__label {
-          font-size: 11px;
-          line-height: 1;
-          font-weight: 500;
-          letter-spacing: 0.01em;
-        }
-
-        .mobile-rooms-cta {
-          position: fixed;
-          left: 16px;
-          right: 16px;
-          bottom: calc(env(safe-area-inset-bottom, 0px) + 82px);
-          z-index: 121;
-          display: none;
-        }
-
-        .mobile-rooms-cta__button {
-          width: 100%;
-          min-height: 52px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          border-radius: 999px;
-          background: #054aff;
-          color: #ffffff;
-          box-shadow: 0 16px 34px rgba(5, 74, 255, 0.28);
-          padding: 14px 20px;
-          font-size: 15px;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-          cursor: pointer;
-          transition:
-            transform 0.2s ease,
-            opacity 0.2s ease,
-            background 0.2s ease;
-        }
-
-        .mobile-rooms-cta__button:hover {
-          transform: translateY(-1px);
-          background: #043be0;
-        }
-
-        
-
-        .mobile-rooms-sheet {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 130;
-          display: none;
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transition:
-            opacity 0.25s ease,
-            visibility 0.25s ease;
-        }
-
-        .mobile-rooms-sheet__backdrop {
-          position: fixed;
-          inset: 0;
-          background: rgba(15, 23, 42, 0.32);
-          opacity: 0;
-          transition: opacity 0.25s ease;
-        }
-
-        .mobile-rooms-sheet__panel {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          max-height: min(74vh, 720px);
-          background: #ffffff;
-          border-top-left-radius: 28px;
-          border-top-right-radius: 28px;
-          box-shadow: 0 -20px 54px rgba(15, 23, 42, 0.18);
-          transform: translateY(100%);
-          transition: transform 0.28s ease;
-          overflow: hidden;
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
-        }
-
-        .mobile-rooms-sheet__handle {
-          width: 52px;
-          height: 5px;
-          background: #cbd5e1;
-          border-radius: 999px;
-          margin: 12px auto 10px;
-        }
-
-        .mobile-rooms-sheet__header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 0 18px 14px;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .mobile-rooms-sheet__title {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 800;
-          color: #0f172a;
-          letter-spacing: -0.02em;
-        }
-
-        .mobile-rooms-sheet__close {
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #0f172a;
-  font-size: 28px;
-  line-height: 1;
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-}
-
-        .mobile-rooms-sheet__body {
-          max-height: calc(min(74vh, 720px) - 72px);
-          overflow-y: auto;
-          padding: 16px 16px 0;
-        }
-
-        .mobile-rooms-toggle:checked ~ .mobile-rooms-sheet {
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
-        }
-
-        .mobile-rooms-toggle:checked ~ .mobile-rooms-sheet .mobile-rooms-sheet__backdrop {
-          opacity: 1;
-        }
-
-        .mobile-rooms-toggle:checked ~ .mobile-rooms-sheet .mobile-rooms-sheet__panel {
-          transform: translateY(0);
-        }
-
-        .footer-esaf {
-          background: #054aff;
-          color: #ffffff;
-          margin-top: 56px;
-        }
-
-        .footer-esaf-container {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 72px 48px 34px;
-        }
-
-        .footer-esaf-top {
-          display: grid;
-          grid-template-columns: minmax(0, 1.5fr) 320px 280px;
-          gap: 72px;
-          align-items: start;
-        }
-
-        .footer-esaf-title {
-          margin: 0;
-          color: #ffffff;
-          font-size: clamp(42px, 5vw, 64px);
-          line-height: 0.98;
-          letter-spacing: -0.06em;
-          font-weight: 500;
-          text-transform: uppercase;
-        }
-
-        .footer-esaf-description {
-          margin: 28px 0 0;
-          max-width: 760px;
-          color: rgba(255, 255, 255, 0.95);
-          font-size: 17px;
-          line-height: 2.05;
-          letter-spacing: -0.02em;
-        }
-
-        .footer-esaf-heading {
-          margin: 0 0 18px;
-          color: #ffffff;
-          font-size: 24px;
-          line-height: 1.2;
-          font-weight: 700;
-          letter-spacing: -0.03em;
-        }
-
-        .footer-esaf-links {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .footer-esaf-link {
-          display: inline-block;
-          width: fit-content;
-          color: #ffffff;
-          text-decoration: underline;
-          text-decoration-thickness: 1px;
-          text-underline-offset: 8px;
-          font-size: 18px;
-          line-height: 1.45;
-          font-weight: 500;
-          transition: opacity 0.2s ease;
-        }
-
-        .footer-esaf-link:hover {
-          opacity: 0.78;
-        }
-
-        .footer-esaf-email {
-          display: inline-block;
-          color: #ffffff;
-          text-decoration: none;
-          font-size: 18px;
-          line-height: 1.45;
-          font-weight: 500;
-          transition: opacity 0.2s ease;
-        }
-
-        .footer-esaf-email:hover {
-          opacity: 0.78;
-        }
-
-        .footer-esaf-bottom {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 34px;
-          padding-top: 92px;
-        }
-
-        .footer-esaf-socials {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 54px;
-        }
-
-        .footer-esaf-social {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          text-decoration: none;
-          transition:
-            transform 0.2s ease,
-            opacity 0.2s ease;
-        }
-
-        .footer-esaf-social:hover {
-          transform: translateY(-2px);
-          opacity: 0.8;
-        }
-
-        .footer-esaf-social svg {
-          width: 28px;
-          height: 28px;
-          fill: currentColor;
-        }
-
-        .footer-esaf-copyright {
-          margin: 0;
-          color: #ffffff;
-          text-align: center;
-          font-size: 16px;
-          line-height: 1.5;
-          letter-spacing: -0.02em;
-        }
-
-        .broker-card-scene {
-  position: relative;
-  width: 100%;
-  perspective: 1400px;
-}
-
-.broker-card-toggle {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.broker-card-click-target {
-  display: block;
-  width: 100%;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.broker-card-inner {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1.58 / 1;
-  transform-style: preserve-3d;
-  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-}
-
-.broker-card-toggle:checked + .broker-card-click-target .broker-card-inner {
-  transform: rotateY(180deg);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .broker-card-scene:hover .broker-card-inner {
-    transform: rotateY(180deg);
-  }
-}
-
-        .broker-card-face {
-          position: absolute;
-          inset: 0;
-          border-radius: 28px;
-          overflow: hidden;
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-          background-size: cover;
-          background-position: center;
-          background-repeat: no-repeat;
-          box-shadow:
-            0 24px 60px rgba(15, 23, 42, 0.18),
-            0 10px 24px rgba(15, 23, 42, 0.10);
-        }
-
-        .broker-card-front-overlay,
-        .broker-card-back-overlay {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          padding: 20px;
-        }
-
-        .broker-card-top-info {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          max-width: 80%;
-        }
-
-        .broker-card-top-info--rtl {
-          flex-direction: row-reverse;
-          text-align: right;
-          margin-left: auto;
-        }
-
-        .broker-card-contact-stack {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          max-width: 240px;
-        }
-
-        .broker-card-contact-stack--details {
-          width: 100%;
-          max-width: 100%;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .broker-card-contact-stack--rtl {
-          margin-left: auto;
-          justify-content: flex-end;
-        }
-
-        .broker-contact-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          min-height: 40px;
-          border-radius: 999px;
-          padding: 10px 16px;
-          font-size: 13px;
-          font-weight: 700;
-          text-decoration: none;
-          transition:
-            transform 0.22s ease,
-            opacity 0.22s ease,
-            background 0.22s ease,
-            color 0.22s ease,
-            border-color 0.22s ease;
-        }
-
-        .broker-contact-btn:hover {
-          transform: translateY(-1px);
-        }
-
-        .broker-contact-btn--solid {
-          background: rgba(255, 255, 255, 0.96);
-          color: #111827;
-          border: 1px solid rgba(255, 255, 255, 0.96);
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
-        }
-
-        .broker-contact-btn--disabled {
-          background: rgba(255, 255, 255, 0.58);
-          color: rgba(17, 24, 39, 0.62);
-          border: 1px solid rgba(255, 255, 255, 0.65);
-          cursor: not-allowed;
-        }
-
-        .broker-contact-info-card {
-          width: 100%;
-          border-radius: 18px;
-          padding: 12px 14px;
-          background: rgba(255, 255, 255, 0.92);
-          border: 1px solid rgba(255, 255, 255, 0.95);
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-          backdrop-filter: blur(6px);
-          -webkit-backdrop-filter: blur(6px);
-        }
-
-        .broker-contact-info-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #475569;
-          font-size: 12px;
-          font-weight: 700;
-          margin-bottom: 6px;
-        }
-
-        .broker-contact-info-value {
-          color: #0f172a;
-          font-size: 15px;
-          font-weight: 800;
-          line-height: 1.35;
-          word-break: break-word;
-        }
-
-        .broker-card-avatar {
-          width: 46px;
-          height: 46px;
-          flex-shrink: 0;
-          overflow: hidden;
-          border-radius: 999px;
-          border: 2px solid rgba(255, 255, 255, 0.95);
-          background: #ffffff;
-          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
-        }
-
-        .broker-card-avatar--large {
-          width: 58px;
-          height: 58px;
-        }
-
-        .broker-card-avatar--back {
-          width: 52px;
-          height: 52px;
-        }
-
-        .broker-card-name {
-          margin: 0;
-          color: #ffffff;
-          font-size: 16px;
-          line-height: 1.2;
-          font-weight: 800;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          text-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
-        }
-
-        .broker-card-role {
-          margin: 4px 0 0;
-          color: rgba(255, 255, 255, 0.95);
-          font-size: 12px;
-          line-height: 1.35;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          text-shadow: 0 2px 10px rgba(0, 0, 0, 0.24);
-        }
-
-        .broker-card-back {
-          transform: rotateY(180deg);
-        }
-
-        .broker-card-back-top {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          max-width: 72%;
-        }
-
-        .broker-card-back-top--rtl {
-          flex-direction: row-reverse;
-          text-align: right;
-          margin-left: auto;
-        }
-
-        .broker-card-name--back {
-          font-size: 16px;
-        }
-
-        .broker-card-role--back {
-          font-size: 12px;
-        }
-
-        .broker-card-back-actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          max-width: 100%;
-        }
-
-        .broker-card-back-actions--rtl {
-          justify-content: flex-end;
-        }
-
-        .broker-chip {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 30px;
-          padding: 6px 12px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.95);
-          color: #111827;
-          font-size: 12px;
-          font-weight: 700;
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
-        }
-
-        .broker-chip--off {
-          background: rgba(255, 255, 255, 0.58);
-          color: rgba(17, 24, 39, 0.62);
-        }
-
-        .broker-card-flip-btn {
-          position: absolute;
-          left: 16px;
-          bottom: 16px;
-          z-index: 5;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 38px;
-          padding: 10px 14px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.92);
-          color: #111827;
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1;
-          cursor: pointer;
-          user-select: none;
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          transition:
-            transform 0.2s ease,
-            opacity 0.2s ease,
-            background 0.2s ease;
-        }
-
-        .broker-card-flip-btn:hover {
-          transform: translateY(-1px);
-          background: rgba(255, 255, 255, 1);
-        }
-
-        .broker-card-flip-btn--rtl {
-          left: auto;
-          right: 16px;
-        }
-
-        .broker-card-flip-btn--back {
-          bottom: 16px;
-        }
-
-        @media (max-width: 1100px) {
-          .footer-esaf-top {
-            grid-template-columns: 1fr 1fr;
-            gap: 48px 36px;
-          }
-
-          .footer-esaf-top-left {
-            grid-column: 1 / -1;
-          }
-        }
-
-        @media (max-width: 1024px) {
-          .mega-menu-wrap {
-            padding: 26px 24px 28px;
-            overflow-y: auto;
-          }
-
-          .mega-menu-top {
-            left: 24px;
-            right: 24px;
-            top: 24px;
-            height: 40px;
-          }
-
-          .mega-menu-close {
-            right: 0;
-            top: 0;
-            font-size: 16px;
-            gap: 12px;
-          }
-
-          .mega-menu-close--rtl {
-            right: auto;
-            left: 0;
-          }
-
-          .mega-menu-close-line {
-            width: 34px;
-          }
-
-          .mega-menu-logo {
-            top: 68px;
-          }
-
-          .mega-menu-logo img {
-            width: 74px;
-            height: 74px;
-          }
-
-          .mega-menu-body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: auto;
-            padding-top: 160px;
-            padding-left: 0;
-            padding-right: 0;
-            padding-bottom: 180px;
-          }
-
-          .mega-menu-left {
-            position: absolute;
-            left: 24px;
-            bottom: 28px;
-            width: auto;
-            min-width: 0;
-          }
-
-          .mega-menu-left-bottom {
-            width: 100%;
-            padding-bottom: 0;
-            gap: 12px;
-          }
-
-          .mega-menu-right {
-            width: 100%;
-            min-width: 0;
-            padding-top: 0;
-          }
-
-          .mega-menu-main-links {
-            gap: 6px;
-            max-width: 100%;
-          }
-
-          .mega-menu-main-link {
-            font-size: clamp(54px, 14.4vw, 86px);
-            line-height: 1.05;
-            white-space: normal;
-          }
-
-          .mega-menu-small-link {
-            font-size: 24px;
-          }
-
-          .mega-menu-footer-links {
-            right: 24px;
-            bottom: 12px;
-            max-width: 220px;
-          }
-
-          .mega-menu-footer-links--rtl {
-            right: auto;
-            left: 24px;
-          }
-
-          .mega-menu-footer-link {
-            font-size: 16px;
-          }
-
-          .mega-menu-footer-link--email {
-            font-size: 15px;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .navienty-logo-mobile,
-          .menu-trigger {
-            display: none !important;
-          }
-
-          .mobile-bottom-nav,
-          .mobile-rooms-cta,
-          .mobile-rooms-sheet {
-            display: block;
-          }
-
-          .mega-menu-body {
-            padding-bottom: 220px;
-          }
-
-          .mega-menu-footer-links {
-            left: 24px;
-            right: 24px;
-            bottom: 76px;
-            align-items: flex-start;
-            text-align: left;
-            max-width: none;
-            gap: 8px;
-          }
-
-          .mega-menu-footer-links--rtl {
-            left: 24px;
-            right: 24px;
-            align-items: flex-end;
-            text-align: right;
-          }
-
-          .mega-menu-footer-link {
-            font-size: 16px;
-          }
-
-          .mega-menu-footer-link--email {
-            margin-top: 6px;
-            font-size: 14px;
-          }
-
-          .footer-esaf-container {
-            padding: 48px 22px 28px;
-          }
-
-          .footer-esaf-top {
-            grid-template-columns: 1fr;
-            gap: 34px;
-          }
-
-          .footer-esaf-title {
-            font-size: 36px;
-          }
-
-          .footer-esaf-description {
-            margin-top: 20px;
-            font-size: 16px;
-            line-height: 1.9;
-          }
-
-          .footer-esaf-heading {
-            font-size: 22px;
-            margin-bottom: 14px;
-          }
-
-          .footer-esaf-link,
-          .footer-esaf-email {
-            font-size: 17px;
-          }
-
-          .footer-esaf-bottom {
-            padding-top: 56px;
-            gap: 26px;
-          }
-
-          .footer-esaf-socials {
-            gap: 34px;
-            flex-wrap: wrap;
-          }
-
-          .footer-esaf-social svg {
-            width: 24px;
-            height: 24px;
-          }
-
-          .footer-esaf-copyright {
-            font-size: 14px;
-          }
-
-          .broker-card-scene {
-            perspective: 1000px;
-          }
-
-          .broker-card-inner {
-            aspect-ratio: 1.52 / 1;
-          }
-
-          .broker-card-front-overlay,
-          .broker-card-back-overlay {
-            padding: 16px;
-          }
-
-          .broker-card-contact-stack {
-            width: 100%;
-            max-width: 100%;
-            gap: 8px;
-          }
-
-          .broker-contact-btn {
-            min-height: 36px;
-            padding: 8px 12px;
-            font-size: 11px;
-          }
-
-          .broker-card-name-badge {
-            max-width: 72%;
-            padding: 9px 10px;
-            gap: 10px;
-          }
-
-          .broker-card-avatar {
-            width: 40px;
-            height: 40px;
-          }
-
-          .broker-card-avatar--large {
-            width: 50px;
-            height: 50px;
-          }
-
-          .broker-card-name {
-            font-size: 13px;
-          }
-
-          .broker-card-role {
-            font-size: 11px;
-          }
-
-          .broker-contact-info-value {
-            font-size: 13px;
-          }
-
-          .broker-card-flip-btn {
-            min-height: 34px;
-            padding: 8px 12px;
-            font-size: 11px;
-          }
-        }
-
-        @media (hover: hover) and (pointer: fine) {
-          .broker-card-flip-btn {
-            display: none;
-          }
-        }
-      `}</style>
 
       <PropertiesHeader
         homeHref={buildPageLink()}
@@ -3211,18 +1867,22 @@ export default async function PropertyPage({
               </h1>
 
               {addressText && (
-  <div className="mt-4 flex justify-center">
-    <PropertyAddress
-      address={addressText}
-      isArabic={isArabic}
-      variant="mobile"
-    />
-  </div>
-)}
+                <div className="mt-4 flex justify-center">
+                  <PropertyAddress
+                    address={addressText}
+                    isArabic={isArabic}
+                    variant="mobile"
+                  />
+                </div>
+              )}
 
-              <p className="mt-2 text-center text-[15px] font-medium leading-6 text-slate-700">
-                {apartmentSummaryText}
-              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[15px] font-medium leading-6 text-slate-700">
+                <span>{apartmentSummaryText}</span>
+                <GenderMeta
+                  gender={typedProperty.gender}
+                  language={selectedLanguage}
+                />
+              </div>
             </div>
 
             <div className="mt-6">
@@ -3255,25 +1915,25 @@ export default async function PropertyPage({
                   </h2>
 
                   <Link
-  href={buildSearchResultsLink()}
-  className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-[13px] font-semibold leading-none text-slate-900 whitespace-nowrap shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
->
-  <span>{t.viewAll}</span>
+                    href={buildSearchResultsLink()}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-[13px] font-semibold leading-none text-slate-900 whitespace-nowrap shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
+                  >
+                    <span>{t.viewAll}</span>
 
-  <svg
-    viewBox="0 0 24 24"
-    className={`h-4 w-4 shrink-0 ${isArabic ? 'rotate-180' : ''}`}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.3"
-  >
-    <path
-      d="M9 6l6 6-6 6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-</Link>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`h-4 w-4 shrink-0 ${isArabic ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.3"
+                    >
+                      <path
+                        d="M9 6l6 6-6 6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </Link>
                 </div>
 
                 <div className="-mx-5 overflow-x-auto px-5 hide-scrollbar">
@@ -3326,14 +1986,23 @@ export default async function PropertyPage({
                               {itemTitle}
                             </h3>
 
+                            <div className="mt-2">
+                              <GenderMeta
+                                gender={item.gender}
+                                language={selectedLanguage}
+                                className="property-meta-gender--compact"
+                                showDot={false}
+                              />
+                            </div>
+
                             {itemAddress && (
                               <div className="mt-2">
-  <PropertyAddress
-    address={itemAddress}
-    isArabic={isArabic}
-    variant="compact"
-  />
-</div>
+                                <PropertyAddress
+                                  address={itemAddress}
+                                  isArabic={isArabic}
+                                  variant="compact"
+                                />
+                              </div>
                             )}
 
                             {formattedPrice && (
@@ -3370,10 +2039,10 @@ export default async function PropertyPage({
               </h1>
 
               {addressText && (
-  <div className="mt-3">
-    <PropertyAddress address={addressText} isArabic={isArabic} />
-  </div>
-)}
+                <div className="mt-3">
+                  <PropertyAddress address={addressText} isArabic={isArabic} />
+                </div>
+              )}
             </div>
           </div>
 
@@ -3394,9 +2063,13 @@ export default async function PropertyPage({
 
           <section className="mt-6 border-b border-slate-200 pb-6">
             <div className="max-w-4xl">
-              <p className="text-[15px] font-medium text-slate-700 md:text-[16px]">
-                {apartmentSummaryText}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-medium text-slate-700 md:text-[16px]">
+                <span>{apartmentSummaryText}</span>
+                <GenderMeta
+                  gender={typedProperty.gender}
+                  language={selectedLanguage}
+                />
+              </div>
             </div>
           </section>
 
@@ -3484,7 +2157,7 @@ export default async function PropertyPage({
                           requestedOptionLabel={option.label}
                           isSignedIn={isSignedIn}
                           loginRedirectUrl={loginRedirectUrl}
-                          label={t.enquire}
+                          label={t.book}
                           className="inline-flex min-h-[38px] w-full items-center justify-center rounded-full bg-[#054aff] px-4 text-[13px] font-semibold text-white transition hover:opacity-95"
                         />
                       ) : (
@@ -3580,14 +2253,23 @@ export default async function PropertyPage({
                           {itemTitle}
                         </h3>
 
+                        <div className="mt-1.5">
+                          <GenderMeta
+                            gender={item.gender}
+                            language={selectedLanguage}
+                            className="property-meta-gender--compact"
+                            showDot={false}
+                          />
+                        </div>
+
                         {itemAddress && (
                           <div className="mt-2">
-  <PropertyAddress
-    address={itemAddress}
-    isArabic={isArabic}
-    variant="compact"
-  />
-</div>
+                            <PropertyAddress
+                              address={itemAddress}
+                              isArabic={isArabic}
+                              variant="compact"
+                            />
+                          </div>
                         )}
 
                         {formattedPrice && (
@@ -3652,29 +2334,31 @@ export default async function PropertyPage({
       </footer>
 
       <div className="mobile-rooms-cta md:hidden">
-  <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-cta__button">
-    <span>Select Your Room</span>
-    
-  </label>
-</div>
+        <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-cta__button">
+          <span>{t.selectYourRoom}</span>
+        </label>
+      </div>
 
       <div className="mobile-rooms-sheet md:hidden">
-        <label htmlFor="mobile-rooms-toggle" className="mobile-rooms-sheet__backdrop" />
+        <label
+          htmlFor="mobile-rooms-toggle"
+          className="mobile-rooms-sheet__backdrop"
+        />
 
         <div className="mobile-rooms-sheet__panel">
           <div className="mobile-rooms-sheet__handle" />
 
           <div className="mobile-rooms-sheet__header">
-  <h2 className="mobile-rooms-sheet__title">{t.availableRooms}</h2>
+            <h2 className="mobile-rooms-sheet__title">{t.availableRooms}</h2>
 
-  <label
-    htmlFor="mobile-rooms-toggle"
-    className="mobile-rooms-sheet__close"
-    aria-label={t.close}
-  >
-    ×
-  </label>
-</div>
+            <label
+              htmlFor="mobile-rooms-toggle"
+              className="mobile-rooms-sheet__close"
+              aria-label={t.close}
+            >
+              ×
+            </label>
+          </div>
 
           <div className="mobile-rooms-sheet__body">
             <div className="space-y-4 pb-4">
@@ -3725,7 +2409,7 @@ export default async function PropertyPage({
                             requestedOptionLabel={option.label}
                             isSignedIn={isSignedIn}
                             loginRedirectUrl={loginRedirectUrl}
-                            label={t.enquire}
+                            label={t.book}
                             className="inline-flex min-h-[50px] w-full items-center justify-center rounded-full bg-[#054aff] px-5 text-[16px] font-semibold text-white transition hover:opacity-95"
                           />
                         ) : (

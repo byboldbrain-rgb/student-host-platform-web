@@ -128,6 +128,9 @@ export async function signUpUserAction(input: SignupInput) {
         status: 'pending',
         inviter_reward_amount: 0,
         invited_reward_amount: 0,
+        invited_signup_bonus_amount: 0,
+        inviter_first_paid_bonus_amount: 0,
+        invited_first_paid_bonus_amount: 0,
       })
 
     if (insertReferralError) {
@@ -141,25 +144,6 @@ export async function signUpUserAction(input: SignupInput) {
 
       throw new Error(insertReferralError.message)
     }
-
-    const { error: referralSignupBonusError } = await supabase.rpc(
-      'award_referral_signup_bonus',
-      {
-        p_invited_user_id: user.id,
-      }
-    )
-
-    if (referralSignupBonusError) {
-      throw new Error(referralSignupBonusError.message)
-    }
-  }
-
-  const { error: signupBonusError } = await supabase.rpc('award_signup_bonus', {
-    p_user_id: user.id,
-  })
-
-  if (signupBonusError) {
-    throw new Error(signupBonusError.message)
   }
 
   return {

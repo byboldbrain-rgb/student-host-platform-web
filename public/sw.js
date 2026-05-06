@@ -48,7 +48,7 @@ self.addEventListener('push', function (event) {
     badge: data.badge || '/icon-192.png',
     tag: data.tag || 'navienty-notification',
     data: {
-      url: data.url || '/admin',
+      url: data.url || '/',
       badgeCount,
     },
     vibrate: [120, 60, 120],
@@ -69,7 +69,7 @@ self.addEventListener('notificationclick', function (event) {
   const urlToOpen =
     event.notification && event.notification.data && event.notification.data.url
       ? event.notification.data.url
-      : '/admin'
+      : '/'
 
   event.waitUntil(
     clients

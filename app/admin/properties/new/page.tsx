@@ -13,6 +13,7 @@ export default async function NewPropertyPage() {
   const [
     citiesRes,
     universitiesRes,
+    propertyAreasRes,
     brokersRes,
     ownersRes,
     ownerServiceAreasRes,
@@ -26,6 +27,13 @@ export default async function NewPropertyPage() {
       .from('universities')
       .select('id, city_id, name_en, name_ar')
       .order('name_en'),
+
+    supabase
+      .from('property_areas')
+      .select('id, city_id, code, name_en, name_ar, sort_order, is_active')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name_en', { ascending: true }),
 
     supabase
       .from('brokers')
@@ -64,6 +72,20 @@ export default async function NewPropertyPage() {
       .order('name_en', { ascending: true }),
   ])
 
+  if (citiesRes.error) throw new Error(citiesRes.error.message)
+  if (universitiesRes.error) throw new Error(universitiesRes.error.message)
+  if (propertyAreasRes.error) throw new Error(propertyAreasRes.error.message)
+  if (brokersRes.error) throw new Error(brokersRes.error.message)
+  if (ownersRes.error) throw new Error(ownersRes.error.message)
+  if (ownerServiceAreasRes.error) {
+    throw new Error(ownerServiceAreasRes.error.message)
+  }
+  if (brokerUniversitiesRes.error) {
+    throw new Error(brokerUniversitiesRes.error.message)
+  }
+  if (amenitiesRes.error) throw new Error(amenitiesRes.error.message)
+  if (billTypesRes.error) throw new Error(billTypesRes.error.message)
+
   let brokers = brokersRes.data ?? []
   let brokerUniversities = brokerUniversitiesRes.data ?? []
 
@@ -75,44 +97,13 @@ export default async function NewPropertyPage() {
     )
   }
 
-  if (citiesRes.error) {
-    throw new Error(citiesRes.error.message)
-  }
-
-  if (universitiesRes.error) {
-    throw new Error(universitiesRes.error.message)
-  }
-
-  if (brokersRes.error) {
-    throw new Error(brokersRes.error.message)
-  }
-
-  if (ownersRes.error) {
-    throw new Error(ownersRes.error.message)
-  }
-
-  if (ownerServiceAreasRes.error) {
-    throw new Error(ownerServiceAreasRes.error.message)
-  }
-
-  if (brokerUniversitiesRes.error) {
-    throw new Error(brokerUniversitiesRes.error.message)
-  }
-
-  if (amenitiesRes.error) {
-    throw new Error(amenitiesRes.error.message)
-  }
-
-  if (billTypesRes.error) {
-    throw new Error(billTypesRes.error.message)
-  }
-
   return (
     <div className="min-h-screen bg-[#f7f7f7]">
       <div className="mx-auto w-full max-w-[1440px] px-6 py-8 lg:px-10">
         <NewPropertyForm
           cities={citiesRes.data ?? []}
           universities={universitiesRes.data ?? []}
+          propertyAreas={propertyAreasRes.data ?? []}
           brokers={brokers}
           owners={ownersRes.data ?? []}
           ownerServiceAreas={ownerServiceAreasRes.data ?? []}

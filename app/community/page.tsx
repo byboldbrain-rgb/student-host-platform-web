@@ -7,22 +7,26 @@ import { cookies } from "next/headers";
 import PostCard from "./components/feed/PostCard";
 import type { FeedPost } from "./components/feed/types";
 import CommunityNotifications from "./CommunityNotifications";
+import CommunityFeedVideoAutoplay from "./CommunityFeedVideoAutoplay";
 
 const squadaOne = Squada_One({
   subsets: ["latin"],
   weight: "400",
 });
 
-const footerQuickLinks = [
-  { label: "About us", href: "/about" },
-  { label: "Board", href: "/board" },
-  { label: "Contact", href: "/contact" },
-];
+const APP_LOGO_URL = "https://i.ibb.co/sn0xS95/Navienty-2.jpg";
 
 const supabase = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+type SearchParams = {
+  lang?: string;
+  currency?: string;
+};
+
+type SupportedLanguage = "en" | "ar";
 
 type PostAsset = {
   id: number;
@@ -54,8 +58,87 @@ type CommunityPost = {
   community_post_assets: PostAsset[];
 };
 
-function normalizePosts(posts: CommunityPost[]): FeedPost[] {
+const TRANSLATIONS = {
+  en: {
+    joinUs: "Join Us",
+    failedToLoadPosts: "Failed to load community posts.",
+    noPosts: "No posts published yet.",
+    footerTitle: "Find your way to better student living",
+    quickLinks: "Quick Links",
+    aboutUs: "About us",
+    board: "Board",
+    contact: "Contact",
+    contactUs: "Contact Us",
+    footerEmail: "info@navienty.com",
+    search: "Search",
+    community: "Community",
+    account: "Account",
+    login: "Login",
+    navientyTeam: "Navienty Team",
+    copyright: (year: number) =>
+      `© ${year} Navienty | All rights reserved.`,
+  },
+  ar: {
+    joinUs: "انضم إلينا",
+    failedToLoadPosts: "تعذر تحميل منشورات المجتمع.",
+    noPosts: "لا توجد منشورات منشورة حتى الآن.",
+    footerTitle: "اعثر على طريقك لحياة طلابية أفضل",
+    quickLinks: "روابط سريعة",
+    aboutUs: "من نحن",
+    board: "الإدارة",
+    contact: "تواصل معنا",
+    contactUs: "تواصل معنا",
+    footerEmail: "info@navienty.com",
+    search: "استكشاف",
+    community: "المجتمع",
+    account: "الحساب",
+    login: "تسجيل الدخول",
+    navientyTeam: "فريق نافينتي",
+    copyright: (year: number) =>
+      `© ${year} نافينتي | جميع الحقوق محفوظة.`,
+  },
+} as const;
+
+function normalizeLanguage(value?: string): SupportedLanguage {
+  return value === "ar" ? "ar" : "en";
+}
+
+function normalizeCurrency(value?: string) {
+  return value?.trim().toUpperCase() || "EGP";
+}
+
+function buildUrl(
+  path: string,
+  language: SupportedLanguage,
+  currency: string
+) {
+  const params = new URLSearchParams();
+  params.set("lang", language);
+  params.set("currency", currency);
+
+  return `${path}?${params.toString()}`;
+}
+
+function normalizePosts(
+  posts: CommunityPost[],
+  language: SupportedLanguage,
+  t: (typeof TRANSLATIONS)["en"] | (typeof TRANSLATIONS)["ar"]
+): FeedPost[] {
+  const isArabic = language === "ar";
+
   return posts.map((post) => {
+    const title = isArabic
+      ? post.title_ar || post.title_en
+      : post.title_en || post.title_ar || "";
+
+    const excerpt = isArabic
+      ? post.excerpt_ar || post.excerpt_en
+      : post.excerpt_en || post.excerpt_ar;
+
+    const content = isArabic
+      ? post.content_ar || post.content_en
+      : post.content_en || post.content_ar;
+
     const activeAssets = (post.community_post_assets || [])
       .filter((asset) => asset.is_active && asset.file_url)
       .sort((a, b) => a.sort_order - b.sort_order);
@@ -65,7 +148,7 @@ function normalizePosts(posts: CommunityPost[]): FeedPost[] {
       type: asset.asset_type,
       src: asset.file_url,
       poster: asset.thumbnail_url || null,
-      alt: asset.alt_text || post.title_en,
+      alt: asset.alt_text || title,
       width: null,
       height: null,
       durationMs: null,
@@ -78,7 +161,7 @@ function normalizePosts(posts: CommunityPost[]): FeedPost[] {
         type: "image",
         src: post.cover_image_url,
         poster: null,
-        alt: post.title_en,
+        alt: title,
         width: null,
         height: null,
         durationMs: null,
@@ -90,13 +173,13 @@ function normalizePosts(posts: CommunityPost[]): FeedPost[] {
       id: post.id,
       author: {
         id: `author-${post.id}`,
-        name: post.author_name || "Navienty Team",
+        name: post.author_name || t.navientyTeam,
         handle: "navienty",
         avatarUrl: "https://i.ibb.co/p6CBgjz0/Navienty-13.png",
         verified: true,
       },
       createdAt: post.published_at || post.created_at,
-      caption: post.excerpt_en || post.content_en || post.title_en,
+      caption: excerpt || content || title,
       media,
       shareUrl: post.social_media_link,
       metrics: {
@@ -117,8 +200,19 @@ function normalizePosts(posts: CommunityPost[]): FeedPost[] {
   });
 }
 
-export default async function CommunityPage() {
+export default async function CommunityPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const currentYear = new Date().getFullYear();
+  const { lang, currency } = await searchParams;
+
+  const selectedLanguage = normalizeLanguage(lang);
+  const selectedCurrency = normalizeCurrency(currency);
+  const isArabic = selectedLanguage === "ar";
+  const t = TRANSLATIONS[selectedLanguage];
+
   const cookieStore = await cookies();
 
   const authSupabase = createServerClient(
@@ -176,13 +270,268 @@ export default async function CommunityPage() {
     .order("created_at", { ascending: false });
 
   const posts: CommunityPost[] = (data as CommunityPost[] | null) ?? [];
-  const feedPosts = normalizePosts(posts);
+  const feedPosts = normalizePosts(posts, selectedLanguage, t);
+
+  const homeHref = buildUrl("/properties", selectedLanguage, selectedCurrency);
+  const joinHref = buildUrl(
+    "/community/join",
+    selectedLanguage,
+    selectedCurrency
+  );
+  const propertiesHref = buildUrl(
+    "/properties",
+    selectedLanguage,
+    selectedCurrency
+  );
+  const communityHref = buildUrl(
+    "/community",
+    selectedLanguage,
+    selectedCurrency
+  );
+  const accountHref = buildUrl(
+    isLoggedIn ? "/account" : "/account-login",
+    selectedLanguage,
+    selectedCurrency
+  );
+
+  const footerQuickLinks = [
+    {
+      label: t.aboutUs,
+      href: buildUrl("/about", selectedLanguage, selectedCurrency),
+    },
+    {
+      label: t.board,
+      href: buildUrl("/board", selectedLanguage, selectedCurrency),
+    },
+    {
+      label: t.contact,
+      href: buildUrl("/contact", selectedLanguage, selectedCurrency),
+    },
+  ];
 
   return (
-    <main className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0">
+    <main
+      dir={isArabic ? "rtl" : "ltr"}
+      className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0"
+    >
+      <div className="pwa-install-banner" id="pwa-install-banner">
+        <button
+          type="button"
+          className="pwa-install-banner__close"
+          aria-label="Close app install banner"
+          id="pwa-install-banner-close"
+        >
+          ×
+        </button>
+
+        <img
+          src={APP_LOGO_URL}
+          alt="Navienty"
+          className="pwa-install-banner__logo"
+          draggable={false}
+        />
+
+        <div className="pwa-install-banner__content">
+          <p className="pwa-install-banner__title">Continue in the app!</p>
+        </div>
+
+        <button
+          type="button"
+          className="pwa-install-banner__button"
+          id="pwa-install-banner-button"
+        >
+          Get App
+        </button>
+
+        <div className="pwa-install-banner__ios-help" id="pwa-install-banner-ios-help">
+          On iPhone: tap Share, then choose Add to Home Screen.
+        </div>
+      </div>
+
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              var banner = document.getElementById('pwa-install-banner');
+              var closeButton = document.getElementById('pwa-install-banner-close');
+              var installButton = document.getElementById('pwa-install-banner-button');
+              var iosHelp = document.getElementById('pwa-install-banner-ios-help');
+              var deferredPrompt = null;
+
+              if (!banner) return;
+
+              function isStandalone() {
+                return window.matchMedia('(display-mode: standalone)').matches ||
+                  window.navigator.standalone === true;
+              }
+
+              function isIos() {
+                var ua = window.navigator.userAgent.toLowerCase();
+                var platform = (window.navigator.platform || '').toLowerCase();
+                return /iphone|ipad|ipod/.test(ua) ||
+                  (platform === 'macintel' && window.navigator.maxTouchPoints > 1);
+              }
+
+              function hideBanner() {
+                banner.style.display = 'none';
+              }
+
+              function showBanner() {
+                banner.style.display = 'grid';
+              }
+
+              if (isStandalone()) {
+                hideBanner();
+                return;
+              }
+
+              if (localStorage.getItem('pwa-install-banner-dismissed') === 'true') {
+                hideBanner();
+                return;
+              }
+
+              if (isIos()) {
+                showBanner();
+              }
+
+              window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                deferredPrompt = event;
+                showBanner();
+              });
+
+              window.addEventListener('appinstalled', function () {
+                localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                hideBanner();
+                deferredPrompt = null;
+              });
+
+              if (closeButton) {
+                closeButton.addEventListener('click', function () {
+                  localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                  hideBanner();
+                });
+              }
+
+              if (installButton) {
+                installButton.addEventListener('click', function () {
+                  if (isIos()) {
+                    if (iosHelp) {
+                      iosHelp.classList.toggle('pwa-install-banner__ios-help--visible');
+                    }
+                    return;
+                  }
+
+                  if (!deferredPrompt) return;
+
+                  deferredPrompt.prompt();
+                  deferredPrompt.userChoice.then(function (choiceResult) {
+                    if (choiceResult && choiceResult.outcome === 'accepted') {
+                      localStorage.setItem('pwa-install-banner-dismissed', 'true');
+                      hideBanner();
+                    }
+                    deferredPrompt = null;
+                  });
+                });
+              }
+            })();
+          `,
+        }}
+      />
+
       <CommunityNotifications />
+      <CommunityFeedVideoAutoplay />
 
       <style>{`
+        .pwa-install-banner {
+          position: sticky;
+          top: 0;
+          z-index: 160;
+          display: none;
+          grid-template-columns: 26px 46px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 9px;
+          min-height: 62px;
+          background: #ffffff;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+          padding: 8px 12px;
+        }
+
+        .pwa-install-banner__close {
+          width: 26px;
+          height: 26px;
+          border: 0;
+          background: transparent;
+          color: #111827;
+          font-size: 28px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 0;
+        }
+
+        .pwa-install-banner__logo {
+          width: 46px;
+          height: 46px;
+          border-radius: 12px;
+          object-fit: cover;
+          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          display: block;
+        }
+
+        .pwa-install-banner__content {
+          min-width: 0;
+        }
+
+        .pwa-install-banner__title {
+          margin: 0;
+          color: #111827;
+          font-size: 15px;
+          line-height: 1.15;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .pwa-install-banner__button {
+          min-width: 86px;
+          height: 38px;
+          border: 0;
+          border-radius: 9px;
+          background: #054aff;
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          padding: 0 16px;
+        }
+
+        .pwa-install-banner__ios-help {
+          display: none;
+          grid-column: 1 / -1;
+          margin-top: 6px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          color: #334155;
+          padding: 8px 10px;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .pwa-install-banner__ios-help--visible {
+          display: block;
+        }
+
+        @media (display-mode: standalone) {
+          .pwa-install-banner {
+            display: none !important;
+          }
+        }
+
         .navienty-logo {
           display: inline-flex;
           align-items: center;
@@ -213,6 +562,10 @@ export default async function CommunityPage() {
           align-items: center;
         }
 
+        [dir='rtl'] .navienty-logo-text-wrap {
+          transform: translateX(6px);
+        }
+
         .navienty-logo:hover .navienty-logo-text-wrap,
         .navienty-logo:focus-visible .navienty-logo-text-wrap {
           max-width: 120px;
@@ -234,6 +587,11 @@ export default async function CommunityPage() {
           align-items: center;
           gap: 12px;
           margin-left: auto;
+        }
+
+        [dir='rtl'] .header-actions {
+          margin-left: 0;
+          margin-right: auto;
         }
 
         .header-join-btn {
@@ -270,6 +628,10 @@ export default async function CommunityPage() {
           flex-shrink: 0;
         }
 
+        [dir='rtl'] .header-join-btn-icon {
+          transform: rotate(180deg);
+        }
+
         .footer-esaf {
           background: #054aff;
           color: #ffffff;
@@ -297,6 +659,11 @@ export default async function CommunityPage() {
           letter-spacing: -0.06em;
           font-weight: 500;
           text-transform: uppercase;
+        }
+
+        [dir='rtl'] .footer-esaf-title {
+          letter-spacing: -0.03em;
+          text-transform: none;
         }
 
         .footer-esaf-heading {
@@ -339,6 +706,8 @@ export default async function CommunityPage() {
           line-height: 1.45;
           font-weight: 500;
           transition: opacity 0.2s ease;
+          direction: ltr;
+          unicode-bidi: isolate;
         }
 
         .footer-esaf-email:hover {
@@ -524,12 +893,18 @@ export default async function CommunityPage() {
             font-size: 12px;
           }
         }
+
+        @media (min-width: 769px) {
+          .pwa-install-banner {
+            display: none !important;
+          }
+        }
       `}</style>
 
       <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
         <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
           <Link
-            href="/properties?lang=en&currency=EGP"
+            href={homeHref}
             className="navienty-logo mt-2"
             aria-label="Navienty home"
           >
@@ -548,8 +923,8 @@ export default async function CommunityPage() {
           </Link>
 
           <div className="header-actions">
-            <Link href="/community/join" className="header-join-btn">
-              <span>Join Us</span>
+            <Link href={joinHref} className="header-join-btn">
+              <span>{t.joinUs}</span>
               <ArrowRight className="header-join-btn-icon" />
             </Link>
           </div>
@@ -557,14 +932,14 @@ export default async function CommunityPage() {
       </header>
 
       <section className="px-0 pb-10 md:pb-14">
-        <div className="mx-auto w-full max-w-[450px]">
+        <div className="mx-auto w-full max-w-[450px]" data-community-feed>
           {error ? (
             <div className="mx-4 rounded-[20px] bg-white p-5 text-sm font-medium text-red-600 shadow-[0_6px_18px_rgba(0,0,0,0.04)] md:mx-6">
-              Failed to load community posts.
+              {t.failedToLoadPosts}
             </div>
           ) : feedPosts.length === 0 ? (
             <div className="mx-4 rounded-[20px] bg-white p-8 text-center text-sm text-[#5b5d68] shadow-[0_6px_18px_rgba(0,0,0,0.04)] md:mx-6">
-              No posts published yet.
+              {t.noPosts}
             </div>
           ) : (
             <div className="pb-2">
@@ -586,12 +961,12 @@ export default async function CommunityPage() {
           <div className="footer-esaf-top">
             <div className="footer-esaf-top-left">
               <h2 className={`${squadaOne.className} footer-esaf-title`}>
-                Find your way to better student living
+                {t.footerTitle}
               </h2>
             </div>
 
             <div>
-              <h3 className="footer-esaf-heading">Quick Links</h3>
+              <h3 className="footer-esaf-heading">{t.quickLinks}</h3>
               <div className="footer-esaf-links">
                 {footerQuickLinks.map((item) => (
                   <Link
@@ -606,19 +981,19 @@ export default async function CommunityPage() {
             </div>
 
             <div>
-              <h3 className="footer-esaf-heading">Contact Us</h3>
+              <h3 className="footer-esaf-heading">{t.contactUs}</h3>
               <a
-                href="mailto:info@navienty.com"
+                href={`mailto:${t.footerEmail}`}
                 className="footer-esaf-email"
               >
-                info@navienty.com
+                {t.footerEmail}
               </a>
             </div>
           </div>
 
           <div className="footer-esaf-bottom">
             <p className="footer-esaf-copyright">
-              © {currentYear} Navienty | All rights reserved.
+              {t.copyright(currentYear)}
             </p>
           </div>
         </div>
@@ -626,7 +1001,7 @@ export default async function CommunityPage() {
 
       <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
         <div className="mobile-bottom-nav__inner">
-          <Link href="/properties" className="mobile-bottom-nav__item">
+          <Link href={propertiesHref} className="mobile-bottom-nav__item">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -642,11 +1017,11 @@ export default async function CommunityPage() {
                 d="M16 16l4 4"
               />
             </svg>
-            <span className="mobile-bottom-nav__label">Search</span>
+            <span className="mobile-bottom-nav__label">{t.search}</span>
           </Link>
 
           <Link
-            href="/community"
+            href={communityHref}
             className="mobile-bottom-nav__item mobile-bottom-nav__item--active"
           >
             <img
@@ -654,13 +1029,10 @@ export default async function CommunityPage() {
               alt="Community"
               className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
             />
-            <span className="mobile-bottom-nav__label">Community</span>
+            <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 
-          <Link
-            href={isLoggedIn ? "/account" : "/login"}
-            className="mobile-bottom-nav__item"
-          >
+          <Link href={accountHref} className="mobile-bottom-nav__item">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -681,7 +1053,7 @@ export default async function CommunityPage() {
               />
             </svg>
             <span className="mobile-bottom-nav__label">
-              {isLoggedIn ? "Account" : "Login"}
+              {isLoggedIn ? t.account : t.login}
             </span>
           </Link>
         </div>

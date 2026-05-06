@@ -14,8 +14,28 @@ const secondaryButtonClass =
 const inputClass =
   'h-14 w-full rounded-2xl border border-gray-200 bg-white px-4 text-sm text-[#222222] outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
 
+const textareaClass =
+  'min-h-[180px] w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm text-[#222222] outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
+
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) || '').trim()
+}
+
+function getLines(value: string) {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function makeAreaCode(name: string, index: number) {
+  const code = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  return code || `area_${index + 1}`
 }
 
 function BrandLogo() {
@@ -76,22 +96,64 @@ export default async function NewCityPage({
     const name_en = getString(formData, 'name_en')
     const name_ar = getString(formData, 'name_ar')
 
+    const areas_en_raw = getString(formData, 'areas_en')
+    const areas_ar_raw = getString(formData, 'areas_ar')
+
+    const areas_en = getLines(areas_en_raw)
+    const areas_ar = getLines(areas_ar_raw)
+
     if (!name_en || !name_ar) {
       redirect('/admin/cities/new?error=Please fill all required fields')
     }
 
+    if (areas_en.length !== areas_ar.length) {
+      redirect(
+        '/admin/cities/new?error=Areas English and Arabic lines must have the same count'
+      )
+    }
+
     const supabase = await createClient()
 
-    const { error } = await supabase.from('cities').insert({
-      name_en,
-      name_ar,
-    })
+    const { data: createdCity, error: cityError } = await supabase
+      .from('cities')
+      .insert({
+        name_en,
+        name_ar,
+      })
+      .select('id')
+      .single()
 
-    if (error) {
-      redirect(`/admin/cities/new?error=${encodeURIComponent(error.message)}`)
+    if (cityError) {
+      redirect(`/admin/cities/new?error=${encodeURIComponent(cityError.message)}`)
+    }
+
+    if (!createdCity?.id) {
+      redirect('/admin/cities/new?error=City was not created')
+    }
+
+    if (areas_en.length > 0) {
+      const areaRows = areas_en.map((areaNameEn, index) => ({
+        city_id: createdCity.id,
+        code: makeAreaCode(areaNameEn, index),
+        name_en: areaNameEn,
+        name_ar: areas_ar[index],
+        sort_order: index,
+        is_active: true,
+      }))
+
+      const { error: areasError } = await supabase
+        .from('property_areas')
+        .insert(areaRows)
+
+      if (areasError) {
+        redirect(
+          `/admin/cities/new?error=${encodeURIComponent(areasError.message)}`
+        )
+      }
     }
 
     revalidatePath('/admin/properties')
+    revalidatePath('/admin/cities/new')
     redirect('/admin/properties')
   }
 
@@ -288,16 +350,12 @@ export default async function NewCityPage({
         </header>
 
         <div className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        
-
           <section className="mt-6 rounded-[32px] border border-black/[0.06] bg-white p-5 shadow-[0_10px_36px_rgba(15,23,42,0.05)] md:p-8">
             <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
               <div>
-                
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#222222]">
                   Enter city information
                 </h2>
-                
               </div>
             </div>
 
@@ -333,6 +391,45 @@ export default async function NewCityPage({
                     className={inputClass}
                     required
                   />
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="rounded-[24px] border border-gray-200 bg-[#fafafa] p-4 md:p-5">
+                    <div className="mb-4">
+                      <h3 className="text-base font-semibold text-[#222222]">
+                        City Areas
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Add one area per line. English and Arabic lines must match
+                        in the same order.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                          Areas Name (English)
+                        </label>
+                        <textarea
+                          name="areas_en"
+                          placeholder={`Smouha\nMiami\nGleem`}
+                          className={textareaClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                          Areas Name (Arabic)
+                        </label>
+                        <textarea
+                          name="areas_ar"
+                          placeholder={`سموحة\nميامي\nجليم`}
+                          className={textareaClass}
+                          dir="rtl"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
