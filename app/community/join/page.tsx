@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   FormEvent,
   KeyboardEvent,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -526,7 +527,7 @@ function CustomSelect({
   );
 }
 
-export default function CommunityJoinPage() {
+function CommunityJoinPageContent() {
   const currentYear = new Date().getFullYear();
   const searchParams = useSearchParams();
 
@@ -2332,5 +2333,19 @@ export default function CommunityJoinPage() {
         }
       `}</style>
     </main>
+  );
+}
+
+export default function CommunityJoinPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="relative min-h-screen bg-[#f7f7f8] px-6 py-10 text-[#20212a]">
+          Loading...
+        </main>
+      }
+    >
+      <CommunityJoinPageContent />
+    </Suspense>
   );
 }
