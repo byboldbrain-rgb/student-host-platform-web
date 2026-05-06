@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import { createClient } from '@/src/lib/supabase/client'
@@ -107,7 +107,7 @@ function normalizeLanguage(value?: string | null): SupportedLanguage {
   return value === 'ar' ? 'ar' : 'en'
 }
 
-export default function AccountPage() {
+function AccountPageContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -1835,5 +1835,19 @@ export default function AccountPage() {
         </nav>
       </div>
     </>
+  )
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222]">
+          Loading...
+        </div>
+      }
+    >
+      <AccountPageContent />
+    </Suspense>
   )
 }
