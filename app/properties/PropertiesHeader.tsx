@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import PropertiesSearchBar from './PropertiesSearchBar'
 import SortDropdown from './search/SortDropdown'
 
@@ -24,15 +24,26 @@ type Labels = {
   city: string
   university: string
   duration: string
+
+  area: string
+
   searchCities: string
+  searchAreas: string
+
   chooseUniversity: string
   chooseDuration: string
+  chooseArea: string
+
   selectCity: string
   selectUniversity: string
   selectDuration: string
+  selectArea: string
+
   anyCity: string
   anyUniversity: string
   anyDuration: string
+  anyArea: string
+
   daily: string
   monthly: string
 }
@@ -95,6 +106,31 @@ export default function PropertiesHeader({
   const [isScrolled, setIsScrolled] = useState(false)
   const [forceExpanded, setForceExpanded] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
+
+  const normalizedSearchBarProps = useMemo(() => {
+    const isArabic = searchBarProps.language === 'ar'
+
+    return {
+      ...searchBarProps,
+      labels: {
+        ...searchBarProps.labels,
+
+        area: searchBarProps.labels.area || (isArabic ? 'المنطقة' : 'Area'),
+        searchAreas:
+          searchBarProps.labels.searchAreas ||
+          (isArabic ? 'ابحث عن منطقة' : 'Search areas'),
+        chooseArea:
+          searchBarProps.labels.chooseArea ||
+          (isArabic ? 'اختر المنطقة' : 'Choose area'),
+        selectArea:
+          searchBarProps.labels.selectArea ||
+          (isArabic ? 'اختر منطقة' : 'Select area'),
+        anyArea:
+          searchBarProps.labels.anyArea ||
+          (isArabic ? 'أي منطقة' : 'Any area'),
+      },
+    }
+  }, [searchBarProps])
 
   useEffect(() => {
     let ticking = false
@@ -299,7 +335,7 @@ export default function PropertiesHeader({
 
               <div className="px-3 pb-6">
                 <PropertiesSearchBar
-                  {...searchBarProps}
+                  {...normalizedSearchBarProps}
                   mobileSearchBarClassName={
                     showMobileSearchHeaderExtras ? 'mt-0' : ''
                   }
@@ -364,7 +400,7 @@ export default function PropertiesHeader({
                   }`}
                 >
                   <PropertiesSearchBar
-                    {...searchBarProps}
+                    {...normalizedSearchBarProps}
                     compact={showCompact}
                     onOpenMenuChange={(isOpen) => {
                       setForceExpanded(isOpen)
