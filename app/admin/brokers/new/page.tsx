@@ -1,10 +1,13 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { createClient } from '@/src/lib/supabase/server'
 import { requireSuperAdminAccess } from '@/src/lib/admin-auth'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 import BrokerUniversitySelector from './BrokerUniversitySelector'
+
+export const runtime = 'nodejs'
 
 type CityRow = {
   id: string
@@ -19,7 +22,7 @@ type UniversityRow = {
   name_ar: string
 }
 
-const BROKER_IMAGES_BUCKET = 'Broker-images'
+const BROKER_IMAGES_BUCKET = 'Brokers-images'
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
 const primaryButtonClass =
@@ -38,13 +41,68 @@ function getString(formData: FormData, key: string) {
   return String(formData.get(key) || '').trim()
 }
 
+function redirectWithError(message: string): never {
+  redirect(`/admin/brokers/new?error=${encodeURIComponent(message)}`)
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause
+
+    if (cause instanceof Error) {
+      return `${error.message}: ${cause.message}`
+    }
+
+    if (typeof cause === 'string') {
+      return `${error.message}: ${cause}`
+    }
+
+    if (cause && typeof cause === 'object') {
+      try {
+        return `${error.message}: ${JSON.stringify(cause)}`
+      } catch {
+        return error.message
+      }
+    }
+
+    return error.message
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return 'Unknown error'
+  }
+}
+
 function sanitizeFileName(fileName: string) {
-  return fileName
+  const safeName = fileName
     .normalize('NFKD')
     .replace(/[^\w.\-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .toLowerCase()
+
+  return safeName || 'broker-image'
+}
+
+function getFileExtension(fileName: string, mimeType: string) {
+  const safeFileName = sanitizeFileName(fileName)
+
+  if (safeFileName.includes('.')) {
+    return safeFileName.split('.').pop() || 'jpg'
+  }
+
+  if (mimeType === 'image/png') return 'png'
+  if (mimeType === 'image/webp') return 'webp'
+  if (mimeType === 'image/gif') return 'gif'
+  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'jpg'
+
+  return 'jpg'
 }
 
 function BrandLogo() {
@@ -124,130 +182,166 @@ export default async function NewBrokerPage({
   async function createBrokerAction(formData: FormData) {
     'use server'
 
-    await requireSuperAdminAccess()
-
-    const full_name = getString(formData, 'full_name')
-    const phone_number = getString(formData, 'phone_number')
-    const whatsapp_number = getString(formData, 'whatsapp_number')
-    const email = getString(formData, 'email')
-    const company_name = getString(formData, 'company_name')
-    const city_id = getString(formData, 'city_id')
-    const university_ids = formData
-      .getAll('university_ids')
-      .map((value) => String(value).trim())
-      .filter(Boolean)
-
-    const imageFile = formData.get('image_file')
-
-    if (!full_name || !phone_number || !whatsapp_number || !city_id || university_ids.length === 0) {
-      redirect('/admin/brokers/new?error=Please fill all required fields and choose at least one university')
-    }
-
-    const supabase = await createClient()
-
-    const { data: selectedUniversities, error: selectedUniversitiesError } = await supabase
-      .from('universities')
-      .select('id, city_id')
-      .in('id', university_ids)
-
-    if (selectedUniversitiesError) {
-      redirect(`/admin/brokers/new?error=${encodeURIComponent(selectedUniversitiesError.message)}`)
-    }
-
-    const invalidUniversity = (selectedUniversities || []).some(
-      (university) => university.city_id !== city_id
-    )
-
-    if (invalidUniversity || (selectedUniversities || []).length !== university_ids.length) {
-      redirect('/admin/brokers/new?error=Selected universities do not belong to the chosen city')
-    }
-
-    let uploadedImageUrl: string | null = null
     let uploadedStoragePath: string | null = null
+    let createdBrokerId: string | null = null
 
-    if (imageFile instanceof File && imageFile.size > 0) {
-      if (!imageFile.type.startsWith('image/')) {
-        redirect('/admin/brokers/new?error=Please upload a valid image file')
-      }
+    try {
+      await requireSuperAdminAccess()
 
-      if (imageFile.size > MAX_IMAGE_SIZE_BYTES) {
-        redirect('/admin/brokers/new?error=Image size must be 5 MB or less')
-      }
+      const full_name = getString(formData, 'full_name')
+      const phone_number = getString(formData, 'phone_number')
+      const whatsapp_number = getString(formData, 'whatsapp_number')
+      const email = getString(formData, 'email')
+      const company_name = getString(formData, 'company_name')
+      const city_id = getString(formData, 'city_id')
 
-      const safeFileName = sanitizeFileName(imageFile.name || 'broker-image')
-      const fileExt = safeFileName.includes('.') ? safeFileName.split('.').pop() : 'jpg'
-      const storagePath = `brokers/${Date.now()}-${crypto.randomUUID()}.${fileExt}`
-
-      const arrayBuffer = await imageFile.arrayBuffer()
-      const fileBuffer = Buffer.from(arrayBuffer)
-
-      const { error: uploadError } = await supabase.storage
-        .from(BROKER_IMAGES_BUCKET)
-        .upload(storagePath, fileBuffer, {
-          contentType: imageFile.type,
-          upsert: false,
-        })
-
-      if (uploadError) {
-        redirect(`/admin/brokers/new?error=${encodeURIComponent(uploadError.message)}`)
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from(BROKER_IMAGES_BUCKET)
-        .getPublicUrl(storagePath)
-
-      uploadedImageUrl = publicUrlData.publicUrl
-      uploadedStoragePath = storagePath
-    }
-
-    const { data: brokerData, error: brokerError } = await supabase
-      .from('brokers')
-      .insert({
-        full_name,
-        phone_number,
-        whatsapp_number,
-        email: email || null,
-        company_name: company_name || null,
-        image_url: uploadedImageUrl,
-      })
-      .select('id')
-      .single()
-
-    if (brokerError || !brokerData) {
-      if (uploadedStoragePath) {
-        await supabase.storage.from(BROKER_IMAGES_BUCKET).remove([uploadedStoragePath])
-      }
-
-      redirect(
-        `/admin/brokers/new?error=${encodeURIComponent(
-          brokerError?.message || 'Failed to create broker'
-        )}`
+      const university_ids = Array.from(
+        new Set(
+          formData
+            .getAll('university_ids')
+            .map((value) => String(value).trim())
+            .filter(Boolean)
+        )
       )
-    }
 
-    const brokerUniversityRows = university_ids.map((university_id) => ({
-      broker_id: brokerData.id,
-      university_id,
-    }))
+      const imageFile = formData.get('image_file')
 
-    const { error: brokerUniversitiesError } = await supabase
-      .from('broker_universities')
-      .insert(brokerUniversityRows)
-
-    if (brokerUniversitiesError) {
-      await supabase.from('brokers').delete().eq('id', brokerData.id)
-
-      if (uploadedStoragePath) {
-        await supabase.storage.from(BROKER_IMAGES_BUCKET).remove([uploadedStoragePath])
+      if (!full_name || !phone_number || !whatsapp_number || !city_id) {
+        redirectWithError('Please fill all required fields')
       }
 
-      redirect(`/admin/brokers/new?error=${encodeURIComponent(brokerUniversitiesError.message)}`)
-    }
+      if (university_ids.length === 0) {
+        redirectWithError('Please choose at least one university')
+      }
 
-    revalidatePath('/admin')
-    revalidatePath('/admin/properties')
-    revalidatePath('/admin/brokers/new')
-    redirect('/admin')
+      const supabase = await createClient()
+
+      const { data: selectedUniversities, error: selectedUniversitiesError } = await supabase
+        .from('universities')
+        .select('id, city_id')
+        .in('id', university_ids)
+
+      if (selectedUniversitiesError) {
+        redirectWithError(selectedUniversitiesError.message)
+      }
+
+      const selectedUniversityRows = selectedUniversities || []
+
+      const invalidUniversity = selectedUniversityRows.some(
+        (university) => university.city_id !== city_id
+      )
+
+      if (invalidUniversity || selectedUniversityRows.length !== university_ids.length) {
+        redirectWithError('Selected universities do not belong to the chosen city')
+      }
+
+      let uploadedImageUrl: string | null = null
+
+      if (imageFile instanceof File && imageFile.size > 0) {
+        if (!imageFile.type || !imageFile.type.startsWith('image/')) {
+          redirectWithError('Please upload a valid image file')
+        }
+
+        if (imageFile.size > MAX_IMAGE_SIZE_BYTES) {
+          redirectWithError('Image size must be 5 MB or less')
+        }
+
+        const fileExt = getFileExtension(imageFile.name || 'broker-image.jpg', imageFile.type)
+        const storagePath = `brokers/${Date.now()}-${globalThis.crypto.randomUUID()}.${fileExt}`
+
+        const imageArrayBuffer = await imageFile.arrayBuffer()
+
+        const { error: uploadError } = await supabase.storage
+          .from(BROKER_IMAGES_BUCKET)
+          .upload(storagePath, imageArrayBuffer, {
+            contentType: imageFile.type,
+            cacheControl: '3600',
+            upsert: false,
+          })
+
+        if (uploadError) {
+          redirectWithError(`Image upload failed: ${uploadError.message}`)
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from(BROKER_IMAGES_BUCKET)
+          .getPublicUrl(storagePath)
+
+        uploadedImageUrl = publicUrlData.publicUrl
+        uploadedStoragePath = storagePath
+      }
+
+      const { data: brokerData, error: brokerError } = await supabase
+        .from('brokers')
+        .insert({
+          full_name,
+          phone_number,
+          whatsapp_number,
+          email: email || null,
+          company_name: company_name || null,
+          image_url: uploadedImageUrl,
+        })
+        .select('id')
+        .single()
+
+      if (brokerError || !brokerData) {
+        if (uploadedStoragePath) {
+          await supabase.storage.from(BROKER_IMAGES_BUCKET).remove([uploadedStoragePath])
+        }
+
+        redirectWithError(brokerError?.message || 'Failed to create broker')
+      }
+
+      createdBrokerId = brokerData.id
+
+      const brokerUniversityRows = university_ids.map((university_id) => ({
+        broker_id: brokerData.id,
+        university_id,
+      }))
+
+      const { error: brokerUniversitiesError } = await supabase
+        .from('broker_universities')
+        .insert(brokerUniversityRows)
+
+      if (brokerUniversitiesError) {
+        await supabase.from('brokers').delete().eq('id', brokerData.id)
+
+        if (uploadedStoragePath) {
+          await supabase.storage.from(BROKER_IMAGES_BUCKET).remove([uploadedStoragePath])
+        }
+
+        redirectWithError(brokerUniversitiesError.message)
+      }
+
+      revalidatePath('/admin')
+      revalidatePath('/admin/properties')
+      revalidatePath('/admin/brokers/new')
+
+      redirect('/admin')
+    } catch (error) {
+      if (isRedirectError(error)) {
+        throw error
+      }
+
+      console.error('Create broker failed full error:', error)
+      console.error('Create broker failed message:', getErrorMessage(error))
+
+      try {
+        const supabase = await createClient()
+
+        if (createdBrokerId) {
+          await supabase.from('brokers').delete().eq('id', createdBrokerId)
+        }
+
+        if (uploadedStoragePath) {
+          await supabase.storage.from(BROKER_IMAGES_BUCKET).remove([uploadedStoragePath])
+        }
+      } catch (cleanupError) {
+        console.error('Broker cleanup failed:', cleanupError)
+      }
+
+      redirectWithError(getErrorMessage(error))
+    }
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined
@@ -542,7 +636,6 @@ export default async function NewBrokerPage({
                       accept="image/*"
                       className={fileInputClass}
                     />
-                  
                   </div>
                 </div>
 
@@ -551,7 +644,6 @@ export default async function NewBrokerPage({
                     <h3 className="text-sm font-semibold text-[#222222]">
                       City & Universities
                     </h3>
-                   
                   </div>
 
                   <BrokerUniversitySelector cities={cities} universities={universities} />

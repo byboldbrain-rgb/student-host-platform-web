@@ -34,33 +34,6 @@ type SearchParams = {
   currency?: string
 }
 
-type City = {
-  id: string | number
-  name_en: string
-  name_ar: string
-}
-
-type University = {
-  id: string | number
-  name_en: string
-  name_ar: string
-  city_id: string | number
-}
-
-type PropertyArea = {
-  id: string | number
-  city_id: string | number
-  name_en: string
-  name_ar?: string | null
-  is_active?: boolean | null
-}
-
-type UniversityArea = {
-  id?: string | number
-  university_id: string | number
-  area_id: string | number
-}
-
 type PropertyImage = {
   image_url: string
   is_cover?: boolean
@@ -990,27 +963,6 @@ export default async function PropertyPage({
 
   const isSignedIn = Boolean(user)
 
-  const { data: cities } = await supabase
-    .from('cities')
-    .select('id, name_en, name_ar')
-    .order('name_en', { ascending: true })
-
-  const { data: universities } = await supabase
-    .from('universities')
-    .select('id, name_en, name_ar, city_id')
-    .order('name_en', { ascending: true })
-
-  const { data: areas } = await supabase
-    .from('property_areas')
-    .select('id, city_id, name_en, name_ar, is_active')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name_en', { ascending: true })
-
-  const { data: universityAreas } = await supabase
-    .from('university_property_areas')
-    .select('id, university_id, area_id')
-
   const { data: property, error } = await supabase
     .from('properties')
     .select(`
@@ -1525,41 +1477,6 @@ export default async function PropertyPage({
     return queryString ? `${path}?${queryString}` : path
   }
 
-  const searchBarProps = {
-    cities: (cities as City[]) ?? [],
-    universities: (universities as University[]) ?? [],
-    areas: (areas as PropertyArea[]) ?? [],
-    universityAreas: (universityAreas as UniversityArea[]) ?? [],
-    initialCityId: city_id ?? '',
-    initialUniversityId: university_id ?? '',
-    initialAreaId: area_id ?? '',
-    initialRentalDuration: rental_duration ?? '',
-    initialPriceRange: price_range ?? '',
-    language: selectedLanguage,
-    currency: selectedCurrency,
-    labels: {
-      city: t.city,
-      university: t.university,
-      area: t.area,
-      duration: t.duration,
-      searchCities: t.searchCities,
-      searchAreas: t.searchAreas,
-      chooseUniversity: t.chooseUniversity,
-      chooseArea: t.chooseArea,
-      chooseDuration: t.chooseDuration,
-      selectCity: t.selectCity,
-      selectUniversity: t.selectUniversity,
-      selectArea: t.selectArea,
-      selectDuration: t.selectDuration,
-      anyCity: t.anyCity,
-      anyUniversity: t.anyUniversity,
-      anyArea: t.anyArea,
-      anyDuration: t.anyDuration,
-      daily: t.daily,
-      monthly: t.monthly,
-    },
-  }
-
   const primaryMenuLinks = [
     {
       label: isSignedIn ? t.account : t.login,
@@ -1741,11 +1658,10 @@ export default async function PropertyPage({
 
   return (
     <main
-
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-32 text-gray-700 md:pb-0"
     >
-       <PwaInstallBanner />
+      <PwaInstallBanner />
       <input
         id="nav-menu-toggle"
         type="checkbox"
@@ -1762,7 +1678,6 @@ export default async function PropertyPage({
 
       <PropertiesHeader
         homeHref={buildPageLink()}
-        searchBarProps={searchBarProps}
         t={{ startSearch: t.startSearch }}
       />
 

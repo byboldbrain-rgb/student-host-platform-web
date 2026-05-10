@@ -884,54 +884,52 @@ export default async function PropertiesPage({
   }
 
   const renderPropertyCard = (property: Property) => {
-    const displayPriceEgp = getDisplayPriceEgp(property)
+  const displayPriceEgp = getDisplayPriceEgp(property)
 
-    return (
-      <Link
-        key={property.id}
-        href={buildPropertyHref(property.property_id)}
-        className="group block min-w-[220px] max-w-[220px] shrink-0 snap-start md:min-w-[200px] md:max-w-[200px]"
-      >
-        {renderPropertyImage(
-          property,
-          translateAvailabilityStatus(
-            property.availability_status,
-            selectedLanguage
-          )
-        )}
+  return (
+    <Link
+      key={property.id}
+      href={buildPropertyHref(property.property_id)}
+      className="group block min-w-[220px] max-w-[220px] shrink-0 snap-start md:min-w-[200px] md:max-w-[200px]"
+    >
+      {renderPropertyImage(
+        property,
+        translateAvailabilityStatus(
+          property.availability_status,
+          selectedLanguage
+        )
+      )}
 
-        <div className="mt-2.5 space-y-1.5 md:mt-3">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
-              {isArabic ? property.title_ar : property.title_en}
-            </h3>
-          </div>
+      <div className="mt-2.5 space-y-1.5 md:mt-3">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
+            {isArabic ? property.title_ar : property.title_en}
+          </h3>
+        </div>
 
+        {renderGenderMeta(property) && (
           <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 md:text-[13px]">
-            <span className="truncate capitalize">
-              {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
-              {t.stay}
-            </span>
             {renderGenderMeta(property)}
           </div>
+        )}
 
-          <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
-            <span className="font-semibold text-slate-950">
-              {formatPrice(
-                displayPriceEgp,
-                selectedCurrency,
-                selectedLanguage,
-                currencyRate
-              )}
-            </span>{' '}
-            <span className="text-[12px] text-slate-500 md:text-[12px]">
-              / {property.rental_duration === 'daily' ? t.night : t.month}
-            </span>
-          </p>
-        </div>
-      </Link>
-    )
-  }
+        <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
+          <span className="font-semibold text-slate-950">
+            {formatPrice(
+              displayPriceEgp,
+              selectedCurrency,
+              selectedLanguage,
+              currencyRate
+            )}
+          </span>{' '}
+          <span className="text-[12px] text-slate-500 md:text-[12px]">
+            / {property.rental_duration === 'daily' ? t.night : t.month}
+          </span>
+        </p>
+      </div>
+    </Link>
+  )
+}
 
   const primaryMenuLinks = [
     {
@@ -1241,6 +1239,12 @@ export default async function PropertiesPage({
         .hide-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
+        }
+
+        .popular-desktop-grid > a {
+          width: 100%;
+          min-width: 0 !important;
+          max-width: none !important;
         }
 
         .navienty-logo {
@@ -2245,8 +2249,15 @@ export default async function PropertiesPage({
                   </Link>
                 </div>
 
-                <div className="hide-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:gap-4">
+                <div className="hide-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:gap-4 lg:hidden">
                   {section.items.map((property) => renderPropertyCard(property))}
+                  {renderSeeAllCard(section.id, section.type, section.items)}
+                </div>
+
+                <div className="popular-desktop-grid hidden gap-4 pb-4 lg:grid lg:grid-cols-6">
+                  {section.items.slice(0, 5).map((property) =>
+                    renderPropertyCard(property)
+                  )}
                   {renderSeeAllCard(section.id, section.type, section.items)}
                 </div>
               </div>

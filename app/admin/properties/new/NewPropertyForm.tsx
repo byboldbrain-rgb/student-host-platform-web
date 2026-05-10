@@ -169,27 +169,9 @@ const FORM_STEPS = [
 const DISPLAY_STEPS: DisplayStep[] = [
   { id: 1, title: 'Basic Info', startStep: 1, endStep: 2, navigateStep: 1 },
   { id: 2, title: 'Photos', startStep: 3, endStep: 3, navigateStep: 3 },
-  {
-    id: 3,
-    title: 'Property Details',
-    startStep: 4,
-    endStep: 4,
-    navigateStep: 4,
-  },
-  {
-    id: 4,
-    title: 'Rooms & Pricing',
-    startStep: 5,
-    endStep: 5,
-    navigateStep: 5,
-  },
-  {
-    id: 5,
-    title: 'Property Featured',
-    startStep: 6,
-    endStep: 6,
-    navigateStep: 6,
-  },
+  { id: 3, title: 'Property Details', startStep: 4, endStep: 4, navigateStep: 4 },
+  { id: 4, title: 'Rooms & Pricing', startStep: 5, endStep: 5, navigateStep: 5 },
+  { id: 5, title: 'Property Featured', startStep: 6, endStep: 6, navigateStep: 6 },
   { id: 6, title: 'Review', startStep: 7, endStep: 7, navigateStep: 7 },
 ]
 
@@ -268,7 +250,6 @@ function getRoomValidationMessage(room: RoomForm) {
 
   if (room.room_name.trim() === '') return 'Room name EN is required.'
   if (room.room_type.trim() === '') return 'Room type is required.'
-  if (room.rental_duration.trim() === '') return 'Room rental duration is required.'
   if (!isValidPositiveInt(room.beds_count)) return 'Beds count must be at least 1.'
 
   const enabledAnyOption =
@@ -532,8 +513,11 @@ export default function NewPropertyForm({
 
   const [propertyCode, setPropertyCode] = useState('')
   const [titleEn, setTitleEn] = useState('')
-  const [descriptionEn, setDescriptionEn] = useState('')
+  const [titleAr, setTitleAr] = useState('')
   const [addressEn, setAddressEn] = useState('')
+  const [addressAr, setAddressAr] = useState('')
+
+  const propertyRentalDuration: 'monthly' = 'monthly'
 
   const [cityId, setCityId] = useState('')
   const [universityIds, setUniversityIds] = useState<string[]>([])
@@ -546,16 +530,10 @@ export default function NewPropertyForm({
   const [ownerSearch, setOwnerSearch] = useState('')
 
   const [newOwnerFullName, setNewOwnerFullName] = useState('')
-  const [newOwnerCompanyName, setNewOwnerCompanyName] = useState('')
   const [newOwnerPhone, setNewOwnerPhone] = useState('')
-  const [newOwnerWhatsapp, setNewOwnerWhatsapp] = useState('')
-  const [newOwnerEmail, setNewOwnerEmail] = useState('')
-  const [newOwnerTaxId, setNewOwnerTaxId] = useState('')
-  const [newOwnerNationalId, setNewOwnerNationalId] = useState('')
 
   const [priceEgp, setPriceEgp] = useState('')
   const [floorNumber, setFloorNumber] = useState('0')
-  const [propertyRentalDuration, setPropertyRentalDuration] = useState<'monthly' | 'daily'>('monthly')
 
   const [bedroomsCount, setBedroomsCount] = useState('0')
   const [bathroomsCount, setBathroomsCount] = useState('0')
@@ -664,15 +642,7 @@ export default function NewPropertyForm({
 
     return eligibleOwners
       .filter((owner) => {
-        const haystack = [
-          owner.full_name,
-          owner.company_name,
-          owner.phone_number,
-          owner.whatsapp_number,
-          owner.email,
-          owner.tax_id,
-          owner.national_id,
-        ]
+        const haystack = [owner.full_name, owner.phone_number]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
@@ -825,6 +795,7 @@ export default function NewPropertyForm({
         room_name_ar: `Bedroom ${nextNumber}`,
         beds_count: '1',
         single_room_enabled: true,
+        rental_duration: 'monthly',
       },
     ])
   }
@@ -840,6 +811,7 @@ export default function NewPropertyForm({
             typeof value === 'string' && field !== 'room_name' && field !== 'room_name_ar'
               ? normalizeNumberFieldIfNeeded(field, value)
               : value,
+          rental_duration: 'monthly',
         } as RoomForm
 
         if (field === 'room_name' && typeof value === 'string') {
@@ -874,7 +846,6 @@ export default function NewPropertyForm({
     const hasAnyValue =
       room.room_name.trim() !== '' ||
       room.room_type.trim() !== '' ||
-      room.rental_duration.trim() !== '' ||
       room.beds_count.trim() !== '' ||
       room.single_room_enabled ||
       room.single_room_price_egp.trim() !== '' ||
@@ -890,8 +861,14 @@ export default function NewPropertyForm({
   const validateStep = (step: number) => {
     switch (step) {
       case 1:
-        if (!propertyCode.trim() || !titleEn.trim() || !descriptionEn.trim() || !addressEn.trim()) {
-          return 'Please complete Property Code, Title EN, Description EN, and Address EN.'
+        if (
+          !propertyCode.trim() ||
+          !titleEn.trim() ||
+          !titleAr.trim() ||
+          !addressEn.trim() ||
+          !addressAr.trim()
+        ) {
+          return 'Please complete Property Code, Title EN, Title AR, Address EN, and Address AR.'
         }
         return ''
 
@@ -901,10 +878,9 @@ export default function NewPropertyForm({
           universityIds.length === 0 ||
           !areaId.trim() ||
           !brokerId.trim() ||
-          !gender.trim() ||
-          !propertyRentalDuration.trim()
+          !gender.trim()
         ) {
-          return 'Please complete city, universities, area, broker, gender, and rental duration.'
+          return 'Please complete city, universities, area, broker, and gender.'
         }
 
         if (!filteredPropertyAreas.some((area) => area.id === areaId)) {
@@ -927,10 +903,7 @@ export default function NewPropertyForm({
 
         if (ownerMode === 'new') {
           if (!newOwnerFullName.trim()) return 'Please enter the new owner full name.'
-
-          if (!newOwnerPhone.trim() && !newOwnerWhatsapp.trim() && !newOwnerEmail.trim()) {
-            return 'Please enter at least one contact method for the new owner: phone, WhatsApp, or email.'
-          }
+          if (!newOwnerPhone.trim()) return 'Please enter the new owner phone number.'
         }
 
         return ''
@@ -1029,11 +1002,11 @@ export default function NewPropertyForm({
 
     formData.set('property_id', propertyCode)
     formData.set('title_en', titleEn)
-    formData.set('title_ar', titleEn)
-    formData.set('description_en', descriptionEn)
-    formData.set('description_ar', descriptionEn)
+    formData.set('title_ar', titleAr)
+    formData.set('description_en', '')
+    formData.set('description_ar', '')
     formData.set('address_en', addressEn)
-    formData.set('address_ar', addressEn)
+    formData.set('address_ar', addressAr)
     formData.set('city_id', cityId)
     formData.set('university_id', primaryUniversityId)
     formData.delete('university_ids')
@@ -1044,16 +1017,16 @@ export default function NewPropertyForm({
     formData.set('owner_mode', ownerMode)
     formData.set('owner_id', ownerMode === 'existing' ? ownerId : '')
     formData.set('new_owner_full_name', newOwnerFullName.trim())
-    formData.set('new_owner_company_name', newOwnerCompanyName.trim())
+    formData.set('new_owner_company_name', '')
     formData.set('new_owner_phone_number', newOwnerPhone.trim())
-    formData.set('new_owner_whatsapp_number', newOwnerWhatsapp.trim())
-    formData.set('new_owner_email', newOwnerEmail.trim())
-    formData.set('new_owner_tax_id', newOwnerTaxId.trim())
-    formData.set('new_owner_national_id', newOwnerNationalId.trim())
+    formData.set('new_owner_whatsapp_number', '')
+    formData.set('new_owner_email', '')
+    formData.set('new_owner_tax_id', '')
+    formData.set('new_owner_national_id', '')
 
     formData.set('price_egp', normalizeNumberString(priceEgp))
     formData.set('floor_number', normalizeNumberString(floorNumber))
-    formData.set('rental_duration', propertyRentalDuration)
+    formData.set('rental_duration', 'monthly')
     formData.set('gender', gender)
     formData.set('bedrooms_count', normalizeNumberString(bedroomsCount))
     formData.set('bathrooms_count', normalizeNumberString(bathroomsCount))
@@ -1078,7 +1051,7 @@ export default function NewPropertyForm({
       formData.append('room_name', room.room_name)
       formData.append('room_name_ar', room.room_name_ar || room.room_name)
       formData.append('room_type', room.room_type)
-      formData.append('room_rental_duration', room.rental_duration)
+      formData.append('room_rental_duration', 'monthly')
       formData.append('room_beds_count', normalizeNumberString(room.beds_count))
       formData.append('room_private_bathroom', room.private_bathroom ? 'true' : 'false')
       formData.append('room_single_room_enabled', room.single_room_enabled ? 'true' : 'false')
@@ -1099,14 +1072,15 @@ export default function NewPropertyForm({
     const ownerComplete =
       ownerMode === 'existing'
         ? Boolean(ownerId.trim())
-        : Boolean(newOwnerFullName.trim() && (newOwnerPhone.trim() || newOwnerWhatsapp.trim() || newOwnerEmail.trim()))
+        : Boolean(newOwnerFullName.trim() && newOwnerPhone.trim())
 
     const basicFieldsComplete =
       [
         'property_id',
         'title_en',
-        'description_en',
+        'title_ar',
         'address_en',
+        'address_ar',
         'city_id',
         'university_id',
         'area_id',
@@ -1164,13 +1138,9 @@ export default function NewPropertyForm({
   const reviewOwnerSubLabel =
     ownerMode === 'existing'
       ? selectedOwner
-        ? selectedOwner.company_name ||
-          selectedOwner.phone_number ||
-          selectedOwner.whatsapp_number ||
-          selectedOwner.email ||
-          ''
+        ? selectedOwner.phone_number || ''
         : ''
-      : newOwnerCompanyName || newOwnerPhone || newOwnerWhatsapp || newOwnerEmail || ''
+      : newOwnerPhone || ''
 
   return (
     <form
@@ -1236,11 +1206,11 @@ export default function NewPropertyForm({
       <input type="hidden" name="admin_status" value="draft" />
       <input type="hidden" name="property_id" value={propertyCode} />
       <input type="hidden" name="title_en" value={titleEn} />
-      <input type="hidden" name="title_ar" value={titleEn} />
-      <input type="hidden" name="description_en" value={descriptionEn} />
-      <input type="hidden" name="description_ar" value={descriptionEn} />
+      <input type="hidden" name="title_ar" value={titleAr} />
+      <input type="hidden" name="description_en" value="" />
+      <input type="hidden" name="description_ar" value="" />
       <input type="hidden" name="address_en" value={addressEn} />
-      <input type="hidden" name="address_ar" value={addressEn} />
+      <input type="hidden" name="address_ar" value={addressAr} />
       <input type="hidden" name="city_id" value={cityId} />
       <input type="hidden" name="university_id" value={primaryUniversityId} />
       {universityIds.map((id) => (
@@ -1251,12 +1221,12 @@ export default function NewPropertyForm({
       <input type="hidden" name="owner_mode" value={ownerMode} />
       <input type="hidden" name="owner_id" value={ownerMode === 'existing' ? ownerId : ''} />
       <input type="hidden" name="new_owner_full_name" value={newOwnerFullName} />
-      <input type="hidden" name="new_owner_company_name" value={newOwnerCompanyName} />
+      <input type="hidden" name="new_owner_company_name" value="" />
       <input type="hidden" name="new_owner_phone_number" value={newOwnerPhone} />
-      <input type="hidden" name="new_owner_whatsapp_number" value={newOwnerWhatsapp} />
-      <input type="hidden" name="new_owner_email" value={newOwnerEmail} />
-      <input type="hidden" name="new_owner_tax_id" value={newOwnerTaxId} />
-      <input type="hidden" name="new_owner_national_id" value={newOwnerNationalId} />
+      <input type="hidden" name="new_owner_whatsapp_number" value="" />
+      <input type="hidden" name="new_owner_email" value="" />
+      <input type="hidden" name="new_owner_tax_id" value="" />
+      <input type="hidden" name="new_owner_national_id" value="" />
       <input type="hidden" name="price_egp" value={priceEgp} />
       <input type="hidden" name="floor_number" value={floorNumber} />
       <input type="hidden" name="rental_duration" value={propertyRentalDuration} />
@@ -1342,7 +1312,7 @@ export default function NewPropertyForm({
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div>
                   <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
                     Title EN
                   </label>
@@ -1354,20 +1324,20 @@ export default function NewPropertyForm({
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div>
                   <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-                    Description EN
+                    Title AR
                   </label>
-                  <textarea
-                    value={descriptionEn}
-                    onChange={(e) => setDescriptionEn(e.target.value)}
-                    placeholder="Description EN"
-                    rows={4}
-                    className="w-full rounded-md border border-[#cfcfcf] px-3 py-2.5 text-sm outline-none transition focus:border-[#0071c2]"
+                  <input
+                    value={titleAr}
+                    onChange={(e) => setTitleAr(e.target.value)}
+                    placeholder="Title AR"
+                    className={inputClass}
+                    dir="rtl"
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div>
                   <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
                     Address EN
                   </label>
@@ -1376,6 +1346,19 @@ export default function NewPropertyForm({
                     onChange={(e) => setAddressEn(e.target.value)}
                     placeholder="Address EN"
                     className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+                    Address AR
+                  </label>
+                  <input
+                    value={addressAr}
+                    onChange={(e) => setAddressAr(e.target.value)}
+                    placeholder="Address AR"
+                    className={inputClass}
+                    dir="rtl"
                   />
                 </div>
               </div>
@@ -1503,24 +1486,12 @@ export default function NewPropertyForm({
                   </p>
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <label className="mb-1.5 block text-sm font-medium">Gender</label>
                   <select value={gender} onChange={(e) => setGender(e.target.value)} className={selectClass}>
                     <option value="">Select Gender</option>
                     <option value="boys">Boys</option>
                     <option value="girls">Girls</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Rental Duration</label>
-                  <select
-                    value={propertyRentalDuration}
-                    onChange={(e) => setPropertyRentalDuration(e.target.value as 'monthly' | 'daily')}
-                    className={selectClass}
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="daily">Daily</option>
                   </select>
                 </div>
 
@@ -1581,62 +1552,11 @@ export default function NewPropertyForm({
                       </div>
 
                       <div>
-                        <label className="mb-1.5 block text-sm font-medium">Company Name</label>
-                        <input
-                          value={newOwnerCompanyName}
-                          onChange={(e) => setNewOwnerCompanyName(e.target.value)}
-                          placeholder="Optional"
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
                         <label className="mb-1.5 block text-sm font-medium">Phone Number</label>
                         <input
                           value={newOwnerPhone}
                           onChange={(e) => setNewOwnerPhone(e.target.value)}
                           placeholder="Owner phone"
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">WhatsApp Number</label>
-                        <input
-                          value={newOwnerWhatsapp}
-                          onChange={(e) => setNewOwnerWhatsapp(e.target.value)}
-                          placeholder="Optional"
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Email</label>
-                        <input
-                          type="email"
-                          value={newOwnerEmail}
-                          onChange={(e) => setNewOwnerEmail(e.target.value)}
-                          placeholder="Optional"
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">Tax ID</label>
-                        <input
-                          value={newOwnerTaxId}
-                          onChange={(e) => setNewOwnerTaxId(e.target.value)}
-                          placeholder="Optional"
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1.5 block text-sm font-medium">National ID</label>
-                        <input
-                          value={newOwnerNationalId}
-                          onChange={(e) => setNewOwnerNationalId(e.target.value)}
-                          placeholder="Optional"
                           className={inputClass}
                         />
                       </div>
@@ -1651,7 +1571,7 @@ export default function NewPropertyForm({
                         onChange={(e) => setOwnerSearch(e.target.value)}
                         placeholder={
                           cityId && universityIds.length > 0
-                            ? 'Search by name, phone, email, tax ID...'
+                            ? 'Search by name or phone...'
                             : 'Select city and universities first'
                         }
                         disabled={!cityId || universityIds.length === 0}
@@ -1690,7 +1610,6 @@ export default function NewPropertyForm({
                         {displayedOwners.map((owner) => (
                           <option key={owner.id} value={owner.id}>
                             {owner.full_name}
-                            {owner.company_name ? ` - ${owner.company_name}` : ''}
                             {owner.phone_number ? ` - ${owner.phone_number}` : ''}
                           </option>
                         ))}
@@ -1712,11 +1631,7 @@ export default function NewPropertyForm({
                         <p className="font-semibold text-[#0f3f75]">Selected owner details</p>
                         <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                           <p>Name: {selectedOwner.full_name || '—'}</p>
-                          <p>Company: {selectedOwner.company_name || '—'}</p>
                           <p>Phone: {selectedOwner.phone_number || '—'}</p>
-                          <p>WhatsApp: {selectedOwner.whatsapp_number || '—'}</p>
-                          <p>Email: {selectedOwner.email || '—'}</p>
-                          <p>Tax ID: {selectedOwner.tax_id || '—'}</p>
                         </div>
                       </div>
                     ) : null}
@@ -1982,18 +1897,6 @@ export default function NewPropertyForm({
                         </div>
 
                         <div>
-                          <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">Rental Duration</label>
-                          <select
-                            value={room.rental_duration}
-                            onChange={(e) => updateRoom(index, 'rental_duration', e.target.value)}
-                            className={selectClass}
-                          >
-                            <option value="monthly">Monthly</option>
-                            <option value="daily">Daily</option>
-                          </select>
-                        </div>
-
-                        <div>
                           <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">Beds Count</label>
                           <input
                             type="number"
@@ -2135,6 +2038,21 @@ export default function NewPropertyForm({
                   </div>
 
                   <div className="rounded-md border border-[#ececec] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Title AR</p>
+                    <p className="mt-1 font-semibold">{titleAr || '-'}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[#ececec] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Address EN</p>
+                    <p className="mt-1 font-semibold">{addressEn || '-'}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[#ececec] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Address AR</p>
+                    <p className="mt-1 font-semibold">{addressAr || '-'}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[#ececec] p-3">
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">City</p>
                     <p className="mt-1 font-semibold">{cities.find((city) => city.id === cityId)?.name_en || '-'}</p>
                   </div>
@@ -2176,11 +2094,6 @@ export default function NewPropertyForm({
                   <div className="rounded-md border border-[#ececec] p-3">
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Gender</p>
                     <p className="mt-1 font-semibold">{gender || '-'}</p>
-                  </div>
-
-                  <div className="rounded-md border border-[#ececec] p-3">
-                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Rental Duration</p>
-                    <p className="mt-1 font-semibold">{propertyRentalDuration || '-'}</p>
                   </div>
 
                   <div className="rounded-md border border-[#ececec] p-3">
@@ -2253,7 +2166,7 @@ export default function NewPropertyForm({
                           <div key={index} className="rounded-md border border-[#ececec] p-3">
                             <p className="font-semibold text-[#1a1a1a]">{room.room_name || `Room ${index + 1}`}</p>
                             <p className="mt-2 text-sm text-[#6b7280]">
-                              Type: {room.room_type} | Duration: {room.rental_duration} | Beds: {room.beds_count || '0'}
+                              Type: {room.room_type} | Beds: {room.beds_count || '0'}
                             </p>
                             <p className="mt-1 text-sm text-[#6b7280]">
                               Options: {optionLabels.length > 0 ? optionLabels.join(' | ') : '-'}

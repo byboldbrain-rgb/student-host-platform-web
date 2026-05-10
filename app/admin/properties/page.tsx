@@ -9,6 +9,10 @@ import {
 } from '@/src/lib/admin-auth'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 
+type SearchParams = Promise<{
+  owner_number?: string
+}>
+
 type Property = {
   id: string
   property_id: string
@@ -34,6 +38,12 @@ type Property = {
   bathrooms_count?: number | null
   beds_count?: number | null
   guests_count?: number | null
+  owner_id: string | null
+  owner_name: string | null
+  owner_phone: string | null
+  owner_whatsapp: string | null
+  owner_email: string | null
+  owner_national_id: string | null
 }
 
 type PropertyImage = {
@@ -125,6 +135,22 @@ function EyeIcon() {
   )
 }
 
+function SearchIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  )
+}
+
 function ClipboardListIcon() {
   return (
     <svg
@@ -199,7 +225,11 @@ function NotificationBadge({ count }: { count: number }) {
   )
 }
 
-function EmptyState() {
+function EmptyState({
+  ownerSearchTerm,
+}: {
+  ownerSearchTerm?: string | null
+}) {
   return (
     <div className="rounded-[32px] border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
@@ -208,7 +238,9 @@ function EmptyState() {
 
       <h3 className="text-lg font-semibold text-slate-900">No properties found</h3>
       <p className="mt-2 text-sm text-slate-500">
-        There are no properties available for this account right now.
+        {ownerSearchTerm
+          ? `No properties found for owner number: ${ownerSearchTerm}.`
+          : 'There are no properties available for this account right now.'}
       </p>
     </div>
   )
@@ -224,6 +256,61 @@ function PropertyImagePlaceholder() {
         <p className="text-sm font-medium">No image available</p>
       </div>
     </div>
+  )
+}
+
+function OwnerSearchForm({
+  ownerSearchTerm,
+}: {
+  ownerSearchTerm: string
+}) {
+  return (
+    <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.05)] md:p-5">
+      <form
+        action="/admin/properties"
+        method="GET"
+        className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]"
+      >
+        <label className="relative block">
+          <span className="mb-2 block text-sm font-semibold text-slate-900">
+            Search by Owner Number
+          </span>
+
+          <span className="pointer-events-none absolute bottom-[13px] left-4 text-slate-400">
+            <SearchIcon />
+          </span>
+
+          <input
+            type="text"
+            name="owner_number"
+            defaultValue={ownerSearchTerm}
+            placeholder="Owner phone, WhatsApp, national ID, email, or owner ID"
+            className="h-[52px] w-full rounded-full border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#155dfc] focus:bg-white focus:ring-4 focus:ring-blue-100"
+          />
+        </label>
+
+        <div className="flex items-end">
+          <button
+            type="submit"
+            className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#155dfc] px-6 text-sm font-semibold text-white transition hover:bg-[#0f4fe0] md:w-auto"
+          >
+            <SearchIcon />
+            Search
+          </button>
+        </div>
+
+        {ownerSearchTerm ? (
+          <div className="flex items-end">
+            <Link
+              href="/admin/properties"
+              className="inline-flex h-[52px] w-full items-center justify-center rounded-full border border-slate-300 bg-white px-6 text-sm font-semibold text-slate-900 transition hover:border-slate-900 hover:bg-slate-50 md:w-auto"
+            >
+              Reset
+            </Link>
+          </div>
+        ) : null}
+      </form>
+    </section>
   )
 }
 
@@ -250,6 +337,46 @@ function getCoverImage(
   })
 
   return sortedImages[0]?.image_url || null
+}
+
+function normalizeSearchValue(value?: string | null) {
+  return (value || '').trim().toLowerCase()
+}
+
+function normalizeDigits(value?: string | null) {
+  return (value || '').replace(/\D/g, '')
+}
+
+function propertyMatchesOwnerSearch(property: Property, ownerSearchTerm: string) {
+  const term = normalizeSearchValue(ownerSearchTerm)
+
+  if (!term) return true
+
+  const digitTerm = normalizeDigits(term)
+
+  const searchableValues = [
+    property.owner_id,
+    property.owner_name,
+    property.owner_phone,
+    property.owner_whatsapp,
+    property.owner_email,
+    property.owner_national_id,
+  ]
+
+  return searchableValues.some((value) => {
+    const normalizedValue = normalizeSearchValue(value)
+    const normalizedDigits = normalizeDigits(value)
+
+    if (normalizedValue.includes(term)) {
+      return true
+    }
+
+    if (digitTerm && normalizedDigits.includes(digitTerm)) {
+      return true
+    }
+
+    return false
+  })
 }
 
 function MobileBottomNav({ newReservationsCount }: { newReservationsCount: number }) {
@@ -336,7 +463,14 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
   )
 }
 
-export default async function AdminPropertiesPage() {
+export default async function AdminPropertiesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const resolvedSearchParams = await searchParams
+  const ownerSearchTerm = resolvedSearchParams?.owner_number?.trim() || ''
+
   const adminContext = await requirePropertiesSectionAccess()
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
@@ -368,7 +502,16 @@ export default async function AdminPropertiesPage() {
       bedrooms_count,
       bathrooms_count,
       beds_count,
-      guests_count
+      guests_count,
+      owner_id,
+      property_owners (
+        id,
+        full_name,
+        phone_number,
+        whatsapp_number,
+        email,
+        national_id
+      )
     `)
     .order('created_at', { ascending: false })
 
@@ -386,7 +529,38 @@ export default async function AdminPropertiesPage() {
     throw new Error(error.message)
   }
 
-  const properties = (data || []) as Property[]
+  const allProperties: Property[] = (data || []).map((property: any) => {
+    const owner = Array.isArray(property.property_owners)
+      ? property.property_owners[0]
+      : property.property_owners
+
+    return {
+      id: property.id,
+      property_id: property.property_id,
+      title_en: property.title_en,
+      title_ar: property.title_ar,
+      price_egp: property.price_egp,
+      availability_status: property.availability_status,
+      admin_status: property.admin_status,
+      is_active: property.is_active,
+      created_at: property.created_at,
+      broker_id: property.broker_id,
+      bedrooms_count: property.bedrooms_count,
+      bathrooms_count: property.bathrooms_count,
+      beds_count: property.beds_count,
+      guests_count: property.guests_count,
+      owner_id: property.owner_id ?? owner?.id ?? null,
+      owner_name: owner?.full_name ?? null,
+      owner_phone: owner?.phone_number ?? null,
+      owner_whatsapp: owner?.whatsapp_number ?? null,
+      owner_email: owner?.email ?? null,
+      owner_national_id: owner?.national_id ?? null,
+    }
+  })
+
+  const properties = allProperties.filter((property) =>
+    propertyMatchesOwnerSearch(property, ownerSearchTerm)
+  )
 
   let propertyImagesMap: Record<string, PropertyImage[]> = {}
 
@@ -670,16 +844,29 @@ export default async function AdminPropertiesPage() {
         </header>
 
         <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
+          <OwnerSearchForm ownerSearchTerm={ownerSearchTerm} />
+
           {properties.length === 0 ? (
             <div className="mt-6">
-              <EmptyState />
+              <EmptyState ownerSearchTerm={ownerSearchTerm} />
             </div>
           ) : (
             <section className="mt-8 rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
               <div className="border-b border-slate-200 px-5 py-5 md:px-7">
-                <h3 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
-                  Property Listings
-                </h3>
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
+                    {ownerSearchTerm ? 'Owner Property Listings' : 'Property Listings'}
+                  </h3>
+
+                  {ownerSearchTerm ? (
+                    <p className="text-sm text-slate-500">
+                      Showing properties matching owner number:{' '}
+                      <span className="font-semibold text-slate-900">
+                        {ownerSearchTerm}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               <div className="p-4 md:p-6">
@@ -711,6 +898,40 @@ export default async function AdminPropertiesPage() {
                           <h4 className="text-lg font-semibold text-slate-900">
                             {title}
                           </h4>
+
+                          <div className="mt-3 rounded-[18px] border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                            <p>
+                              <span className="font-semibold text-slate-900">
+                                Owner:
+                              </span>{' '}
+                              {property.owner_name || '—'}
+                            </p>
+
+                            <p className="mt-1">
+                              <span className="font-semibold text-slate-900">
+                                Phone:
+                              </span>{' '}
+                              {property.owner_phone || '—'}
+                            </p>
+
+                            {property.owner_whatsapp ? (
+                              <p className="mt-1">
+                                <span className="font-semibold text-slate-900">
+                                  WhatsApp:
+                                </span>{' '}
+                                {property.owner_whatsapp}
+                              </p>
+                            ) : null}
+
+                            {property.owner_national_id ? (
+                              <p className="mt-1">
+                                <span className="font-semibold text-slate-900">
+                                  National ID:
+                                </span>{' '}
+                                {property.owner_national_id}
+                              </p>
+                            ) : null}
+                          </div>
 
                           <div className="mt-5">
                             <Link

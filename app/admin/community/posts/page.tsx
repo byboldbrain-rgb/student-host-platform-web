@@ -16,6 +16,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import AdminLogoutButton from "@/app/admin/components/AdminLogoutButton";
+import { createClient as createSupabaseBrowserClient } from "@/src/lib/supabase/client";
 
 type AssetType = "image" | "video";
 
@@ -83,6 +84,27 @@ type PostForm = {
   assets: PostAssetInput[];
 };
 
+const STORAGE_BUCKET =
+  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "community-posts";
+
+const MAX_ASSETS_PER_POST = 5;
+const MAX_IMAGE_SIZE_MB = 8;
+const MAX_VIDEO_SIZE_MB = 80;
+const MAX_THUMBNAIL_SIZE_MB = 5;
+
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
+
+const ALLOWED_VIDEO_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+];
+
 const primaryButtonClass =
   "inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_12px_26px_rgba(37,99,235,0.28)] disabled:cursor-not-allowed disabled:opacity-70";
 
@@ -126,6 +148,79 @@ const emptyForm = (): PostForm => ({
   socialMediaLink: "",
   assets: [createEmptyAsset(true, 0)],
 });
+
+function validateClientFile(
+  file: File,
+  assetType: AssetType,
+  isThumbnail = false
+) {
+  const maxMb = isThumbnail
+    ? MAX_THUMBNAIL_SIZE_MB
+    : assetType === "video"
+      ? MAX_VIDEO_SIZE_MB
+      : MAX_IMAGE_SIZE_MB;
+
+  if (file.size > maxMb * 1024 * 1024) {
+    return `${
+      isThumbnail ? "Thumbnail" : assetType === "video" ? "Video" : "Image"
+    } must be less than ${maxMb}MB.`;
+  }
+
+  const allowedTypes =
+    assetType === "video" && !isThumbnail
+      ? ALLOWED_VIDEO_TYPES
+      : ALLOWED_IMAGE_TYPES;
+
+  if (!allowedTypes.includes(file.type)) {
+    return `Unsupported file type: ${file.type}`;
+  }
+
+  return "";
+}
+
+async function uploadCommunityFile(params: {
+  file: File;
+  assetType: AssetType;
+  purpose: "main" | "thumbnail";
+}) {
+  const { file, assetType, purpose } = params;
+
+  const signedUrlRes = await fetch("/api/admin/community/upload-url", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      assetType,
+      purpose,
+    }),
+  });
+
+  const signedUrlResult = await signedUrlRes.json();
+
+  if (!signedUrlRes.ok) {
+    throw new Error(signedUrlResult.error || "Failed to prepare upload");
+  }
+
+  const { path, token, publicUrl } = signedUrlResult;
+
+  const uploadSupabase = createSupabaseBrowserClient();
+
+  const { error: uploadError } = await uploadSupabase.storage
+    .from(STORAGE_BUCKET)
+    .uploadToSignedUrl(path, token, file, {
+      contentType: file.type,
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Failed to upload file");
+  }
+
+  return publicUrl as string;
+}
 
 function BrandLogo() {
   return (
@@ -182,6 +277,7 @@ export default function AdminCommunityPostsPage() {
   const [tableMessage, setTableMessage] = useState("");
   const [formMessage, setFormMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
 
   const coverAsset = useMemo(
     () => form.assets.find((asset) => asset.isCover) ?? form.assets[0],
@@ -256,6 +352,7 @@ export default function AdminCommunityPostsPage() {
     setEditingPostId(null);
     setFormMessage("");
     setErrorMessage("");
+    setUploadStatus("");
   }
 
   function updateAsset(localId: string, patch: Partial<PostAssetInput>) {
@@ -268,15 +365,24 @@ export default function AdminCommunityPostsPage() {
   }
 
   function addAsset() {
-    setForm((prev) => ({
-      ...prev,
-      assets: [...prev.assets, createEmptyAsset(false, prev.assets.length)],
-    }));
+    setForm((prev) => {
+      if (prev.assets.length >= MAX_ASSETS_PER_POST) {
+        setErrorMessage(`Maximum ${MAX_ASSETS_PER_POST} assets per post.`);
+        return prev;
+      }
+
+      return {
+        ...prev,
+        assets: [...prev.assets, createEmptyAsset(false, prev.assets.length)],
+      };
+    });
   }
 
   function removeAsset(localId: string) {
     setForm((prev) => {
-      const assetToRemove = prev.assets.find((asset) => asset.localId === localId);
+      const assetToRemove = prev.assets.find(
+        (asset) => asset.localId === localId
+      );
 
       if (assetToRemove) {
         if (assetToRemove.file && assetToRemove.previewUrl.startsWith("blob:")) {
@@ -327,6 +433,17 @@ export default function AdminCommunityPostsPage() {
     file: File | null,
     assetType: AssetType
   ) {
+    setErrorMessage("");
+
+    if (file) {
+      const validationError = validateClientFile(file, assetType);
+
+      if (validationError) {
+        setErrorMessage(validationError);
+        return;
+      }
+    }
+
     setForm((prev) => ({
       ...prev,
       assets: prev.assets.map((asset) => {
@@ -359,6 +476,17 @@ export default function AdminCommunityPostsPage() {
   }
 
   function handleThumbnailFileChange(localId: string, file: File | null) {
+    setErrorMessage("");
+
+    if (file) {
+      const validationError = validateClientFile(file, "image", true);
+
+      if (validationError) {
+        setErrorMessage(validationError);
+        return;
+      }
+    }
+
     setForm((prev) => ({
       ...prev,
       assets: prev.assets.map((asset) => {
@@ -391,6 +519,7 @@ export default function AdminCommunityPostsPage() {
   async function startEdit(postId: number) {
     try {
       setErrorMessage("");
+      setUploadStatus("");
       const res = await fetch(`/api/admin/community/posts/${postId}`, {
         cache: "no-store",
       });
@@ -455,11 +584,67 @@ export default function AdminCommunityPostsPage() {
     setSaving(true);
     setFormMessage("");
     setErrorMessage("");
+    setUploadStatus("");
 
     try {
       const validAssets = form.assets.filter(
         (asset) => asset.file || asset.existingFileUrl
       );
+
+      if (validAssets.length === 0) {
+        throw new Error("At least one asset is required.");
+      }
+
+      if (validAssets.length > MAX_ASSETS_PER_POST) {
+        throw new Error(`Maximum ${MAX_ASSETS_PER_POST} assets per post.`);
+      }
+
+      const uploadedAssets = [];
+
+      for (let index = 0; index < validAssets.length; index++) {
+        const asset = validAssets[index];
+
+        let fileUrl = asset.existingFileUrl || "";
+        let thumbnailUrl = asset.existingThumbnailUrl || "";
+
+        if (asset.file) {
+          setUploadStatus(
+            `Uploading ${asset.assetType} ${index + 1} of ${validAssets.length}...`
+          );
+
+          fileUrl = await uploadCommunityFile({
+            file: asset.file,
+            assetType: asset.assetType,
+            purpose: "main",
+          });
+        }
+
+        if (asset.thumbnailFile) {
+          setUploadStatus(`Uploading thumbnail ${index + 1}...`);
+
+          thumbnailUrl = await uploadCommunityFile({
+            file: asset.thumbnailFile,
+            assetType: "image",
+            purpose: "thumbnail",
+          });
+        }
+
+        if (!fileUrl) {
+          throw new Error(`Asset #${index + 1} is missing a file.`);
+        }
+
+        uploadedAssets.push({
+          localId: asset.localId,
+          assetType: asset.assetType,
+          fileUrl,
+          thumbnailUrl: thumbnailUrl || null,
+          altText: asset.altText.trim() || null,
+          isCover: asset.isCover,
+          sortOrder: index,
+        });
+      }
+
+      setUploadStatus("Saving post details...");
 
       const postData = {
         titleEn: form.titleEn.trim(),
@@ -474,34 +659,8 @@ export default function AdminCommunityPostsPage() {
         publishedAt: form.publishedAt || null,
         authorName: form.authorName.trim() || null,
         socialMediaLink: form.socialMediaLink.trim() || null,
-        assets: validAssets.map((asset, index) => ({
-          localId: asset.localId,
-          assetType: asset.assetType,
-          altText: asset.altText.trim() || null,
-          isCover: asset.isCover,
-          sortOrder: index,
-          existingFileUrl: asset.file ? null : asset.existingFileUrl || null,
-          existingThumbnailUrl: asset.thumbnailFile
-            ? null
-            : asset.existingThumbnailUrl || null,
-        })),
+        assets: uploadedAssets,
       };
-
-      const formData = new FormData();
-      formData.append("data", JSON.stringify(postData));
-
-      validAssets.forEach((asset) => {
-        if (asset.file) {
-          formData.append(`assetFiles.${asset.localId}`, asset.file);
-        }
-
-        if (asset.thumbnailFile) {
-          formData.append(
-            `assetThumbnails.${asset.localId}`,
-            asset.thumbnailFile
-          );
-        }
-      });
 
       const isEdit = editingPostId !== null;
       const url = isEdit
@@ -511,7 +670,10 @@ export default function AdminCommunityPostsPage() {
 
       const res = await fetch(url, {
         method,
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(postData),
       });
 
       const result = await res.json();
@@ -531,6 +693,7 @@ export default function AdminCommunityPostsPage() {
       );
     } finally {
       setSaving(false);
+      setUploadStatus("");
     }
   }
 
@@ -769,6 +932,12 @@ export default function AdminCommunityPostsPage() {
             </div>
           ) : null}
 
+          {uploadStatus ? (
+            <div className="mt-6 rounded-[20px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+              {uploadStatus}
+            </div>
+          ) : null}
+
           <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <form
               onSubmit={handleSubmit}
@@ -844,7 +1013,10 @@ export default function AdminCommunityPostsPage() {
                       type="text"
                       value={form.authorName}
                       onChange={(e) =>
-                        setForm((prev) => ({ ...prev, authorName: e.target.value }))
+                        setForm((prev) => ({
+                          ...prev,
+                          authorName: e.target.value,
+                        }))
                       }
                       className={inputClass}
                     />
@@ -858,7 +1030,10 @@ export default function AdminCommunityPostsPage() {
                       type="datetime-local"
                       value={form.publishedAt}
                       onChange={(e) =>
-                        setForm((prev) => ({ ...prev, publishedAt: e.target.value }))
+                        setForm((prev) => ({
+                          ...prev,
+                          publishedAt: e.target.value,
+                        }))
                       }
                       className={inputClass}
                     />
@@ -892,14 +1067,15 @@ export default function AdminCommunityPostsPage() {
                       Post assets
                     </h3>
                     <p className="mt-1 text-sm text-[#667085]">
-                      Upload images or videos and choose which one appears as the
-                      cover.
+                      Upload up to {MAX_ASSETS_PER_POST} assets. Images max{" "}
+                      {MAX_IMAGE_SIZE_MB}MB, videos max {MAX_VIDEO_SIZE_MB}MB.
                     </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={addAsset}
+                    disabled={form.assets.length >= MAX_ASSETS_PER_POST}
                     className={primaryButtonClass}
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -909,7 +1085,8 @@ export default function AdminCommunityPostsPage() {
 
                 <div className="grid gap-4">
                   {form.assets.map((asset, index) => {
-                    const assetMediaUrl = asset.previewUrl || asset.existingFileUrl;
+                    const assetMediaUrl =
+                      asset.previewUrl || asset.existingFileUrl;
                     const assetThumbUrl =
                       asset.thumbnailPreviewUrl || asset.existingThumbnailUrl;
 
@@ -971,7 +1148,8 @@ export default function AdminCommunityPostsPage() {
 
                           <div className="md:col-span-2">
                             <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                              Upload {asset.assetType === "image" ? "Image" : "Video"}
+                              Upload{" "}
+                              {asset.assetType === "image" ? "Image" : "Video"}
                             </label>
 
                             <label className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-[#222222] transition hover:border-blue-500 hover:bg-blue-50/40">
@@ -987,13 +1165,8 @@ export default function AdminCommunityPostsPage() {
                                 type="file"
                                 accept={
                                   asset.assetType === "image"
-                                    ? "image/*"
-                                    : "video/*"
-                                }
-                                capture={
-                                  asset.assetType === "image"
-                                    ? "environment"
-                                    : undefined
+                                    ? "image/jpeg,image/png,image/webp,image/gif"
+                                    : "video/mp4,video/webm,video/quicktime"
                                 }
                                 onChange={(e) =>
                                   handleAssetFileChange(
@@ -1043,8 +1216,7 @@ export default function AdminCommunityPostsPage() {
                                 </span>
                                 <input
                                   type="file"
-                                  accept="image/*"
-                                  capture="environment"
+                                  accept="image/jpeg,image/png,image/webp,image/gif"
                                   onChange={(e) =>
                                     handleThumbnailFileChange(
                                       asset.localId,
@@ -1059,12 +1231,12 @@ export default function AdminCommunityPostsPage() {
                         ) : null}
 
                         {assetMediaUrl ? (
-                          <div className="mt-4 overflow-hidden rounded-[24px] border border-black/[0.06] bg-[#f8fafc]">
+                          <div className="mt-4 overflow-hidden rounded-[24px] border border-black/[0.06] bg-black">
                             {asset.assetType === "video" ? (
                               <video
                                 controls
                                 poster={assetThumbUrl || undefined}
-                                className="h-[240px] w-full bg-black object-cover"
+                                className="h-[240px] w-full bg-black object-contain"
                               >
                                 <source src={assetMediaUrl} />
                               </video>
@@ -1072,7 +1244,7 @@ export default function AdminCommunityPostsPage() {
                               <img
                                 src={assetMediaUrl}
                                 alt={asset.altText || `Asset ${index + 1}`}
-                                className="h-[240px] w-full object-cover"
+                                className="h-[240px] w-full bg-black object-contain"
                               />
                             )}
                           </div>
@@ -1092,7 +1264,7 @@ export default function AdminCommunityPostsPage() {
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <button type="submit" disabled={saving} className={primaryButtonClass}>
                   {saving
-                    ? "Saving..."
+                    ? uploadStatus || "Saving..."
                     : editingPostId
                       ? "Update Post"
                       : "Create Post"}
@@ -1145,7 +1317,7 @@ export default function AdminCommunityPostsPage() {
                           <video
                             controls
                             poster={coverAssetPosterUrl || undefined}
-                            className="h-[320px] w-full object-cover"
+                            className="h-[320px] w-full bg-black object-contain"
                           >
                             <source src={coverAssetMediaUrl} />
                           </video>
@@ -1153,7 +1325,7 @@ export default function AdminCommunityPostsPage() {
                           <img
                             src={coverAssetMediaUrl}
                             alt={coverAsset.altText || form.titleEn || "Cover"}
-                            className="h-[320px] w-full object-cover"
+                            className="h-[320px] w-full bg-black object-contain"
                           />
                         )}
                       </div>

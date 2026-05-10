@@ -106,10 +106,6 @@ function getOptionLabel(code: RoomSellableOptionInput['code']) {
   }
 }
 
-function normalizeRentalDuration(value: string): 'daily' | 'monthly' {
-  return value === 'daily' ? 'daily' : 'monthly'
-}
-
 function buildPropertySellableOptionRows(params: {
   propertyIdRef: string
   rentalDuration: 'daily' | 'monthly'
@@ -452,33 +448,21 @@ async function createNewOwner({
   cityId,
   universityIds,
   fullName,
-  companyName,
   phoneNumber,
-  whatsappNumber,
-  email,
-  taxId,
-  nationalId,
 }: {
   supabase: AdminSupabaseClient
   adminId: string
   cityId: string
   universityIds: string[]
   fullName: string
-  companyName: string
   phoneNumber: string
-  whatsappNumber: string
-  email: string
-  taxId: string
-  nationalId: string
 }) {
   if (!fullName.trim()) {
     throw new Error('New owner full name is required')
   }
 
-  if (!phoneNumber.trim() && !whatsappNumber.trim() && !email.trim()) {
-    throw new Error(
-      'New owner must have at least one contact method: phone, WhatsApp, or email'
-    )
+  if (!phoneNumber.trim()) {
+    throw new Error('New owner phone number is required')
   }
 
   const uniqueUniversityIds = Array.from(new Set(universityIds.filter(Boolean)))
@@ -491,12 +475,12 @@ async function createNewOwner({
     .from('property_owners')
     .insert({
       full_name: fullName.trim(),
-      company_name: companyName.trim() || null,
-      phone_number: phoneNumber.trim() || null,
-      whatsapp_number: whatsappNumber.trim() || null,
-      email: email.trim() || null,
-      tax_id: taxId.trim() || null,
-      national_id: nationalId.trim() || null,
+      company_name: null,
+      phone_number: phoneNumber.trim(),
+      whatsapp_number: null,
+      email: null,
+      tax_id: null,
+      national_id: null,
       is_active: true,
       created_by_admin_id: adminId,
       updated_by_admin_id: adminId,
@@ -566,24 +550,12 @@ export async function createPropertyAction(formData: FormData) {
   const newOwnerFullName = String(
     formData.get('new_owner_full_name') || ''
   ).trim()
-  const newOwnerCompanyName = String(
-    formData.get('new_owner_company_name') || ''
-  ).trim()
+
   const newOwnerPhoneNumber = String(
     formData.get('new_owner_phone_number') || ''
   ).trim()
-  const newOwnerWhatsappNumber = String(
-    formData.get('new_owner_whatsapp_number') || ''
-  ).trim()
-  const newOwnerEmail = String(formData.get('new_owner_email') || '').trim()
-  const newOwnerTaxId = String(formData.get('new_owner_tax_id') || '').trim()
-  const newOwnerNationalId = String(
-    formData.get('new_owner_national_id') || ''
-  ).trim()
 
-  const rental_duration = normalizeRentalDuration(
-    String(formData.get('rental_duration') || 'monthly').trim()
-  )
+  const rental_duration: 'monthly' = 'monthly'
   const admin_status = String(formData.get('admin_status') || 'draft').trim()
   const gender = String(formData.get('gender') || '').trim() || null
   const smoking_policy =
@@ -638,12 +610,7 @@ export async function createPropertyAction(formData: FormData) {
       cityId: city_id,
       universityIds: university_ids,
       fullName: newOwnerFullName,
-      companyName: newOwnerCompanyName,
       phoneNumber: newOwnerPhoneNumber,
-      whatsappNumber: newOwnerWhatsappNumber,
-      email: newOwnerEmail,
-      taxId: newOwnerTaxId,
-      nationalId: newOwnerNationalId,
     })
   } else {
     await validateOwner({
@@ -675,9 +642,6 @@ export async function createPropertyAction(formData: FormData) {
     .getAll('room_name_ar')
     .map((v) => String(v).trim())
   const roomTypes = formData.getAll('room_type').map((v) => String(v).trim())
-  const roomDurations = formData
-    .getAll('room_rental_duration')
-    .map((v) => String(v).trim())
   const roomBedsCounts = formData
     .getAll('room_beds_count')
     .map((v) => String(v).trim())
@@ -808,7 +772,7 @@ export async function createPropertyAction(formData: FormData) {
         )
           ? (room_type as RoomRowInput['room_type'])
           : 'custom',
-        rental_duration: roomDurations[index] === 'daily' ? 'daily' : 'monthly',
+        rental_duration: 'monthly',
         beds_count,
         private_bathroom: toBoolean(roomPrivateBathrooms[index] || 'false'),
         is_active: true,
@@ -843,12 +807,16 @@ export async function createPropertyAction(formData: FormData) {
       throw new Error('English title is required')
     }
 
-    if (!description_en) {
-      throw new Error('English description is required')
+    if (!title_ar) {
+      throw new Error('Arabic title is required')
     }
 
     if (!address_en) {
       throw new Error('English address is required')
+    }
+
+    if (!address_ar) {
+      throw new Error('Arabic address is required')
     }
 
     if (!city_id) throw new Error('City is required')
@@ -1215,6 +1183,7 @@ export async function createPropertyAction(formData: FormData) {
       area_id,
       floor_number,
       admin_status,
+      rental_duration,
     },
   })
 

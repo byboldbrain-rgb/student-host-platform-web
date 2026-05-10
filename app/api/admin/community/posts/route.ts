@@ -7,9 +7,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const STORAGE_BUCKET =
-  process.env.SUPABASE_STORAGE_BUCKET || "community-posts";
-
 type AssetType = "image" | "video";
 
 type AssetInput = {
@@ -17,8 +14,6 @@ type AssetInput = {
   assetType: AssetType;
   fileUrl?: string | null;
   thumbnailUrl?: string | null;
-  existingFileUrl?: string | null;
-  existingThumbnailUrl?: string | null;
   altText?: string | null;
   isCover?: boolean;
   sortOrder?: number;
@@ -41,73 +36,10 @@ type CreatePostPayload = {
 };
 
 const allowedPostTypes = ["blog", "announcement", "news", "update"] as const;
+const MAX_ASSETS_PER_POST = 5;
 
-function sanitizeFileName(fileName: string) {
-  return fileName
-    .normalize("NFKD")
-    .replace(/[^\w.-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function getFileExtension(fileName: string, fallback = "bin") {
-  const clean = fileName.split("?")[0].split("#")[0];
-  const parts = clean.split(".");
-  if (parts.length > 1) return parts.pop() || fallback;
-  return fallback;
-}
-
-function getMimeFallbackExtension(mimeType: string, assetType: AssetType) {
-  if (mimeType.includes("png")) return "png";
-  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
-  if (mimeType.includes("webp")) return "webp";
-  if (mimeType.includes("gif")) return "gif";
-  if (mimeType.includes("mp4")) return "mp4";
-  if (mimeType.includes("webm")) return "webm";
-  if (mimeType.includes("mov")) return "mov";
-  return assetType === "video" ? "mp4" : "jpg";
-}
-
-async function uploadFileToStorage(params: {
-  file: File;
-  assetType: AssetType;
-  folder: string;
-}) {
-  const { file, assetType, folder } = params;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  const extension =
-    getFileExtension(
-      file.name,
-      getMimeFallbackExtension(file.type || "", assetType)
-    ) || getMimeFallbackExtension(file.type || "", assetType);
-
-  const safeName = sanitizeFileName(
-    file.name.replace(/\.[^.]+$/, "") || `${assetType}-file`
-  );
-
-  const filePath = `${folder}/${Date.now()}-${crypto.randomUUID()}-${safeName}.${extension}`;
-
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, buffer, {
-      contentType: file.type || undefined,
-      upsert: false,
-    });
-
-  if (error) {
-    throw new Error(error.message || "Failed to upload file");
-  }
-
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-
-  return {
-    path: filePath,
-    publicUrl: data.publicUrl,
-    mimeType: file.type || null,
-  };
+function normalizeAssetType(value: unknown): AssetType | null {
+  return value === "image" || value === "video" ? value : null;
 }
 
 async function parseCreatePayload(req: Request): Promise<{
@@ -126,106 +58,39 @@ async function parseCreatePayload(req: Request): Promise<{
   const contentType = req.headers.get("content-type") || "";
 
   if (contentType.includes("multipart/form-data")) {
-    const formData = await req.formData();
-    const rawData = formData.get("data");
+    throw new Error(
+      "Multipart upload is disabled. Please upload files directly to storage first."
+    );
+  }
 
-    if (typeof rawData !== "string") {
-      throw new Error("Invalid form data payload");
-    }
+  const body = (await req.json()) as CreatePostPayload;
+  const rawAssets = Array.isArray(body.assets) ? body.assets : [];
 
-    const body = JSON.parse(rawData) as CreatePostPayload;
+  if (rawAssets.length > MAX_ASSETS_PER_POST) {
+    throw new Error(`Maximum ${MAX_ASSETS_PER_POST} assets per post`);
+  }
 
-    const assets = body.assets || [];
-    const uploadedAssets: Array<{
-      asset_type: AssetType;
-      file_url: string;
-      thumbnail_url: string | null;
-      alt_text: string | null;
-      is_cover: boolean;
-      sort_order: number;
-      file_mime_type: string | null;
-      is_active: true;
-    }> = [];
+  const uploadedAssets = rawAssets
+    .filter((asset) => asset.fileUrl?.trim())
+    .map((asset, index) => {
+      const assetType = normalizeAssetType(asset.assetType);
 
-    for (let index = 0; index < assets.length; index++) {
-      const asset = assets[index];
-      const localId = asset.localId?.trim();
-
-      if (!localId) {
-        continue;
+      if (!assetType) {
+        throw new Error("Invalid asset type");
       }
 
-      const assetFile = formData.get(`assetFiles.${localId}`);
-      const assetThumbnail = formData.get(`assetThumbnails.${localId}`);
-
-      let fileUrl =
-        typeof asset.existingFileUrl === "string"
-          ? asset.existingFileUrl.trim()
-          : "";
-      let thumbnailUrl =
-        typeof asset.existingThumbnailUrl === "string"
-          ? asset.existingThumbnailUrl.trim()
-          : "";
-
-      let mimeType: string | null =
-        asset.assetType === "video" ? "video/mp4" : "image/*";
-
-      if (assetFile instanceof File && assetFile.size > 0) {
-        const uploadedMain = await uploadFileToStorage({
-          file: assetFile,
-          assetType: asset.assetType,
-          folder: `community/posts/main`,
-        });
-
-        fileUrl = uploadedMain.publicUrl;
-        mimeType = uploadedMain.mimeType;
-      }
-
-      if (assetThumbnail instanceof File && assetThumbnail.size > 0) {
-        const uploadedThumb = await uploadFileToStorage({
-          file: assetThumbnail,
-          assetType: "image",
-          folder: `community/posts/thumbnails`,
-        });
-
-        thumbnailUrl = uploadedThumb.publicUrl;
-      }
-
-      if (!fileUrl) continue;
-
-      uploadedAssets.push({
-        asset_type: asset.assetType,
-        file_url: fileUrl,
-        thumbnail_url: thumbnailUrl || null,
+      return {
+        asset_type: assetType,
+        file_url: asset.fileUrl!.trim(),
+        thumbnail_url: asset.thumbnailUrl?.trim() || null,
         alt_text: asset.altText?.trim() || null,
         is_cover: Boolean(asset.isCover),
         sort_order:
           typeof asset.sortOrder === "number" ? asset.sortOrder : index,
-        file_mime_type: mimeType,
-        is_active: true,
-      });
-    }
-
-    return {
-      payload: body,
-      uploadedAssets,
-    };
-  }
-
-  const body = (await req.json()) as CreatePostPayload;
-
-  const uploadedAssets = (body.assets || [])
-    .filter((asset) => asset.fileUrl?.trim())
-    .map((asset, index) => ({
-      asset_type: asset.assetType,
-      file_url: asset.fileUrl!.trim(),
-      thumbnail_url: asset.thumbnailUrl?.trim() || null,
-      alt_text: asset.altText?.trim() || null,
-      is_cover: Boolean(asset.isCover),
-      sort_order: typeof asset.sortOrder === "number" ? asset.sortOrder : index,
-      file_mime_type: asset.assetType === "video" ? "video/mp4" : "image/*",
-      is_active: true as const,
-    }));
+        file_mime_type: assetType === "video" ? "video/mp4" : "image/*",
+        is_active: true as const,
+      };
+    });
 
   return {
     payload: body,

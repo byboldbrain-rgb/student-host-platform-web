@@ -92,7 +92,7 @@ type Props = {
   mobileSearchBarClassName?: string
 }
 
-type OpenMenu = 'city' | 'university' | 'area' | 'duration' | null
+type OpenMenu = 'city' | 'university' | 'area' | null
 
 function SearchIcon() {
   return (
@@ -168,8 +168,6 @@ export default function PropertiesSearchBar({
   const [draftUniversityId, setDraftUniversityId] =
     useState(initialUniversityId)
   const [draftAreaId, setDraftAreaId] = useState(initialAreaId)
-  const [draftRentalDuration, setDraftRentalDuration] =
-    useState(initialRentalDuration)
 
   const [cityQuery, setCityQuery] = useState('')
   const [universityQuery, setUniversityQuery] = useState('')
@@ -184,7 +182,6 @@ export default function PropertiesSearchBar({
 
   const canOpenUniversity = !!draftCityId
   const canOpenArea = !!draftCityId && !!draftUniversityId
-  const canOpenDuration = !!draftCityId && !!draftUniversityId && !!draftAreaId
 
   const openUniversityMenu = () => {
     if (!canOpenUniversity) {
@@ -214,28 +211,6 @@ export default function PropertiesSearchBar({
     setAreaQuery('')
   }
 
-  const openDurationMenu = () => {
-    if (!draftCityId) {
-      setOpenMenu('city')
-      setCityQuery('')
-      return
-    }
-
-    if (!draftUniversityId) {
-      setOpenMenu('university')
-      setUniversityQuery('')
-      return
-    }
-
-    if (!draftAreaId) {
-      setOpenMenu('area')
-      setAreaQuery('')
-      return
-    }
-
-    setOpenMenu(openMenu === 'duration' ? null : 'duration')
-  }
-
   useEffect(() => {
     onOpenMenuChange?.(openMenu !== null)
   }, [openMenu, onOpenMenuChange])
@@ -251,10 +226,6 @@ export default function PropertiesSearchBar({
   useEffect(() => {
     setDraftAreaId(initialAreaId)
   }, [initialAreaId])
-
-  useEffect(() => {
-    setDraftRentalDuration(initialRentalDuration)
-  }, [initialRentalDuration])
 
   useEffect(() => {
     if (!mobileMode) {
@@ -335,35 +306,21 @@ export default function PropertiesSearchBar({
     return isCompact ? labels.area : labels.selectArea
   }, [areas, draftAreaId, labels.area, labels.selectArea, isCompact, isArabic])
 
-  const selectedDurationLabel = useMemo(() => {
-    if (draftRentalDuration === 'daily') return labels.daily
-    if (draftRentalDuration === 'monthly') return labels.monthly
-    return isCompact ? labels.duration : labels.selectDuration
-  }, [
-    draftRentalDuration,
-    labels.daily,
-    labels.monthly,
-    labels.selectDuration,
-    labels.duration,
-    isCompact,
-  ])
-
   const applySearch = (
     nextValues?: Partial<{
       cityId: string
       universityId: string
       areaId: string
-      rentalDuration: string
     }>
   ) => {
     const cityId = nextValues?.cityId ?? draftCityId
     const universityId = nextValues?.universityId ?? draftUniversityId
     const areaId = nextValues?.areaId ?? draftAreaId
-    const rentalDuration = nextValues?.rentalDuration ?? draftRentalDuration
 
     const params = new URLSearchParams()
 
-    if (rentalDuration) params.set('rental_duration', rentalDuration)
+    params.set('rental_duration', 'monthly')
+
     if (cityId) params.set('city_id', cityId)
     if (universityId) params.set('university_id', universityId)
     if (areaId) params.set('area_id', areaId)
@@ -384,7 +341,6 @@ export default function PropertiesSearchBar({
     setDraftCityId('')
     setDraftUniversityId('')
     setDraftAreaId('')
-    setDraftRentalDuration('')
     setCityQuery('')
     setUniversityQuery('')
     setAreaQuery('')
@@ -489,19 +445,11 @@ export default function PropertiesSearchBar({
 
   if (mobileMode) {
     const showCityCard =
-      openMenu !== 'city' &&
-      openMenu !== 'university' &&
-      openMenu !== 'area' &&
-      openMenu !== 'duration'
+      openMenu !== 'city' && openMenu !== 'university' && openMenu !== 'area'
 
-    const showUniversityCard =
-      openMenu !== 'university' &&
-      openMenu !== 'area' &&
-      openMenu !== 'duration'
+    const showUniversityCard = openMenu !== 'university' && openMenu !== 'area'
 
-    const showAreaCard = openMenu !== 'area' && openMenu !== 'duration'
-
-    const showDurationCard = openMenu !== 'duration' && openMenu !== 'area'
+    const showAreaCard = openMenu !== 'area'
 
     return (
       <div dir={isArabic ? 'rtl' : 'ltr'} className="w-full">
@@ -518,9 +466,7 @@ export default function PropertiesSearchBar({
                   ? labels.selectCity
                   : openMenu === 'university'
                     ? labels.selectUniversity
-                    : openMenu === 'area'
-                      ? labels.selectArea
-                      : labels.selectDuration}
+                    : labels.selectArea}
               </h2>
             </div>
 
@@ -550,7 +496,6 @@ export default function PropertiesSearchBar({
                         setDraftCityId(nextCityId)
                         setDraftUniversityId('')
                         setDraftAreaId('')
-                        setDraftRentalDuration('')
                         setCityQuery('')
                         setUniversityQuery('')
                         setAreaQuery('')
@@ -707,7 +652,7 @@ export default function PropertiesSearchBar({
                     onClick={() => {
                       setDraftAreaId('')
                       setAreaQuery('')
-                      setOpenMenu('duration')
+                      setOpenMenu(null)
                     }}
                     className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] ${
                       isArabic ? 'text-right' : 'text-left'
@@ -727,7 +672,7 @@ export default function PropertiesSearchBar({
                       onClick={() => {
                         setDraftAreaId(String(area.id))
                         setAreaQuery('')
-                        setOpenMenu('duration')
+                        setOpenMenu(null)
                       }}
                       className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] ${
                         isArabic ? 'text-right' : 'text-left'
@@ -740,110 +685,6 @@ export default function PropertiesSearchBar({
                       </div>
                     </button>
                   ))}
-                </div>
-              </>
-            )}
-
-            {openMenu === 'duration' && (
-              <>
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
-                  <button
-                    type="button"
-                    onClick={() => setOpenMenu('city')}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <p className="text-[13px] font-medium text-[#6f6f6f]">
-                      {labels.selectCity}
-                    </p>
-
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222]">
-                        {draftCityId ? selectedCityLabel : labels.selectCity}
-                      </span>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
-                </div>
-
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!draftCityId) {
-                        setOpenMenu('city')
-                        return
-                      }
-
-                      setOpenMenu('university')
-                    }}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <p className="text-[13px] font-medium text-[#6f6f6f]">
-                      {labels.selectUniversity}
-                    </p>
-
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222]">
-                        {draftUniversityId
-                          ? selectedUniversityLabel
-                          : labels.selectUniversity}
-                      </span>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
-                </div>
-
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
-                  <button
-                    type="button"
-                    onClick={openAreaMenu}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <p className="text-[13px] font-medium text-[#6f6f6f]">
-                      {labels.selectArea}
-                    </p>
-
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222]">
-                        {draftAreaId ? selectedAreaLabel : labels.selectArea}
-                      </span>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftRentalDuration('daily')
-                    }}
-                    className={`flex w-full items-center justify-between rounded-[14px] border px-4 py-4 text-left transition ${
-                      draftRentalDuration === 'daily'
-                        ? 'border-[#222222] bg-[#fafafa]'
-                        : 'border-[#d9d9d9] bg-white'
-                    }`}
-                  >
-                    <span className="text-[15px] font-semibold text-[#222222]">
-                      {labels.daily}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftRentalDuration('monthly')
-                    }}
-                    className={`flex w-full items-center justify-between rounded-[14px] border px-4 py-4 text-left transition ${
-                      draftRentalDuration === 'monthly'
-                        ? 'border-[#222222] bg-[#fafafa]'
-                        : 'border-[#d9d9d9] bg-white'
-                    }`}
-                  >
-                    <span className="text-[15px] font-semibold text-[#222222]">
-                      {labels.monthly}
-                    </span>
-                  </button>
                 </div>
               </>
             )}
@@ -918,30 +759,6 @@ export default function PropertiesSearchBar({
             </button>
           )}
 
-          {showDurationCard && (
-            <button
-              type="button"
-              onClick={openDurationMenu}
-              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${
-                canOpenDuration ? '' : 'cursor-not-allowed opacity-55'
-              }`}
-            >
-              <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f]">
-                  {labels.duration}
-                </p>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222]">
-                  {draftRentalDuration
-                    ? selectedDurationLabel
-                    : labels.selectDuration}
-                </span>
-                <ChevronDownIcon />
-              </div>
-            </button>
-          )}
-
           <div className="flex items-center justify-between px-3 pt-2">
             <button
               type="button"
@@ -969,11 +786,6 @@ export default function PropertiesSearchBar({
                   return
                 }
 
-                if (!draftRentalDuration) {
-                  setOpenMenu('duration')
-                  return
-                }
-
                 applySearch()
               }}
               className="flex h-[46px] items-center justify-center gap-2 rounded-full bg-[#0047ff] px-6 text-[16px] font-semibold text-white shadow-sm transition-all duration-200 hover:scale-[1.02]"
@@ -993,7 +805,7 @@ export default function PropertiesSearchBar({
         ref={wrapperRef}
         dir={isArabic ? 'rtl' : 'ltr'}
         className={`pointer-events-auto relative z-[70] mx-auto flex items-center rounded-full border border-[#dddddd] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ${
-          isCompact ? 'w-fit max-w-full px-1 py-1' : 'w-full max-w-[1120px]'
+          isCompact ? 'w-fit max-w-full px-1 py-1' : 'w-full max-w-[900px]'
         }`}
       >
         <div
@@ -1039,7 +851,6 @@ export default function PropertiesSearchBar({
                     setDraftCityId(nextCityId)
                     setDraftUniversityId('')
                     setDraftAreaId('')
-                    setDraftRentalDuration('')
                     setCityQuery('')
                     setUniversityQuery('')
                     setAreaQuery('')
@@ -1175,7 +986,7 @@ export default function PropertiesSearchBar({
                 onClick={() => {
                   setDraftAreaId('')
                   setAreaQuery('')
-                  setOpenMenu('duration')
+                  setOpenMenu(null)
                 }}
                 className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
                   !draftAreaId ? 'bg-gray-100 font-semibold text-gray-900' : ''
@@ -1191,7 +1002,7 @@ export default function PropertiesSearchBar({
                   onClick={() => {
                     setDraftAreaId(String(area.id))
                     setAreaQuery('')
-                    setOpenMenu('duration')
+                    setOpenMenu(null)
                   }}
                   className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
                     String(draftAreaId) === String(area.id)
@@ -1202,70 +1013,6 @@ export default function PropertiesSearchBar({
                   {getAreaName(area)}
                 </button>
               ))}
-            </div>
-          )}
-        </div>
-
-        <div
-          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
-        />
-
-        <div
-          className={`relative z-[71] min-w-0 transition ${
-            canOpenDuration ? 'hover:bg-[#f7f7f7]' : 'opacity-55'
-          } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
-        >
-          <button
-            type="button"
-            onClick={openDurationMenu}
-            className={`relative z-[72] w-full ${sectionPaddingClass} ${
-              canOpenDuration ? 'cursor-pointer' : 'cursor-not-allowed'
-            } ${isArabic ? 'text-right' : 'text-left'} ${
-              isCompact ? 'min-w-[95px]' : ''
-            }`}
-          >
-            <p className={titleTextClass}>{labels.duration}</p>
-            <p
-              className={`${valueTextClass} ${
-                canOpenDuration ? '' : disabledValueTextClass
-              }`}
-            >
-              {selectedDurationLabel}
-            </p>
-          </button>
-
-          {openMenu === 'duration' && canOpenDuration && (
-            <div className={panelClass}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraftRentalDuration('daily')
-                  setOpenMenu(null)
-                  applySearch({ rentalDuration: 'daily' })
-                }}
-                className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                  draftRentalDuration === 'daily'
-                    ? 'bg-gray-100 font-semibold text-gray-900'
-                    : ''
-                }`}
-              >
-                {labels.daily}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraftRentalDuration('monthly')
-                  setOpenMenu(null)
-                  applySearch({ rentalDuration: 'monthly' })
-                }}
-                className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                  draftRentalDuration === 'monthly'
-                    ? 'bg-gray-100 font-semibold text-gray-900'
-                    : ''
-                }`}
-              >
-                {labels.monthly}
-              </button>
             </div>
           )}
         </div>

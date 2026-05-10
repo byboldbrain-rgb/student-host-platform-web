@@ -81,7 +81,7 @@ type HeaderTexts = {
 
 type Props = {
   homeHref: string
-  searchBarProps: SearchBarProps
+  searchBarProps?: SearchBarProps
   t: HeaderTexts
   showMobileSearchHeaderExtras?: boolean
   mobileBackHref?: string
@@ -107,7 +107,11 @@ export default function PropertiesHeader({
   const [forceExpanded, setForceExpanded] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
 
+  const hasSearchBar = Boolean(searchBarProps)
+
   const normalizedSearchBarProps = useMemo(() => {
+    if (!searchBarProps) return null
+
     const isArabic = searchBarProps.language === 'ar'
 
     return {
@@ -175,6 +179,12 @@ export default function PropertiesHeader({
     }
   }, [isMobileSearchOpen])
 
+  useEffect(() => {
+    if (!hasSearchBar && isMobileSearchOpen) {
+      setIsMobileSearchOpen(false)
+    }
+  }, [hasSearchBar, isMobileSearchOpen])
+
   const showCompact = isScrolled && !forceExpanded
 
   return (
@@ -217,38 +227,74 @@ export default function PropertiesHeader({
             </label>
           </div>
 
-          <div className="px-3 pb-4 pt-2">
-            {showMobileSearchHeaderExtras && mobileSortProps && mobileBackHref ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  href={mobileBackHref}
-                  aria-label={t.backToProperties || 'Back'}
-                  className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full border border-[#dedede] bg-white text-[#222] shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.9}
-                    stroke="currentColor"
-                    className="h-[15px] w-[15px]"
+          {hasSearchBar && normalizedSearchBarProps && (
+            <div className="px-3 pb-4 pt-2">
+              {showMobileSearchHeaderExtras && mobileSortProps && mobileBackHref ? (
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={mobileBackHref}
+                    aria-label={t.backToProperties || 'Back'}
+                    className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full border border-[#dedede] bg-white text-[#222] shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d={
-                        mobileSortProps.isArabic
-                          ? 'm10 6 6 6-6 6'
-                          : 'm14 6-6 6 6 6'
-                      }
-                    />
-                  </svg>
-                </Link>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.9}
+                      stroke="currentColor"
+                      className="h-[15px] w-[15px]"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d={
+                          mobileSortProps.isArabic
+                            ? 'm10 6 6 6-6 6'
+                            : 'm14 6-6 6 6 6'
+                        }
+                      />
+                    </svg>
+                  </Link>
 
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSearchOpen(true)}
+                    className="flex h-[44px] min-w-0 flex-1 items-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.2}
+                      stroke="currentColor"
+                      className="h-[16px] w-[16px] shrink-0 text-[#222]"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                      />
+                    </svg>
+
+                    <span className="truncate text-[13px] font-semibold leading-none text-[#222]">
+                      {t.startSearch}
+                    </span>
+                  </button>
+
+                  <div className="mobile-sort-icon-only shrink-0">
+                    <SortDropdown
+                      isArabic={mobileSortProps.isArabic}
+                      selectedSort={mobileSortProps.selectedSort}
+                      sortByLabel={mobileSortProps.sortByLabel}
+                      options={mobileSortProps.options}
+                    />
+                  </div>
+                </div>
+              ) : (
                 <button
                   type="button"
                   onClick={() => setIsMobileSearchOpen(true)}
-                  className="flex h-[44px] min-w-0 flex-1 items-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
+                  className="mx-auto flex h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -256,7 +302,7 @@ export default function PropertiesHeader({
                     viewBox="0 0 24 24"
                     strokeWidth={2.2}
                     stroke="currentColor"
-                    className="h-[16px] w-[16px] shrink-0 text-[#222]"
+                    className="h-[16px] w-[16px] text-[#222]"
                   >
                     <path
                       strokeLinecap="round"
@@ -269,45 +315,11 @@ export default function PropertiesHeader({
                     {t.startSearch}
                   </span>
                 </button>
+              )}
+            </div>
+          )}
 
-                <div className="mobile-sort-icon-only shrink-0">
-                  <SortDropdown
-                    isArabic={mobileSortProps.isArabic}
-                    selectedSort={mobileSortProps.selectedSort}
-                    sortByLabel={mobileSortProps.sortByLabel}
-                    options={mobileSortProps.options}
-                  />
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsMobileSearchOpen(true)}
-                className="mx-auto flex h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2.2}
-                  stroke="currentColor"
-                  className="h-[16px] w-[16px] text-[#222]"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
-                  />
-                </svg>
-
-                <span className="truncate text-[13px] font-semibold leading-none text-[#222]">
-                  {t.startSearch}
-                </span>
-              </button>
-            )}
-          </div>
-
-          {isMobileSearchOpen && (
+          {isMobileSearchOpen && normalizedSearchBarProps && (
             <div className="fixed inset-0 z-[220] bg-[#f2f2f2]">
               <div className="flex items-center justify-end px-4 pb-2 pt-4">
                 <button
@@ -353,7 +365,11 @@ export default function PropertiesHeader({
             <div className="mx-auto max-w-[1920px] px-6">
               <div
                 className={`relative transition-all duration-300 ${
-                  showCompact ? 'h-[94px]' : 'h-[168px]'
+                  hasSearchBar
+                    ? showCompact
+                      ? 'h-[94px]'
+                      : 'h-[168px]'
+                    : 'h-[82px]'
                 }`}
               >
                 <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-between">
@@ -392,21 +408,23 @@ export default function PropertiesHeader({
                   </div>
                 </div>
 
-                <div
-                  className={`absolute left-1/2 z-30 flex -translate-x-1/2 justify-center origin-center transition-all duration-300 ${
-                    showCompact
-                      ? 'top-1/2 -translate-y-1/2 scale-[0.85] w-max'
-                      : 'top-[72px] scale-[0.92] w-full max-w-[1000px]'
-                  }`}
-                >
-                  <PropertiesSearchBar
-                    {...normalizedSearchBarProps}
-                    compact={showCompact}
-                    onOpenMenuChange={(isOpen) => {
-                      setForceExpanded(isOpen)
-                    }}
-                  />
-                </div>
+                {hasSearchBar && normalizedSearchBarProps && (
+                  <div
+                    className={`absolute left-1/2 z-30 flex -translate-x-1/2 justify-center origin-center transition-all duration-300 ${
+                      showCompact
+                        ? 'top-1/2 -translate-y-1/2 scale-[0.85] w-max'
+                        : 'top-[72px] scale-[0.92] w-full max-w-[1000px]'
+                    }`}
+                  >
+                    <PropertiesSearchBar
+                      {...normalizedSearchBarProps}
+                      compact={showCompact}
+                      onOpenMenuChange={(isOpen) => {
+                        setForceExpanded(isOpen)
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>

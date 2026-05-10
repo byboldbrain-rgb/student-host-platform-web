@@ -103,14 +103,14 @@ function buildSectionedOptions(options: SortOption[]) {
 function GenderIcon({ value, label }: { value: SupportedSort; label: string }) {
   const iconSrc =
     value === 'boys'
-      ? 'https://i.ibb.co/DHvFXzLP/young-man-15375361.png'
-      : 'https://i.ibb.co/MkG4qbfM/painter-10645956.png'
+      ? 'https://i.ibb.co/Pzg14kFJ/Navienty-22.png'
+      : 'https://i.ibb.co/whT5VJDn/Navienty-21.png'
 
   return (
     <img
       src={iconSrc}
       alt={label}
-      className="h-[52px] w-[52px] object-contain"
+      className="h-[100px] w-[100px] object-contain"
       loading="lazy"
     />
   )

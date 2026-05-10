@@ -10,8 +10,6 @@ const squadaOne = Squada_One({
   weight: '400',
 })
 
-const APP_LOGO_URL = 'https://i.ibb.co/sn0xS95/Navienty-2.jpg'
-
 type SearchParams = {
   rental_duration?: string
   city_id?: string
@@ -526,7 +524,10 @@ export default async function SearchResultsPage({
   const isArabic = selectedLanguage === 'ar'
   const currencyRate = await getCurrencyRate(selectedCurrency)
 
-  const PAGE_SIZE = 12
+  // أقل عدد كروت على الصفحة = Scroll أخف على الموبايل
+  const PAGE_SIZE = 8
+  const MAX_CARD_IMAGES = 3
+
   const currentPage = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
   const from = (currentPage - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE
@@ -730,7 +731,7 @@ export default async function SearchResultsPage({
       label: isLoggedIn ? t.account : t.login,
       href: isLoggedIn
         ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/account-login'),
+        : buildSimpleNavLink('/login'),
     },
     { label: t.join, href: buildSimpleNavLink('/community') },
   ]
@@ -826,7 +827,7 @@ export default async function SearchResultsPage({
 
   const mobileAccountHref = isLoggedIn
     ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/account-login')
+    : buildSimpleNavLink('/login')
 
   const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
 
@@ -838,6 +839,7 @@ export default async function SearchResultsPage({
     return property.property_images
       .map((item) => item?.image_url?.trim())
       .filter((url): url is string => Boolean(url))
+      .slice(0, MAX_CARD_IMAGES)
   }
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
@@ -851,14 +853,14 @@ export default async function SearchResultsPage({
     const propertyTitle = isArabic ? property.title_ar : property.title_en
 
     return (
-      <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_10px_30px_rgba(15,23,42,0.10)] md:rounded-[28px]">
+      <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:rounded-[28px] md:shadow-[0_10px_30px_rgba(15,23,42,0.10)]">
         <PropertyImageSlider
           images={images}
           title={propertyTitle}
           propertyId={property.id}
         />
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/18 via-black/5 to-transparent" />
+        <div className="property-media-gradient pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/14 via-black/4 to-transparent md:h-20" />
 
         {(isAvailable || isReserved) && (
           <div
@@ -895,7 +897,7 @@ export default async function SearchResultsPage({
       <Link
         key={property.id}
         href={buildPropertyHref(property.property_id)}
-        className="group block"
+        className="property-card group block"
       >
         {renderPropertyImage(
           property,
@@ -943,131 +945,6 @@ export default async function SearchResultsPage({
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0"
     >
-      <div className="pwa-install-banner" id="pwa-install-banner">
-        <button
-          type="button"
-          className="pwa-install-banner__close"
-          aria-label="Close app install banner"
-          id="pwa-install-banner-close"
-        >
-          ×
-        </button>
-
-        <img
-          src={APP_LOGO_URL}
-          alt="Navienty"
-          className="pwa-install-banner__logo"
-          draggable={false}
-        />
-
-        <div className="pwa-install-banner__content">
-          <p className="pwa-install-banner__title">Continue in the app!</p>
-        </div>
-
-        <button
-          type="button"
-          className="pwa-install-banner__button"
-          id="pwa-install-banner-button"
-        >
-          Get App
-        </button>
-
-        <div className="pwa-install-banner__ios-help" id="pwa-install-banner-ios-help">
-          On iPhone: tap Share, then choose Add to Home Screen.
-        </div>
-      </div>
-
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (function () {
-              var banner = document.getElementById('pwa-install-banner');
-              var closeButton = document.getElementById('pwa-install-banner-close');
-              var installButton = document.getElementById('pwa-install-banner-button');
-              var iosHelp = document.getElementById('pwa-install-banner-ios-help');
-              var deferredPrompt = null;
-
-              if (!banner) return;
-
-              function isStandalone() {
-                return window.matchMedia('(display-mode: standalone)').matches ||
-                  window.navigator.standalone === true;
-              }
-
-              function isIos() {
-                var ua = window.navigator.userAgent.toLowerCase();
-                var platform = (window.navigator.platform || '').toLowerCase();
-                return /iphone|ipad|ipod/.test(ua) ||
-                  (platform === 'macintel' && window.navigator.maxTouchPoints > 1);
-              }
-
-              function hideBanner() {
-                banner.style.display = 'none';
-              }
-
-              function showBanner() {
-                banner.style.display = 'grid';
-              }
-
-              if (isStandalone()) {
-                hideBanner();
-                return;
-              }
-
-              if (localStorage.getItem('pwa-install-banner-dismissed') === 'true') {
-                hideBanner();
-                return;
-              }
-
-              if (isIos()) {
-                showBanner();
-              }
-
-              window.addEventListener('beforeinstallprompt', function (event) {
-                event.preventDefault();
-                deferredPrompt = event;
-                showBanner();
-              });
-
-              window.addEventListener('appinstalled', function () {
-                localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                hideBanner();
-                deferredPrompt = null;
-              });
-
-              if (closeButton) {
-                closeButton.addEventListener('click', function () {
-                  localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                  hideBanner();
-                });
-              }
-
-              if (installButton) {
-                installButton.addEventListener('click', function () {
-                  if (isIos()) {
-                    if (iosHelp) {
-                      iosHelp.classList.toggle('pwa-install-banner__ios-help--visible');
-                    }
-                    return;
-                  }
-
-                  if (!deferredPrompt) return;
-
-                  deferredPrompt.prompt();
-                  deferredPrompt.userChoice.then(function (choiceResult) {
-                    if (choiceResult && choiceResult.outcome === 'accepted') {
-                      localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                      hideBanner();
-                    }
-                    deferredPrompt = null;
-                  });
-                });
-              }
-            })();
-          `,
-        }}
-      />
-
       <input
         id="nav-menu-toggle"
         type="checkbox"
@@ -1080,95 +957,6 @@ export default async function SearchResultsPage({
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
-        }
-
-        .pwa-install-banner {
-          position: sticky;
-          top: 0;
-          z-index: 160;
-          display: none;
-          grid-template-columns: 26px 46px minmax(0, 1fr) auto;
-          align-items: center;
-          gap: 9px;
-          min-height: 62px;
-          background: #ffffff;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-          padding: 8px 12px;
-        }
-
-        .pwa-install-banner__close {
-          width: 26px;
-          height: 26px;
-          border: 0;
-          background: transparent;
-          color: #111827;
-          font-size: 28px;
-          line-height: 1;
-          cursor: pointer;
-          padding: 0;
-        }
-
-        .pwa-install-banner__logo {
-          width: 46px;
-          height: 46px;
-          border-radius: 12px;
-          object-fit: cover;
-          border: 1px solid #e5e7eb;
-          background: #ffffff;
-          display: block;
-        }
-
-        .pwa-install-banner__content {
-          min-width: 0;
-        }
-
-        .pwa-install-banner__title {
-          margin: 0;
-          color: #111827;
-          font-size: 15px;
-          line-height: 1.15;
-          font-weight: 800;
-          letter-spacing: -0.02em;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .pwa-install-banner__button {
-          min-width: 86px;
-          height: 38px;
-          border: 0;
-          border-radius: 9px;
-          background: #054aff;
-          color: #ffffff;
-          font-size: 13px;
-          font-weight: 800;
-          cursor: pointer;
-          padding: 0 16px;
-        }
-
-        .pwa-install-banner__ios-help {
-          display: none;
-          grid-column: 1 / -1;
-          margin-top: 6px;
-          border-radius: 10px;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #334155;
-          padding: 8px 10px;
-          font-size: 12px;
-          line-height: 1.4;
-        }
-
-        .pwa-install-banner__ios-help--visible {
-          display: block;
-        }
-
-        @media (display-mode: standalone) {
-          .pwa-install-banner {
-            display: none !important;
-          }
         }
 
         .navienty-logo {
@@ -1471,8 +1259,18 @@ export default async function SearchResultsPage({
           font-size: 16px;
         }
 
+        .property-card {
+          contain: layout paint style;
+          content-visibility: auto;
+          contain-intrinsic-size: 360px 360px;
+          -webkit-tap-highlight-color: transparent;
+        }
+
         .property-media-card {
           isolation: isolate;
+          contain: layout paint style;
+          transform: translateZ(0);
+          backface-visibility: hidden;
         }
 
         .property-media-slider {
@@ -1487,6 +1285,8 @@ export default async function SearchResultsPage({
           -ms-overflow-style: none;
           touch-action: pan-x;
           overscroll-behavior-x: contain;
+          overscroll-behavior-y: auto;
+          contain: layout paint;
         }
 
         .property-media-slider::-webkit-scrollbar {
@@ -1497,6 +1297,7 @@ export default async function SearchResultsPage({
           display: flex;
           width: 100%;
           height: 100%;
+          contain: layout paint;
         }
 
         .property-media-slider__slide {
@@ -1505,9 +1306,10 @@ export default async function SearchResultsPage({
           width: 100%;
           height: 100%;
           scroll-snap-align: start;
-          scroll-snap-stop: always;
+          scroll-snap-stop: normal;
           user-select: none;
           -webkit-user-drag: none;
+          contain: layout paint;
         }
 
         .property-media-slider__slide img {
@@ -1517,6 +1319,8 @@ export default async function SearchResultsPage({
           user-select: none;
           -webkit-user-drag: none;
           pointer-events: none;
+          backface-visibility: hidden;
+          transform: translateZ(0);
         }
 
         .property-media-slider__dots {
@@ -1591,10 +1395,6 @@ export default async function SearchResultsPage({
             0 8px 18px rgba(0, 0, 0, 0.24),
             inset 0 1px 0 rgba(255, 255, 255, 0.22);
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
-          transition:
-            transform 0.35s ease,
-            filter 0.35s ease,
-            box-shadow 0.35s ease;
         }
 
         .status-ribbon::after {
@@ -1635,14 +1435,6 @@ export default async function SearchResultsPage({
           background: linear-gradient(135deg, #9f1239 0%, #7f1d1d 100%);
         }
 
-        .group:hover .status-ribbon__inner {
-          transform: rotate(-45deg) scale(1.03);
-          filter: saturate(1.06) brightness(1.02);
-          box-shadow:
-            0 14px 26px rgba(0, 0, 0, 0.32),
-            inset 0 1px 0 rgba(255, 255, 255, 0.26);
-        }
-
         .property-meta-gender {
           display: inline-flex;
           min-width: 0;
@@ -1654,7 +1446,6 @@ export default async function SearchResultsPage({
           font-weight: 500;
           letter-spacing: -0.01em;
           white-space: nowrap;
-          transition: color 0.2s ease;
         }
 
         .property-meta-dot {
@@ -1666,12 +1457,33 @@ export default async function SearchResultsPage({
           flex-shrink: 0;
         }
 
-        .group:hover .property-meta-gender {
-          color: #334155;
-        }
-
         [dir='rtl'] .property-meta-gender {
           flex-direction: row;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+          .status-ribbon__inner {
+            transition:
+              transform 0.35s ease,
+              filter 0.35s ease,
+              box-shadow 0.35s ease;
+          }
+
+          .group:hover .status-ribbon__inner {
+            transform: rotate(-45deg) scale(1.03);
+            filter: saturate(1.06) brightness(1.02);
+            box-shadow:
+              0 14px 26px rgba(0, 0, 0, 0.32),
+              inset 0 1px 0 rgba(255, 255, 255, 0.26);
+          }
+
+          .property-meta-gender {
+            transition: color 0.2s ease;
+          }
+
+          .group:hover .property-meta-gender {
+            color: #334155;
+          }
         }
 
         .mobile-bottom-nav {
@@ -1978,6 +1790,15 @@ export default async function SearchResultsPage({
 
           .mobile-bottom-nav {
             display: block;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+          }
+
+          .mega-menu-overlay {
+            transform: none;
+            transition:
+              opacity 0.18s ease,
+              visibility 0.18s ease;
           }
 
           .mega-menu-body {
@@ -2012,51 +1833,85 @@ export default async function SearchResultsPage({
             display: none;
           }
 
+          .property-card {
+            contain-intrinsic-size: 330px 340px;
+          }
+
+          .property-media-card {
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+          }
+
+          .property-media-gradient {
+            height: 48px;
+            opacity: 0.75;
+          }
+
+          .property-media-slider {
+            scroll-snap-type: x proximity;
+          }
+
           .property-media-slider__dots {
             display: flex;
-            bottom: 10px;
+            bottom: 8px;
             gap: 5px;
-            padding: 5px 8px;
+            padding: 4px 7px;
+            background: rgba(15, 23, 42, 0.22);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
           }
 
           .property-media-slider__dot {
             width: 5px;
             height: 5px;
+            transition: none;
           }
 
           .property-media-slider__dot--active {
-            width: 13px;
+            width: 12px;
           }
 
           .status-ribbon {
-            width: 112px;
-            height: 112px;
+            width: 100px;
+            height: 100px;
             top: -5px;
             left: -5px;
           }
 
           .status-ribbon__inner {
-            top: 25px;
-            left: -37px;
-            width: 160px;
-            height: 31px;
-            font-size: 8px;
-            letter-spacing: 0.14em;
+            top: 23px;
+            left: -35px;
+            width: 148px;
+            height: 28px;
+            font-size: 7px;
+            letter-spacing: 0.12em;
             border-radius: 2px;
+            box-shadow:
+              0 5px 12px rgba(0, 0, 0, 0.18),
+              inset 0 1px 0 rgba(255, 255, 255, 0.18);
           }
 
           .status-ribbon--available::after {
-            box-shadow: 104px -104px #06664a;
+            box-shadow: 92px -92px #06664a;
           }
 
           .status-ribbon--reserved::after {
-            box-shadow: 104px -104px #8f1239;
+            box-shadow: 92px -92px #8f1239;
+          }
+
+          .mobile-bottom-nav__item,
+          .mobile-bottom-nav__icon--image {
+            transition: none;
           }
         }
 
-        @media (min-width: 769px) {
-          .pwa-install-banner {
-            display: none !important;
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
           }
         }
       `}</style>

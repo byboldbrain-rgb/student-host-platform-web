@@ -14,6 +14,7 @@ import {
 
 type SearchParams = Promise<{
   property_id?: string
+  owner_number?: string
 }>
 
 type BillingCycleSummary = {
@@ -85,6 +86,12 @@ type PropertyOption = {
   property_id: string
   title: string
   broker_id: string | null
+  owner_id: string | null
+  owner_name: string | null
+  owner_phone: string | null
+  owner_whatsapp: string | null
+  owner_email: string | null
+  owner_national_id: string | null
 }
 
 type PropertyImage = {
@@ -153,6 +160,22 @@ function EyeIcon() {
     >
       <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="M21 21l-4.3-4.3" />
     </svg>
   )
 }
@@ -288,12 +311,20 @@ function ReservationCardCover({
         <h3 className="line-clamp-2 text-lg font-semibold text-slate-900">
           {reservation.customer_name || '—'}
         </h3>
+
+        <p className="mt-1 text-xs font-medium text-slate-500">
+          {reservation.property_title} · {reservation.property_code}
+        </p>
       </div>
     </div>
   )
 }
 
-function EmptyPropertiesState() {
+function EmptyPropertiesState({
+  ownerSearchTerm,
+}: {
+  ownerSearchTerm?: string | null
+}) {
   return (
     <div className="rounded-[32px] border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
@@ -302,7 +333,9 @@ function EmptyPropertiesState() {
 
       <h3 className="text-lg font-semibold text-slate-900">No properties found</h3>
       <p className="mt-2 text-sm text-slate-500">
-        There are no properties available for this account right now.
+        {ownerSearchTerm
+          ? `No properties found for owner number: ${ownerSearchTerm}.`
+          : 'There are no properties available for this account right now.'}
       </p>
     </div>
   )
@@ -324,6 +357,61 @@ function EmptyReservationsState({ propertyTitle }: { propertyTitle?: string | nu
           : 'Select a property to view its active reservations.'}
       </p>
     </div>
+  )
+}
+
+function OwnerSearchForm({
+  ownerSearchTerm,
+}: {
+  ownerSearchTerm: string
+}) {
+  return (
+    <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.05)] md:p-5">
+      <form
+        action="/admin/properties/reservations"
+        method="GET"
+        className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]"
+      >
+        <label className="relative block">
+          <span className="mb-2 block text-sm font-semibold text-slate-900">
+            Search by Owner Number
+          </span>
+
+          <span className="pointer-events-none absolute bottom-[13px] left-4 text-slate-400">
+            <SearchIcon />
+          </span>
+
+          <input
+            type="text"
+            name="owner_number"
+            defaultValue={ownerSearchTerm}
+            placeholder="Owner phone, WhatsApp, national ID, email, or owner ID"
+            className="h-[52px] w-full rounded-full border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#155dfc] focus:bg-white focus:ring-4 focus:ring-blue-100"
+          />
+        </label>
+
+        <div className="flex items-end">
+          <button
+            type="submit"
+            className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#155dfc] px-6 text-sm font-semibold text-white transition hover:bg-[#0f4fe0] md:w-auto"
+          >
+            <SearchIcon />
+            Search
+          </button>
+        </div>
+
+        {ownerSearchTerm ? (
+          <div className="flex items-end">
+            <Link
+              href="/admin/properties/reservations"
+              className="inline-flex h-[52px] w-full items-center justify-center rounded-full border border-slate-300 bg-white px-6 text-sm font-semibold text-slate-900 transition hover:border-slate-900 hover:bg-slate-50 md:w-auto"
+            >
+              Reset
+            </Link>
+          </div>
+        ) : null}
+      </form>
+    </section>
   )
 }
 
@@ -369,6 +457,49 @@ function formatDate(date?: string | null) {
 function formatPrice(value?: number | null) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '—'
   return `${Number(value).toLocaleString()} EGP`
+}
+
+function normalizeSearchValue(value?: string | null) {
+  return (value || '').trim().toLowerCase()
+}
+
+function normalizeDigits(value?: string | null) {
+  return (value || '').replace(/\D/g, '')
+}
+
+function propertyMatchesOwnerSearch(
+  property: PropertyOption,
+  ownerSearchTerm: string
+) {
+  const term = normalizeSearchValue(ownerSearchTerm)
+
+  if (!term) return true
+
+  const digitTerm = normalizeDigits(term)
+
+  const searchableValues = [
+    property.owner_id,
+    property.owner_name,
+    property.owner_phone,
+    property.owner_whatsapp,
+    property.owner_email,
+    property.owner_national_id,
+  ]
+
+  return searchableValues.some((value) => {
+    const normalizedValue = normalizeSearchValue(value)
+    const normalizedDigits = normalizeDigits(value)
+
+    if (normalizedValue.includes(term)) {
+      return true
+    }
+
+    if (digitTerm && normalizedDigits.includes(digitTerm)) {
+      return true
+    }
+
+    return false
+  })
 }
 
 function getRenewButtonState(reservation: ActiveUnifiedReservation) {
@@ -584,6 +715,15 @@ export default async function PropertyReservationsPage({
 }) {
   const resolvedSearchParams = await searchParams
   const selectedPropertyId = resolvedSearchParams?.property_id?.trim() || ''
+  const ownerSearchTerm = resolvedSearchParams?.owner_number?.trim() || ''
+
+  const encodedOwnerSearchTerm = encodeURIComponent(ownerSearchTerm)
+  const ownerQuerySuffix = ownerSearchTerm
+    ? `&owner_number=${encodedOwnerSearchTerm}`
+    : ''
+  const ownerQueryOnly = ownerSearchTerm
+    ? `?owner_number=${encodedOwnerSearchTerm}`
+    : ''
 
   const adminContext = await requirePropertiesSectionAccess()
   const supabase = createAdminClient()
@@ -591,7 +731,22 @@ export default async function PropertyReservationsPage({
 
   let propertiesQuery = supabase
     .from('properties')
-    .select('id, property_id, title_en, title_ar, broker_id')
+    .select(`
+      id,
+      property_id,
+      title_en,
+      title_ar,
+      broker_id,
+      owner_id,
+      property_owners (
+        id,
+        full_name,
+        phone_number,
+        whatsapp_number,
+        email,
+        national_id
+      )
+    `)
     .order('created_at', { ascending: false })
 
   if (!isSuperAdmin(admin)) {
@@ -608,16 +763,34 @@ export default async function PropertyReservationsPage({
     throw new Error(propertiesError.message)
   }
 
-  const propertyOptions: PropertyOption[] = (propertiesData || []).map(
-    (property: any) => ({
-      id: property.id,
-      property_id: property.property_id,
-      title: property.title_en || property.title_ar || 'Untitled Property',
-      broker_id: property.broker_id ?? null,
-    })
+  const allPropertyOptions: PropertyOption[] = (propertiesData || []).map(
+    (property: any) => {
+      const owner = Array.isArray(property.property_owners)
+        ? property.property_owners[0]
+        : property.property_owners
+
+      return {
+        id: property.id,
+        property_id: property.property_id,
+        title: property.title_en || property.title_ar || 'Untitled Property',
+        broker_id: property.broker_id ?? null,
+        owner_id: property.owner_id ?? owner?.id ?? null,
+        owner_name: owner?.full_name ?? null,
+        owner_phone: owner?.phone_number ?? null,
+        owner_whatsapp: owner?.whatsapp_number ?? null,
+        owner_email: owner?.email ?? null,
+        owner_national_id: owner?.national_id ?? null,
+      }
+    }
+  )
+
+  const propertyOptions = allPropertyOptions.filter((property) =>
+    propertyMatchesOwnerSearch(property, ownerSearchTerm)
   )
 
   const allowedPropertyIds = propertyOptions.map((property) => property.id)
+  const hasValidSelectedProperty =
+    !!selectedPropertyId && allowedPropertyIds.includes(selectedPropertyId)
 
   let propertyImagesMap: Record<string, PropertyImage[]> = {}
 
@@ -654,79 +827,72 @@ export default async function PropertyReservationsPage({
 
   const activeStatuses = ['pending', 'reserved', 'checked_in']
 
-  let propertyReservationCountsQuery = supabase
-    .from('property_reservations')
-    .select('id, property_id, properties!inner(broker_id)')
-    .in('status', activeStatuses)
-
-  let legacyReservationCountsQuery = supabase
-    .from('bed_reservations')
-    .select('id, property_id, properties!inner(broker_id)')
-    .in('status', activeStatuses)
-
-  if (!isSuperAdmin(admin)) {
-    propertyReservationCountsQuery = propertyReservationCountsQuery.eq(
-      'properties.broker_id',
-      admin.broker_id
-    )
-    legacyReservationCountsQuery = legacyReservationCountsQuery.eq(
-      'properties.broker_id',
-      admin.broker_id
-    )
-  }
-
-  if (allowedPropertyIds.length > 0) {
-    propertyReservationCountsQuery = propertyReservationCountsQuery.in(
-      'property_id',
-      allowedPropertyIds
-    )
-    legacyReservationCountsQuery = legacyReservationCountsQuery.in(
-      'property_id',
-      allowedPropertyIds
-    )
-  }
-
-  const [
-    { data: propertyReservationCountsData, error: propertyReservationCountsError },
-    { data: legacyReservationCountsData, error: legacyReservationCountsError },
-  ] = await Promise.all([
-    propertyReservationCountsQuery,
-    legacyReservationCountsQuery,
-  ])
-
-  if (propertyReservationCountsError) {
-    throw new Error(propertyReservationCountsError.message)
-  }
-
-  if (legacyReservationCountsError) {
-    throw new Error(legacyReservationCountsError.message)
-  }
-
   const reservationCountsByProperty = new Map<string, number>()
 
-  ;((propertyReservationCountsData || []) as any[]).forEach((reservation) => {
-    const propertyId = reservation.property_id
-    if (!propertyId) return
+  if (allowedPropertyIds.length > 0) {
+    let propertyReservationCountsQuery = supabase
+      .from('property_reservations')
+      .select('id, property_id, properties!inner(broker_id)')
+      .in('status', activeStatuses)
+      .in('property_id', allowedPropertyIds)
 
-    reservationCountsByProperty.set(
-      propertyId,
-      (reservationCountsByProperty.get(propertyId) || 0) + 1
-    )
-  })
+    let legacyReservationCountsQuery = supabase
+      .from('bed_reservations')
+      .select('id, property_id, properties!inner(broker_id)')
+      .in('status', activeStatuses)
+      .in('property_id', allowedPropertyIds)
 
-  ;((legacyReservationCountsData || []) as any[]).forEach((reservation) => {
-    const propertyId = reservation.property_id
-    if (!propertyId) return
+    if (!isSuperAdmin(admin)) {
+      propertyReservationCountsQuery = propertyReservationCountsQuery.eq(
+        'properties.broker_id',
+        admin.broker_id
+      )
+      legacyReservationCountsQuery = legacyReservationCountsQuery.eq(
+        'properties.broker_id',
+        admin.broker_id
+      )
+    }
 
-    reservationCountsByProperty.set(
-      propertyId,
-      (reservationCountsByProperty.get(propertyId) || 0) + 1
-    )
-  })
+    const [
+      { data: propertyReservationCountsData, error: propertyReservationCountsError },
+      { data: legacyReservationCountsData, error: legacyReservationCountsError },
+    ] = await Promise.all([
+      propertyReservationCountsQuery,
+      legacyReservationCountsQuery,
+    ])
+
+    if (propertyReservationCountsError) {
+      throw new Error(propertyReservationCountsError.message)
+    }
+
+    if (legacyReservationCountsError) {
+      throw new Error(legacyReservationCountsError.message)
+    }
+
+    ;((propertyReservationCountsData || []) as any[]).forEach((reservation) => {
+      const propertyId = reservation.property_id
+      if (!propertyId) return
+
+      reservationCountsByProperty.set(
+        propertyId,
+        (reservationCountsByProperty.get(propertyId) || 0) + 1
+      )
+    })
+
+    ;((legacyReservationCountsData || []) as any[]).forEach((reservation) => {
+      const propertyId = reservation.property_id
+      if (!propertyId) return
+
+      reservationCountsByProperty.set(
+        propertyId,
+        (reservationCountsByProperty.get(propertyId) || 0) + 1
+      )
+    })
+  }
 
   let unifiedReservations: ActiveUnifiedReservation[] = []
 
-  if (selectedPropertyId && allowedPropertyIds.includes(selectedPropertyId)) {
+  if (hasValidSelectedProperty) {
     let propertyReservationsQuery = supabase
       .from('property_reservations')
       .select(`
@@ -1331,15 +1497,40 @@ export default async function PropertyReservationsPage({
         </header>
 
         <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
-          {!selectedPropertyId ? (
+          <OwnerSearchForm ownerSearchTerm={ownerSearchTerm} />
+
+          {!hasValidSelectedProperty ? (
             <section className="rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+              <div className="border-b border-slate-200 px-5 py-5 md:px-7">
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-lg font-semibold text-slate-900">
+                    {ownerSearchTerm ? 'Owner Properties' : 'Manage Reservations'}
+                  </h1>
+
+                  {ownerSearchTerm ? (
+                    <p className="text-sm text-slate-500">
+                      Showing properties matching owner number:{" "}
+                      <span className="font-semibold text-slate-900">
+                        {ownerSearchTerm}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      Search by owner number or select a property to manage active reservations.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               <div className="p-4 md:p-6">
                 {propertyOptions.length === 0 ? (
-                  <EmptyPropertiesState />
+                  <EmptyPropertiesState ownerSearchTerm={ownerSearchTerm} />
                 ) : (
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                     {propertyOptions.map((property) => {
                       const coverImage = getCoverImage(property.id, propertyImagesMap)
+                      const activeReservationsCount =
+                        reservationCountsByProperty.get(property.id) || 0
 
                       return (
                         <div
@@ -1356,6 +1547,12 @@ export default async function PropertyReservationsPage({
                             ) : (
                               <PropertyImagePlaceholder />
                             )}
+
+                            {activeReservationsCount > 0 ? (
+                              <div className="absolute right-4 top-4 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-[#155dfc] shadow-sm">
+                                {activeReservationsCount} Active
+                              </div>
+                            ) : null}
                           </div>
 
                           <div className="p-5">
@@ -1363,9 +1560,43 @@ export default async function PropertyReservationsPage({
                               {property.title}
                             </h3>
 
+                            <div className="mt-3 rounded-[18px] border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                              <p>
+                                <span className="font-semibold text-slate-900">
+                                  Owner:
+                                </span>{" "}
+                                {property.owner_name || '—'}
+                              </p>
+
+                              <p className="mt-1">
+                                <span className="font-semibold text-slate-900">
+                                  Phone:
+                                </span>{" "}
+                                {property.owner_phone || '—'}
+                              </p>
+
+                              {property.owner_whatsapp ? (
+                                <p className="mt-1">
+                                  <span className="font-semibold text-slate-900">
+                                    WhatsApp:
+                                  </span>{" "}
+                                  {property.owner_whatsapp}
+                                </p>
+                              ) : null}
+
+                              {property.owner_national_id ? (
+                                <p className="mt-1">
+                                  <span className="font-semibold text-slate-900">
+                                    National ID:
+                                  </span>{" "}
+                                  {property.owner_national_id}
+                                </p>
+                              ) : null}
+                            </div>
+
                             <div className="mt-5">
                               <Link
-                                href={`/admin/properties/reservations?property_id=${property.id}`}
+                                href={`/admin/properties/reservations?property_id=${property.id}${ownerQuerySuffix}`}
                                 className="property-select-button"
                               >
                                 <EyeIcon />
@@ -1384,12 +1615,26 @@ export default async function PropertyReservationsPage({
             <section className="rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
               <div className="border-b border-slate-200 px-5 py-5 md:px-7">
                 <div className="flex items-center justify-between gap-3">
-                  <h1 className="truncate text-lg font-semibold text-slate-900">
-                    {selectedPropertyLabel || 'Property Reservations'}
-                  </h1>
+                  <div className="min-w-0">
+                    <h1 className="truncate text-lg font-semibold text-slate-900">
+                      {selectedPropertyLabel || 'Property Reservations'}
+                    </h1>
+
+                    {selectedProperty ? (
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        Owner:{" "}
+                        <span className="font-semibold text-slate-900">
+                          {selectedProperty.owner_name || '—'}
+                        </span>
+                        {selectedProperty.owner_phone
+                          ? ` · ${selectedProperty.owner_phone}`
+                          : ''}
+                      </p>
+                    ) : null}
+                  </div>
 
                   <Link
-                    href="/admin/properties/reservations"
+                    href={`/admin/properties/reservations${ownerQueryOnly}`}
                     className="close-reservations-button"
                   >
                     Close
@@ -1495,6 +1740,35 @@ export default async function PropertyReservationsPage({
                               ) : null}
                             </div>
                           </div>
+
+                          {reservation.room_names.length > 0 ||
+                          reservation.bed_labels.length > 0 ? (
+                            <div className="mt-4 rounded-[22px] border border-slate-100 bg-slate-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                Allocation
+                              </p>
+
+                              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                                {reservation.room_names.length > 0 ? (
+                                  <p>
+                                    <span className="font-medium text-slate-900">
+                                      Rooms:
+                                    </span>{' '}
+                                    {reservation.room_names.join(', ')}
+                                  </p>
+                                ) : null}
+
+                                {reservation.bed_labels.length > 0 ? (
+                                  <p>
+                                    <span className="font-medium text-slate-900">
+                                      Beds:
+                                    </span>{' '}
+                                    {reservation.bed_labels.join(', ')}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : null}
 
                           <div className="mt-4 grid grid-cols-1 gap-3">
                             <RenewPropertyReservationForm reservation={reservation} />

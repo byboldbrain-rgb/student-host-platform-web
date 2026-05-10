@@ -1600,8 +1600,6 @@ export async function updatePropertyAction(formData: FormData) {
   const property_id = String(formData.get('property_id') || '').trim()
   const title_en = String(formData.get('title_en') || '').trim()
   const title_ar = String(formData.get('title_ar') || '').trim()
-  const description_en = String(formData.get('description_en') || '').trim()
-  const description_ar = String(formData.get('description_ar') || '').trim()
   const city_id = String(formData.get('city_id') || '').trim()
   const university_id = String(formData.get('university_id') || '').trim()
   const submittedBrokerId = String(formData.get('broker_id') || '').trim()
@@ -1638,9 +1636,6 @@ export async function updatePropertyAction(formData: FormData) {
     throw new Error('Both Arabic and English titles are required')
   }
 
-  if (!description_en || !description_ar) {
-    throw new Error('Both Arabic and English descriptions are required')
-  }
 
   if (!city_id) throw new Error('City is required')
   if (!university_id) throw new Error('University is required')
@@ -1798,8 +1793,6 @@ export async function updatePropertyAction(formData: FormData) {
     property_id,
     title_en,
     title_ar,
-    description_en,
-    description_ar,
     city_id,
     university_id,
     broker_id,

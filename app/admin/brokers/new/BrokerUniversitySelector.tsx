@@ -23,16 +23,29 @@ type Props = {
 const inputClass =
   'h-12 w-full rounded-[18px] border border-gray-200 bg-white px-4 text-sm text-[#222222] outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
 
-export default function BrokerUniversitySelector({
-  cities,
-  universities,
-}: Props) {
+export default function BrokerUniversitySelector({ cities, universities }: Props) {
   const [selectedCityId, setSelectedCityId] = useState('')
+  const [selectedUniversityIds, setSelectedUniversityIds] = useState<string[]>([])
 
   const filteredUniversities = useMemo(() => {
     if (!selectedCityId) return []
     return universities.filter((university) => university.city_id === selectedCityId)
   }, [selectedCityId, universities])
+
+  function handleCityChange(cityId: string) {
+    setSelectedCityId(cityId)
+    setSelectedUniversityIds([])
+  }
+
+  function toggleUniversity(universityId: string) {
+    setSelectedUniversityIds((current) => {
+      if (current.includes(universityId)) {
+        return current.filter((id) => id !== universityId)
+      }
+
+      return [...current, universityId]
+    })
+  }
 
   return (
     <div className="grid gap-5 md:grid-cols-2">
@@ -45,7 +58,7 @@ export default function BrokerUniversitySelector({
           name="city_id"
           className={inputClass}
           value={selectedCityId}
-          onChange={(e) => setSelectedCityId(e.target.value)}
+          onChange={(e) => handleCityChange(e.target.value)}
           required
         >
           <option value="" disabled>
@@ -69,6 +82,15 @@ export default function BrokerUniversitySelector({
           Universities *
         </label>
 
+        {selectedUniversityIds.map((universityId) => (
+          <input
+            key={universityId}
+            type="hidden"
+            name="university_ids"
+            value={universityId}
+          />
+        ))}
+
         <div className="rounded-[20px] border border-gray-200 bg-white p-4">
           {!selectedCityId ? (
             <p className="text-sm text-gray-500">
@@ -80,28 +102,32 @@ export default function BrokerUniversitySelector({
             </p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {filteredUniversities.map((university) => (
-                <label
-                  key={university.id}
-                  className="flex items-start gap-3 rounded-[18px] border border-gray-200 bg-[#fafafa] p-4 transition hover:border-blue-300 hover:bg-white"
-                >
-                  <input
-                    type="checkbox"
-                    name="university_ids"
-                    value={university.id}
-                    className="mt-1 h-4 w-4 rounded border-gray-300"
-                  />
+              {filteredUniversities.map((university) => {
+                const isChecked = selectedUniversityIds.includes(university.id)
 
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-[#222222]">
-                      {university.name_en}
+                return (
+                  <label
+                    key={university.id}
+                    className="flex items-start gap-3 rounded-[18px] border border-gray-200 bg-[#fafafa] p-4 transition hover:border-blue-300 hover:bg-white"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleUniversity(university.id)}
+                      className="mt-1 h-4 w-4 rounded border-gray-300"
+                    />
+
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-[#222222]">
+                        {university.name_en}
+                      </span>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        {university.name_ar}
+                      </span>
                     </span>
-                    <span className="mt-1 block text-xs text-gray-500">
-                      {university.name_ar}
-                    </span>
-                  </span>
-                </label>
-              ))}
+                  </label>
+                )
+              })}
             </div>
           )}
         </div>
