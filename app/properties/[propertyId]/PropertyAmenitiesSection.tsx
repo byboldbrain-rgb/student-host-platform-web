@@ -498,7 +498,11 @@ function AmenityRow({
     <div
       className={`${
         isSidebar ? 'flex items-center gap-3.5' : 'flex items-center gap-4.5'
-      } ${isAvailable ? 'text-slate-900' : 'text-slate-500'}`}
+      } ${
+        isAvailable
+          ? 'text-slate-900 dark:text-slate-100'
+          : 'text-slate-500 dark:text-slate-500'
+      }`}
     >
       <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
         <AmenityIcon
@@ -507,14 +511,14 @@ function AmenityRow({
           className={iconSizeClass}
         />
         {!isAvailable && (
-          <span className="pointer-events-none absolute left-[-4px] top-1/2 h-[2px] w-[calc(100%+8px)] -translate-y-1/2 rotate-[-18deg] bg-black" />
+          <span className="pointer-events-none absolute left-[-4px] top-1/2 h-[2px] w-[calc(100%+8px)] -translate-y-1/2 rotate-[-18deg] bg-black dark:bg-slate-400" />
         )}
       </div>
 
       <div className="relative inline-block min-w-0">
         <span className={textClass}>{label}</span>
         {!isAvailable && (
-          <span className="pointer-events-none absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-black" />
+          <span className="pointer-events-none absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-black dark:bg-slate-400" />
         )}
       </div>
     </div>
@@ -652,16 +656,16 @@ export default function PropertyAmenitiesSection({
   const resolvedSectionClassName = sectionClassName
     ? sectionClassName
     : isSidebar
-      ? 'overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]'
-      : `mt-8 ${hideBottomBorder ? '' : 'border-b border-slate-200 pb-8'}`
+      ? 'overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_42px_rgba(0,0,0,0.32)]'
+      : `mt-8 ${hideBottomBorder ? '' : 'border-b border-slate-200 pb-8 dark:border-white/10'}`
 
   const resolvedInnerWrapperClassName = isSidebar ? 'p-5 sm:p-6' : ''
 
   const resolvedTitleClassName = titleClassName
     ? titleClassName
     : isSidebar
-      ? 'text-[22px] font-bold tracking-tight text-slate-950'
-      : 'text-[24px] font-bold tracking-tight text-slate-950'
+      ? 'text-[22px] font-bold tracking-tight text-slate-950 dark:text-slate-100'
+      : 'text-[24px] font-bold tracking-tight text-slate-950 dark:text-slate-100'
 
   const resolvedGridClassName = gridClassName
     ? gridClassName
@@ -699,7 +703,7 @@ export default function PropertyAmenitiesSection({
                 onClick={() => setOpen(true)}
                 className={
                   showAllButtonClassName ||
-                  'inline-flex h-11 items-center justify-center rounded-[18px] bg-[#054aff] px-5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,74,255,0.22)] transition hover:-translate-y-[1px] hover:bg-[#043be0]'
+                  'inline-flex h-11 items-center justify-center rounded-[18px] bg-[#054aff] px-5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,74,255,0.22)] transition hover:-translate-y-[1px] hover:bg-[#043be0] dark:bg-[#2563eb] dark:shadow-[0_12px_28px_rgba(37,99,235,0.22)] dark:hover:bg-[#1d4ed8]'
                 }
               >
                 {showAllLabel}
@@ -711,20 +715,20 @@ export default function PropertyAmenitiesSection({
 
       {open && (
         <div
-          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 px-4 py-4 sm:items-center sm:py-6"
+          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 px-4 py-4 dark:bg-black/65 sm:items-center sm:py-6"
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl"
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl dark:border dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
             dir={isArabic ? 'rtl' : 'ltr'}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur sm:px-8">
+            <div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur dark:border-white/10 dark:bg-[#0b1220]/95 sm:px-8">
               <div />
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-white/10"
                 aria-label="Close"
               >
                 <svg
@@ -740,18 +744,18 @@ export default function PropertyAmenitiesSection({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-5 sm:px-8 sm:pb-10 sm:pt-6">
-              <h2 className="text-[28px] font-bold tracking-tight text-slate-950">
+              <h2 className="text-[28px] font-bold tracking-tight text-slate-950 dark:text-slate-100">
                 {title}
               </h2>
 
               <div className="mt-8 space-y-10 sm:mt-10">
                 {groupedItems.map(([category, categoryItems]) => (
                   <div key={category}>
-                    <h3 className="text-[20px] font-semibold text-slate-950">
+                    <h3 className="text-[20px] font-semibold text-slate-950 dark:text-slate-100">
                       {category}
                     </h3>
 
-                    <div className="mt-5 divide-y divide-slate-200">
+                    <div className="mt-5 divide-y divide-slate-200 dark:divide-white/10">
                       {categoryItems.map((item) => {
                         const label = getDisplayLabel(item, isArabic)
 

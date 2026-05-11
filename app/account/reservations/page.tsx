@@ -599,6 +599,69 @@ export default function AccountReservationsPage() {
           letter-spacing: 0.01em;
         }
 
+
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --menu-blue: #054aff;
+            --menu-cream: #f8fafc;
+            --menu-cream-soft: rgba(248, 250, 252, 0.92);
+          }
+
+          .menu-trigger-lines span {
+            background: #f8fafc !important;
+          }
+
+          .mega-menu-overlay {
+            background: #054aff;
+            color: #f8fafc;
+          }
+
+          .mega-menu-small-link,
+          .mega-menu-main-link,
+          .mega-menu-close {
+            color: #f8fafc;
+          }
+
+          .mega-menu-footer-link {
+            color: rgba(248, 250, 252, 0.86);
+          }
+
+          .mega-menu-footer-link:hover {
+            color: #ffffff;
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -788,8 +851,8 @@ export default function AccountReservationsPage() {
         }
       `}</style>
 
-      <div className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0">
-        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+      <div className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0">
+        <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <Link
               href={propertiesHref}
@@ -921,10 +984,10 @@ export default function AccountReservationsPage() {
 
         <main
           dir="ltr"
-          className="min-h-screen bg-[linear-gradient(180deg,#f5f7fb_0%,#f7f7f8_40%,#f3f6ff_100%)] px-4 py-6 text-left text-[#20212a] sm:px-6 lg:px-8"
+          className="min-h-screen bg-[linear-gradient(180deg,#f5f7fb_0%,#f7f7f8_40%,#f3f6ff_100%)] px-4 py-6 text-left text-[#20212a] dark:bg-[linear-gradient(180deg,#050816_0%,#0b1220_48%,#050816_100%)] dark:text-slate-100 sm:px-6 lg:px-8"
         >
           <div className="mx-auto max-w-6xl">
-            <section className="relative overflow-hidden rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_10px_35px_rgba(0,0,0,0.05)] sm:p-6 lg:p-8">
+            <section className="relative overflow-hidden rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_10px_35px_rgba(0,0,0,0.05)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_46px_rgba(0,0,0,0.32)] sm:p-6 lg:p-8">
               <div className="pointer-events-none absolute inset-0">
                 <div className="absolute left-0 top-0 h-44 w-44 rounded-full bg-[#054aff]/[0.07] blur-3xl" />
                 <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-[#6ea8ff]/[0.12] blur-3xl" />
@@ -950,19 +1013,19 @@ export default function AccountReservationsPage() {
                     {[1, 2, 3].map((item) => (
                       <div
                         key={item}
-                        className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)]"
+                        className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)]"
                       >
-                        <div className="animate-pulse border-b border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 sm:p-6">
+                        <div className="animate-pulse border-b border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 dark:border-white/10 dark:bg-[linear-gradient(180deg,#111827_0%,#0b1220_100%)] sm:p-6">
                           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div className="min-w-0 space-y-3">
-                              <div className="h-7 w-48 rounded-xl bg-gray-200" />
-                              <div className="h-4 w-36 rounded-xl bg-gray-100" />
+                              <div className="h-7 w-48 rounded-xl bg-gray-200 dark:bg-slate-800" />
+                              <div className="h-4 w-36 rounded-xl bg-gray-100 dark:bg-slate-800/70" />
                             </div>
 
                             <div className="xl:min-w-[180px] xl:max-w-[220px]">
-                              <div className="rounded-[22px] border border-[#dbe5ff] bg-[#f3f6ff] p-4">
-                                <div className="h-3 w-20 rounded bg-gray-200" />
-                                <div className="mt-3 h-5 w-24 rounded bg-gray-300" />
+                              <div className="rounded-[22px] border border-[#dbe5ff] bg-[#f3f6ff] p-4 dark:border-white/10 dark:bg-[#0b1220]">
+                                <div className="h-3 w-20 rounded bg-gray-200 dark:bg-slate-800" />
+                                <div className="mt-3 h-5 w-24 rounded bg-gray-300 dark:bg-slate-700" />
                               </div>
                             </div>
                           </div>
@@ -972,15 +1035,15 @@ export default function AccountReservationsPage() {
                   </section>
                 ) : reservations.length === 0 ? (
                   <section className="mt-8">
-                    <div className="rounded-[30px] border border-dashed border-[#cddcff] bg-[#f8fbff] p-8 text-center shadow-[0_10px_30px_rgba(5,74,255,0.06)] sm:p-10">
-                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[24px] bg-white shadow-[0_10px_24px_rgba(5,74,255,0.10)]">
+                    <div className="rounded-[30px] border border-dashed border-[#cddcff] bg-[#f8fbff] p-8 text-center shadow-[0_10px_30px_rgba(5,74,255,0.06)] dark:border-[#60a5fa]/25 dark:bg-[#111827] dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)] sm:p-10">
+                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[24px] bg-white shadow-[0_10px_24px_rgba(5,74,255,0.10)] dark:bg-[#0b1220] dark:shadow-[0_12px_28px_rgba(0,0,0,0.28)]">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
                           viewBox="0 0 24 24"
                           strokeWidth={1.8}
                           stroke="currentColor"
-                          className="h-9 w-9 text-[#054aff]"
+                          className="h-9 w-9 text-[#054aff] dark:text-[#60a5fa]"
                         >
                           <path
                             strokeLinecap="round"
@@ -990,10 +1053,10 @@ export default function AccountReservationsPage() {
                         </svg>
                       </div>
 
-                      <h2 className="mt-5 text-xl font-extrabold text-gray-900">
+                      <h2 className="mt-5 text-xl font-extrabold text-gray-900 dark:text-slate-100">
                         No reservations yet
                       </h2>
-                      <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-gray-500">
+                      <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-gray-500 dark:text-slate-400">
                         Once you create your first reservation, the property details, creation
                         date, and total reservation amount will appear here.
                       </p>
@@ -1001,7 +1064,7 @@ export default function AccountReservationsPage() {
                       <div className="mt-6">
                         <Link
                           href={accountHref}
-                          className="inline-flex items-center justify-center rounded-full bg-[#054aff] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#003fd9]"
+                          className="inline-flex items-center justify-center rounded-full bg-[#054aff] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#003fd9] dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8]"
                         >
                           Back to Account Dashboard
                         </Link>
@@ -1020,29 +1083,29 @@ export default function AccountReservationsPage() {
                       return (
                         <article
                           key={reservation.id}
-                          className="group overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+                          className="group overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)] dark:hover:shadow-[0_18px_44px_rgba(0,0,0,0.42)]"
                         >
-                          <div className="border-b border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 sm:p-6">
+                          <div className="border-b border-black/5 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 dark:border-white/10 dark:bg-[linear-gradient(180deg,#111827_0%,#0b1220_100%)] sm:p-6">
                             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                               <div className="min-w-0">
-                                <h2 className="text-xl font-extrabold tracking-tight text-gray-900 sm:text-2xl">
+                                <h2 className="text-xl font-extrabold tracking-tight text-gray-900 dark:text-slate-100 sm:text-2xl">
                                   {property?.title_en || property?.title_ar || 'Property'}
                                 </h2>
 
-                                <p className="mt-2 text-sm text-gray-500">
+                                <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">
                                   Created on:{' '}
-                                  <span className="font-semibold text-gray-700">
+                                  <span className="font-semibold text-gray-700 dark:text-slate-300">
                                     {formatDate(reservation.created_at)}
                                   </span>
                                 </p>
                               </div>
 
                               <div className="xl:min-w-[180px] xl:max-w-[220px]">
-                                <div className="rounded-[22px] border border-[#dbe5ff] bg-[#f3f6ff] p-4">
-                                  <p className="text-xs font-medium text-[#4d5b7c]">
+                                <div className="rounded-[22px] border border-[#dbe5ff] bg-[#f3f6ff] p-4 dark:border-white/10 dark:bg-[#0b1220]">
+                                  <p className="text-xs font-medium text-[#4d5b7c] dark:text-slate-400">
                                     Total Reservation
                                   </p>
-                                  <p className="mt-2 text-sm font-extrabold text-[#0b1f46] sm:text-[15px]">
+                                  <p className="mt-2 text-sm font-extrabold text-[#0b1f46] dark:text-slate-100 sm:text-[15px]">
                                     {formatMoney(totalPrice)}
                                   </p>
                                 </div>

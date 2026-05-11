@@ -61,6 +61,15 @@ type SortOption = {
   href: string
 }
 
+type AmenityOption = {
+  id: string
+  name_en: string
+  name_ar: string
+  icon_url?: string | null
+  sort_order?: number | null
+  is_active?: boolean | null
+}
+
 type SearchBarProps = {
   cities: City[]
   universities: University[]
@@ -79,18 +88,22 @@ type HeaderTexts = {
   backToProperties?: string
 }
 
+type MobileSortProps = {
+  isArabic: boolean
+  selectedSort: SupportedSort
+  sortByLabel: string
+  amenitiesLabel?: string
+  options: SortOption[]
+  amenities?: AmenityOption[]
+}
+
 type Props = {
   homeHref: string
   searchBarProps?: SearchBarProps
   t: HeaderTexts
   showMobileSearchHeaderExtras?: boolean
   mobileBackHref?: string
-  mobileSortProps?: {
-    isArabic: boolean
-    selectedSort: SupportedSort
-    sortByLabel: string
-    options: SortOption[]
-  }
+  mobileSortProps?: MobileSortProps
   hideDesktopHeader?: boolean
 }
 
@@ -195,14 +208,41 @@ export default function PropertiesHeader({
             display: none !important;
           }
         }
+
+        @media (prefers-color-scheme: dark) {
+          .properties-header {
+            background: #0b1220 !important;
+            border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+          }
+
+          .properties-header .menu-trigger-lines span {
+            background: #f8fafc;
+          }
+
+          .properties-header .navienty-logo,
+          .properties-header .navienty-logo-mobile {
+            color: #f8fafc;
+          }
+
+          .properties-mobile-search-overlay {
+            background: #050816 !important;
+          }
+
+          .properties-mobile-search-close {
+            background: #0b1220 !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+            color: #f8fafc !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+          }
+        }
       `}</style>
 
       <header
-        className={`properties-header sticky top-0 z-[130] border-b border-gray-200 bg-white shadow-sm md:bg-[#f7f7f7] md:shadow-none ${
+        className={`properties-header sticky top-0 z-[130] border-b border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:bg-[#f7f7f7] md:shadow-none md:dark:bg-[#0b1220] ${
           hideDesktopHeader ? 'md:hidden' : ''
         }`}
       >
-        <div className="w-full bg-white pb-2 pt-1 md:hidden">
+        <div className="w-full bg-white pb-2 pt-1 dark:bg-[#0b1220] md:hidden">
           <div className="flex items-center justify-between px-3 pt-2">
             <Link
               href={homeHref}
@@ -234,7 +274,7 @@ export default function PropertiesHeader({
                   <Link
                     href={mobileBackHref}
                     aria-label={t.backToProperties || 'Back'}
-                    className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full border border-[#dedede] bg-white text-[#222] shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
+                    className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full border border-[#dedede] bg-white text-[#222] shadow-[0_1px_5px_rgba(0,0,0,0.08)] transition dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:shadow-[0_8px_22px_rgba(0,0,0,0.28)] dark:hover:bg-[#111827]"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -259,7 +299,7 @@ export default function PropertiesHeader({
                   <button
                     type="button"
                     onClick={() => setIsMobileSearchOpen(true)}
-                    className="flex h-[44px] min-w-0 flex-1 items-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
+                    className="flex h-[44px] min-w-0 flex-1 items-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)] transition dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_22px_rgba(0,0,0,0.28)] dark:hover:bg-[#111827]"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -267,7 +307,7 @@ export default function PropertiesHeader({
                       viewBox="0 0 24 24"
                       strokeWidth={2.2}
                       stroke="currentColor"
-                      className="h-[16px] w-[16px] shrink-0 text-[#222]"
+                      className="h-[16px] w-[16px] shrink-0 text-[#222] dark:text-slate-100"
                     >
                       <path
                         strokeLinecap="round"
@@ -276,7 +316,7 @@ export default function PropertiesHeader({
                       />
                     </svg>
 
-                    <span className="truncate text-[13px] font-semibold leading-none text-[#222]">
+                    <span className="truncate text-[13px] font-semibold leading-none text-[#222] dark:text-slate-100">
                       {t.startSearch}
                     </span>
                   </button>
@@ -286,7 +326,9 @@ export default function PropertiesHeader({
                       isArabic={mobileSortProps.isArabic}
                       selectedSort={mobileSortProps.selectedSort}
                       sortByLabel={mobileSortProps.sortByLabel}
+                      amenitiesLabel={mobileSortProps.amenitiesLabel}
                       options={mobileSortProps.options}
+                      amenities={mobileSortProps.amenities ?? []}
                     />
                   </div>
                 </div>
@@ -294,7 +336,7 @@ export default function PropertiesHeader({
                 <button
                   type="button"
                   onClick={() => setIsMobileSearchOpen(true)}
-                  className="mx-auto flex h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)]"
+                  className="mx-auto flex h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[#dedede] bg-white px-4 shadow-[0_1px_5px_rgba(0,0,0,0.08)] transition dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_22px_rgba(0,0,0,0.28)] dark:hover:bg-[#111827]"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -302,7 +344,7 @@ export default function PropertiesHeader({
                     viewBox="0 0 24 24"
                     strokeWidth={2.2}
                     stroke="currentColor"
-                    className="h-[16px] w-[16px] text-[#222]"
+                    className="h-[16px] w-[16px] text-[#222] dark:text-slate-100"
                   >
                     <path
                       strokeLinecap="round"
@@ -311,7 +353,7 @@ export default function PropertiesHeader({
                     />
                   </svg>
 
-                  <span className="truncate text-[13px] font-semibold leading-none text-[#222]">
+                  <span className="truncate text-[13px] font-semibold leading-none text-[#222] dark:text-slate-100">
                     {t.startSearch}
                   </span>
                 </button>
@@ -320,13 +362,13 @@ export default function PropertiesHeader({
           )}
 
           {isMobileSearchOpen && normalizedSearchBarProps && (
-            <div className="fixed inset-0 z-[220] bg-[#f2f2f2]">
+            <div className="properties-mobile-search-overlay fixed inset-0 z-[220] bg-[#f2f2f2] dark:bg-[#050816]">
               <div className="flex items-center justify-end px-4 pb-2 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsMobileSearchOpen(false)}
                   aria-label="Close search"
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d8d8d8] bg-[#f7f7f7] text-[#222222] shadow-sm"
+                  className="properties-mobile-search-close flex h-11 w-11 items-center justify-center rounded-full border border-[#d8d8d8] bg-[#f7f7f7] text-[#222222] shadow-sm transition dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:hover:bg-[#111827]"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"

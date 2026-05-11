@@ -3,10 +3,54 @@
 :root {
   --background: #f6f8fb;
   --foreground: #101828;
+
+  --page-bg: #f6f8fb;
+  --surface-bg: #ffffff;
+  --surface-bg-soft: #fcfcfd;
+  --surface-bg-muted: #f7f7f7;
+
+  --text-main: #101828;
+  --text-strong: #111827;
+  --text-muted: #667085;
+  --text-soft: #98a2b3;
+
+  --border-soft: #d0d5dd;
+  --border-muted: #e5e7eb;
+
+  --brand-blue: #175cd3;
+  --brand-blue-strong: #054aff;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #050816;
+    --foreground: #f8fafc;
+
+    --page-bg: #050816;
+    --surface-bg: #0b1220;
+    --surface-bg-soft: #111827;
+    --surface-bg-muted: #0f172a;
+
+    --text-main: #f8fafc;
+    --text-strong: #ffffff;
+    --text-muted: #cbd5e1;
+    --text-soft: #94a3b8;
+
+    --border-soft: rgba(255, 255, 255, 0.14);
+    --border-muted: rgba(255, 255, 255, 0.10);
+
+    --brand-blue: #60a5fa;
+    --brand-blue-strong: #3b82f6;
+
+    color-scheme: dark;
+  }
 }
 
 html {
   scroll-behavior: smooth;
+  background: var(--background);
 }
 
 html,
@@ -61,6 +105,178 @@ img {
   background: rgba(23, 92, 211, 0.16);
 }
 
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: rgba(96, 165, 250, 0.28);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  input,
+  select,
+  textarea {
+    color-scheme: dark;
+  }
+
+  /*
+    Global dark-mode compatibility layer.
+    ده بيخلي أغلب الواجهات القديمة اللي فيها Tailwind classes hardcoded
+    زي bg-white / text-[#222222] / border-[#dddddd] تتحول تلقائيًا في Dark Mode.
+  */
+
+  :where(.bg-white, [class~="bg-white"]) {
+    background-color: var(--surface-bg) !important;
+  }
+
+  :where(.bg-\[\#ffffff\], [class~="bg-[#ffffff]"]) {
+    background-color: var(--surface-bg) !important;
+  }
+
+  :where(.bg-\[\#f7f7f7\], [class~="bg-[#f7f7f7]"]) {
+    background-color: var(--surface-bg-muted) !important;
+  }
+
+  :where(.bg-\[\#fbfbfb\], [class~="bg-[#fbfbfb]"]) {
+    background-color: var(--surface-bg-muted) !important;
+  }
+
+  :where(.bg-slate-50, [class~="bg-slate-50"]) {
+    background-color: #0f172a !important;
+  }
+
+  :where(.bg-gray-50, [class~="bg-gray-50"]) {
+    background-color: #0f172a !important;
+  }
+
+  :where(.bg-gray-100, [class~="bg-gray-100"]) {
+    background-color: #111827 !important;
+  }
+
+  :where(.text-gray-700, [class~="text-gray-700"]) {
+    color: #cbd5e1 !important;
+  }
+
+  :where(.text-gray-900, [class~="text-gray-900"]) {
+    color: #f8fafc !important;
+  }
+
+  :where(.text-slate-900, [class~="text-slate-900"]) {
+    color: #f8fafc !important;
+  }
+
+  :where(.text-slate-950, [class~="text-slate-950"]) {
+    color: #ffffff !important;
+  }
+
+  :where(.text-slate-500, [class~="text-slate-500"]) {
+    color: #94a3b8 !important;
+  }
+
+  :where(.text-gray-500, [class~="text-gray-500"]) {
+    color: #94a3b8 !important;
+  }
+
+  :where(.text-gray-600, [class~="text-gray-600"]) {
+    color: #cbd5e1 !important;
+  }
+
+  :where(.text-\[\#222\], [class~="text-[#222]"]) {
+    color: #f8fafc !important;
+  }
+
+  :where(.text-\[\#222222\], [class~="text-[#222222]"]) {
+    color: #f8fafc !important;
+  }
+
+  :where(.text-\[\#111827\], [class~="text-[#111827]"]) {
+    color: #f8fafc !important;
+  }
+
+  :where(.text-\[\#8d8d8d\], [class~="text-[#8d8d8d]"]) {
+    color: #94a3b8 !important;
+  }
+
+  :where(.border-gray-200, [class~="border-gray-200"]) {
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.border-slate-200, [class~="border-slate-200"]) {
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.border-\[\#dddddd\], [class~="border-[#dddddd]"]) {
+    border-color: var(--border-soft) !important;
+  }
+
+  :where(.border-\[\#dedede\], [class~="border-[#dedede]"]) {
+    border-color: var(--border-soft) !important;
+  }
+
+  :where(.border-\[\#ebebeb\], [class~="border-[#ebebeb]"]) {
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.border-\[\#ececec\], [class~="border-[#ececec]"]) {
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.shadow-sm, [class~="shadow-sm"]) {
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.28) !important;
+  }
+
+  :where(.properties-header) {
+    background-color: var(--surface-bg) !important;
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.mobile-bottom-nav) {
+    background: rgba(11, 18, 32, 0.96) !important;
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.pwa-install-banner) {
+    background: var(--surface-bg) !important;
+    border-color: var(--border-muted) !important;
+  }
+
+  :where(.pwa-install-banner__title) {
+    color: var(--text-strong) !important;
+  }
+
+  :where(.pwa-install-banner__close) {
+    color: var(--text-strong) !important;
+  }
+
+  :where(.pwa-install-banner__ios-help) {
+    background: var(--surface-bg-muted) !important;
+    border-color: var(--border-muted) !important;
+    color: var(--text-muted) !important;
+  }
+
+  :where(.property-media-card) {
+    background-color: #111827 !important;
+  }
+
+  :where(.property-meta-gender) {
+    color: #94a3b8 !important;
+  }
+
+  :where(.group:hover .property-meta-gender) {
+    color: #cbd5e1 !important;
+  }
+
+  :where(.mega-menu-overlay) {
+    background: #054aff !important;
+  }
+
+  :where(.footer-esaf) {
+    background: #054aff !important;
+  }
+}
+
 @layer utilities {
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
@@ -77,12 +293,12 @@ img {
   width: 100%;
   min-height: 52px;
   border-radius: 16px;
-  border: 1px solid #d0d5dd;
-  background: #ffffff;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-bg);
   padding: 0 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #101828;
+  color: var(--text-main);
   outline: none;
   transition:
     border-color 0.2s ease,
@@ -91,19 +307,32 @@ img {
 }
 
 .input::placeholder {
-  color: #98a2b3;
+  color: var(--text-soft);
   font-weight: 400;
 }
 
 .input:hover {
   border-color: #bfc7d4;
-  background: #fcfcfd;
+  background: var(--surface-bg-soft);
 }
 
 .input:focus {
   border-color: #175cd3;
   box-shadow: 0 0 0 4px rgba(23, 92, 211, 0.12);
-  background: #ffffff;
+  background: var(--surface-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .input:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: #111827;
+  }
+
+  .input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+    background: #0b1220;
+  }
 }
 
 textarea.input {
@@ -145,6 +374,23 @@ textarea.input {
     0 0 0 2px var(--stone-50),
     1px 1px 0 2px var(--stone-50),
     2px 2px 0 2px var(--stone-50);
+}
+
+@media (prefers-color-scheme: dark) {
+  .top-action-button {
+    --stone-50: #0b1220;
+    --stone-800: #0b1220;
+    --yellow-400: #2563eb;
+    color: #93c5fd;
+    box-shadow:
+      0.5px 0.5px 0 0 rgba(96, 165, 250, 0.8),
+      1px 1px 0 0 rgba(96, 165, 250, 0.8),
+      1.5px 1.5px 0 0 rgba(96, 165, 250, 0.8),
+      2px 2px 0 0 rgba(96, 165, 250, 0.8),
+      0 0 0 2px var(--stone-50),
+      1px 1px 0 2px var(--stone-50),
+      2px 2px 0 2px var(--stone-50);
+  }
 }
 
 .top-action-button:hover {
@@ -267,4 +513,3 @@ textarea.input {
     padding: 10px 0;
   }
 }
-

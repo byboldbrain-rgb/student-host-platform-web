@@ -205,15 +205,15 @@ export default function CommunityNotifications() {
 
   return (
     <div className="fixed inset-x-0 bottom-[84px] z-[140] px-4 md:bottom-6 md:px-0">
-      <div className="mx-auto max-w-[430px] overflow-hidden rounded-[28px] border border-white/80 bg-white/95 shadow-[0_22px_70px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/[0.04] backdrop-blur-xl">
+      <div className="mx-auto max-w-[430px] overflow-hidden rounded-[28px] border border-white/80 bg-white/95 shadow-[0_22px_70px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/[0.04] backdrop-blur-xl dark:border-white/10 dark:bg-[#0b1220]/95 dark:shadow-[0_24px_80px_rgba(0,0,0,0.48)] dark:ring-white/[0.04]">
         <div className="p-4">
           <div className="flex items-start gap-3">
             <div
               className={[
                 'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
                 isSubscribed
-                  ? 'bg-emerald-50 text-emerald-600'
-                  : 'bg-blue-50 text-blue-600',
+                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-300'
+                  : 'bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300',
               ].join(' ')}
             >
               {isSubscribed ? <Check className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
@@ -222,10 +222,10 @@ export default function CommunityNotifications() {
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-black tracking-tight text-slate-950">
+                  <h3 className="text-sm font-black tracking-tight text-slate-950 dark:text-slate-100">
                     Stay updated with Community
                   </h3>
-                  <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                  <p className="mt-1 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
                     Get notified when new community posts go live.
                   </p>
                 </div>
@@ -233,7 +233,7 @@ export default function CommunityNotifications() {
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/15 dark:hover:text-white"
                   aria-label="Close notifications prompt"
                 >
                   <X className="h-4 w-4" />
@@ -249,7 +249,7 @@ export default function CommunityNotifications() {
                     permission === 'unsupported' ||
                     permission === 'denied'
                   }
-                  className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[#054aff] px-4 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#003ed6] hover:shadow-lg disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[#054aff] px-4 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#003ed6] hover:shadow-lg disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8] dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 >
                   {isPending ? 'Please wait...' : 'Turn on'}
                 </button>
@@ -259,7 +259,7 @@ export default function CommunityNotifications() {
                     type="button"
                     onClick={handleDisable}
                     disabled={isPending}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-[#111827] dark:text-slate-200 dark:hover:bg-white/10"
                   >
                     Off
                   </button>
@@ -267,13 +267,13 @@ export default function CommunityNotifications() {
               </div>
 
               {message ? (
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-600 dark:border-white/10 dark:bg-[#111827] dark:text-slate-300">
                   {message}
                 </div>
               ) : null}
 
               {permission === 'denied' ? (
-                <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-semibold leading-5 text-rose-700">
+                <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-semibold leading-5 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300">
                   Notifications are blocked. Enable them from browser site settings.
                 </div>
               ) : null}

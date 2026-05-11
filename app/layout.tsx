@@ -1,5 +1,5 @@
 import './globals.css'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import SplashScreen from '@/components/SplashScreen'
 
 export const metadata: Metadata = {
@@ -18,13 +18,27 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: [
+    {
+      media: '(prefers-color-scheme: light)',
+      color: '#ffffff',
+    },
+    {
+      media: '(prefers-color-scheme: dark)',
+      color: '#050816',
+    },
+  ],
+  colorScheme: 'light dark',
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <SplashScreen />
         {children}

@@ -12,6 +12,7 @@ import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 import {
   approvePropertyAction,
   rejectPropertyAction,
+  returnPropertyToReviewAction,
 } from '../actions'
 import PropertyGalleryEditor from './PropertyGalleryEditor'
 
@@ -436,6 +437,14 @@ async function rejectPropertyAndBackAction(formData: FormData) {
   redirect('/admin/properties/review')
 }
 
+async function returnPropertyToReviewAndBackAction(formData: FormData) {
+  'use server'
+
+  await returnPropertyToReviewAction(formData)
+  revalidatePath('/admin/properties/review')
+  redirect('/admin/properties/review')
+}
+
 function BrandLogo() {
   return (
     <Link href="/admin" className="navienty-logo" aria-label="Navienty admin home">
@@ -845,6 +854,8 @@ export default async function PropertyReviewPreviewPage({
     allBrokers.find((item) => item.id === typedProperty.broker_id)?.company_name ||
     '—'
 
+  const isPublished = typedProperty.admin_status === 'published'
+
   return (
     <>
       <style>{`
@@ -1038,15 +1049,13 @@ export default async function PropertyReviewPreviewPage({
           <input type="hidden" name="property_db_id" value={typedProperty.id} />
           <input type="hidden" name="property_route_id" value={typedProperty.property_id} />
           <input type="hidden" name="property_id" value={typedProperty.id} />
+          <input type="hidden" name="admin_status" value={typedProperty.admin_status || ''} />
 
           <main className="px-4 py-8 md:px-6 md:py-10 xl:px-8">
             <div className="mx-auto w-full max-w-[1600px]">
               <div className="space-y-8">
                 <section>
-                  <ReviewStepHeader
-                    title="Review Property"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Review Property" subtitle="" />
 
                   <div className="mt-6 rounded-md border border-[#e7e7e7] bg-white p-4 shadow-sm md:p-5">
                     <h2 className="mb-3 text-lg font-semibold text-[#1a1a1a]">
@@ -1114,10 +1123,7 @@ export default async function PropertyReviewPreviewPage({
                 </section>
 
                 <section>
-                  <ReviewStepHeader
-                    title="Photos"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Photos" subtitle="" />
 
                   <div className="mt-6">
                     <ReviewSection title="Property Gallery">
@@ -1130,10 +1136,7 @@ export default async function PropertyReviewPreviewPage({
                 </section>
 
                 <section>
-                  <ReviewStepHeader
-                    title="Basic Info"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Basic Info" subtitle="" />
 
                   <div className="mt-6 space-y-6">
                     <ReviewSection title="Basic Property Info">
@@ -1257,10 +1260,7 @@ export default async function PropertyReviewPreviewPage({
                 </section>
 
                 <section>
-                  <ReviewStepHeader
-                    title="Property Details"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Property Details" subtitle="" />
 
                   <div className="mt-6">
                     <ReviewSection title="Property Details">
@@ -1328,16 +1328,10 @@ export default async function PropertyReviewPreviewPage({
                 </section>
 
                 <section>
-                  <ReviewStepHeader
-                    title="Property Featured"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Property Featured" subtitle="" />
 
                   <div className="mt-6 space-y-6">
-                    <ReviewSection
-                      title="Amenities"
-                      subtitle=""
-                    >
+                    <ReviewSection title="Amenities" subtitle="">
                       <CheckboxGroup
                         title="Select Amenities"
                         name="amenity_ids"
@@ -1350,10 +1344,7 @@ export default async function PropertyReviewPreviewPage({
                       />
                     </ReviewSection>
 
-                    <ReviewSection
-                      title="Bills Included"
-                      subtitle=""
-                    >
+                    <ReviewSection title="Bills Included" subtitle="">
                       <CheckboxGroup
                         title="Select Included Bills"
                         name="bill_type_ids"
@@ -1369,10 +1360,7 @@ export default async function PropertyReviewPreviewPage({
                 </section>
 
                 <section>
-                  <ReviewStepHeader
-                    title="Rooms & Pricing"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Rooms & Pricing" subtitle="" />
 
                   <div className="mt-6">
                     <ReviewSection title="Room Types">
@@ -1488,10 +1476,7 @@ export default async function PropertyReviewPreviewPage({
                 </section>
 
                 <section>
-                  <ReviewStepHeader
-                    title="Publish"
-                    subtitle=""
-                  />
+                  <ReviewStepHeader title="Publish" subtitle="" />
 
                   <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-white p-4 shadow-sm md:p-5">
                     <div className="grid gap-3 sm:grid-cols-3">
@@ -1502,12 +1487,22 @@ export default async function PropertyReviewPreviewPage({
                         Back to Queue
                       </Link>
 
-                      <button
-                        type="submit"
-                        className="inline-flex h-[46px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3]"
-                      >
-                        Approve &amp; Publish
-                      </button>
+                      {isPublished ? (
+                        <button
+                          type="submit"
+                          formAction={returnPropertyToReviewAndBackAction}
+                          className="inline-flex h-[46px] items-center justify-center rounded-xl bg-amber-500 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600"
+                        >
+                          Return to Review
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          className="inline-flex h-[46px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3]"
+                        >
+                          Approve &amp; Publish
+                        </button>
+                      )}
 
                       <button
                         type="submit"

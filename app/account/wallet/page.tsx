@@ -32,16 +32,16 @@ function getTransactionDirectionMeta(direction: string) {
   if (direction === 'credit') {
     return {
       label: 'Credit',
-      amountClassName: 'text-emerald-600',
-      badgeClassName: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+      amountClassName: 'text-emerald-600 dark:text-emerald-400',
+      badgeClassName: 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300',
       sign: '+',
     }
   }
 
   return {
     label: 'Debit',
-    amountClassName: 'text-rose-600',
-    badgeClassName: 'bg-rose-100 text-rose-700 border border-rose-200',
+    amountClassName: 'text-rose-600 dark:text-rose-400',
+    badgeClassName: 'bg-rose-100 text-rose-700 border border-rose-200 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300',
     sign: '-',
   }
 }
@@ -539,6 +539,69 @@ export default async function AccountWalletPage() {
           letter-spacing: 0.01em;
         }
 
+
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --menu-blue: #054aff;
+            --menu-cream: #f8fafc;
+            --menu-cream-soft: rgba(248, 250, 252, 0.92);
+          }
+
+          .menu-trigger-lines span {
+            background: #f8fafc !important;
+          }
+
+          .mega-menu-overlay {
+            background: #054aff;
+            color: #f8fafc;
+          }
+
+          .mega-menu-small-link,
+          .mega-menu-main-link,
+          .mega-menu-close {
+            color: #f8fafc;
+          }
+
+          .mega-menu-footer-link {
+            color: rgba(248, 250, 252, 0.86);
+          }
+
+          .mega-menu-footer-link:hover {
+            color: #ffffff;
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -728,10 +791,10 @@ export default async function AccountWalletPage() {
         }
       `}</style>
 
-      <div className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0">
+      <div className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0">
         <input id="nav-menu-toggle" type="checkbox" className="sr-only" aria-hidden="true" />
 
-        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+        <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <Link
               href={propertiesHref}
@@ -834,23 +897,23 @@ export default async function AccountWalletPage() {
 
         <main
           dir="ltr"
-          className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] sm:px-6 lg:px-8"
+          className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] dark:bg-[#050816] dark:text-slate-100 sm:px-6 lg:px-8"
         >
           <div className="mx-auto max-w-6xl">
-            <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-6 lg:p-8">
+            <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_46px_rgba(0,0,0,0.32)] sm:p-6 lg:p-8">
               <section>
                 <div
                   id="deposit-form"
-                  className="rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_12px_30px_rgba(0,0,0,0.04)] sm:p-6"
+                  className="rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_12px_30px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)] sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-xl font-extrabold text-gray-900">New Deposit Request</h2>
+                      <h2 className="text-xl font-extrabold text-gray-900 dark:text-slate-100">New Deposit Request</h2>
                       
                     </div>
                   </div>
 
-                  <div className="mt-6 rounded-[24px] border border-[#edf1f7] bg-[#fafcff] p-4 sm:p-5">
+                  <div className="mt-6 rounded-[24px] border border-[#edf1f7] bg-[#fafcff] p-4 dark:border-white/10 dark:bg-[#0b1220] sm:p-5">
                     <WalletDepositForm paymentMethods={paymentMethods} />
                   </div>
                 </div>
@@ -859,19 +922,19 @@ export default async function AccountWalletPage() {
               <section className="mt-8 rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_12px_30px_rgba(0,0,0,0.04)] sm:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h2 className="text-xl font-extrabold text-gray-900">Latest Transactions</h2>
-                    <p className="mt-2 text-sm leading-7 text-gray-600">
+                    <h2 className="text-xl font-extrabold text-gray-900 dark:text-slate-100">Latest Transactions</h2>
+                    <p className="mt-2 text-sm leading-7 text-gray-600 dark:text-slate-400">
                       View your most recent wallet transactions, including transaction type and
                       balance after each activity.
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 overflow-hidden rounded-[24px] border border-[#edf1f7]">
+                <div className="mt-6 overflow-hidden rounded-[24px] border border-[#edf1f7] dark:border-white/10">
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
-                      <thead className="bg-[#f8fbff]">
-                        <tr className="text-left text-gray-500">
+                      <thead className="bg-[#f8fbff] dark:bg-[#0f172a]">
+                        <tr className="text-left text-gray-500 dark:text-slate-400">
                           <th className="px-4 py-4 font-semibold">Type</th>
                           <th className="px-4 py-4 font-semibold">Direction</th>
                           <th className="px-4 py-4 font-semibold">Amount</th>
@@ -880,10 +943,10 @@ export default async function AccountWalletPage() {
                         </tr>
                       </thead>
 
-                      <tbody className="divide-y divide-[#edf1f7] bg-white">
+                      <tbody className="divide-y divide-[#edf1f7] bg-white dark:divide-white/10 dark:bg-[#0b1220]">
                         {transactions.length === 0 ? (
                           <tr>
-                            <td className="px-4 py-10 text-center text-gray-500" colSpan={5}>
+                            <td className="px-4 py-10 text-center text-gray-500 dark:text-slate-400" colSpan={5}>
                               No transactions yet.
                             </td>
                           </tr>
@@ -892,8 +955,8 @@ export default async function AccountWalletPage() {
                             const directionMeta = getTransactionDirectionMeta(tx.wallet_direction)
 
                             return (
-                              <tr key={tx.id} className="transition hover:bg-[#fafcff]">
-                                <td className="px-4 py-4 font-medium text-gray-900">
+                              <tr key={tx.id} className="transition hover:bg-[#fafcff] dark:hover:bg-[#111827]">
+                                <td className="px-4 py-4 font-medium text-gray-900 dark:text-slate-100">
                                   {tx.transaction_type}
                                 </td>
 
@@ -912,11 +975,11 @@ export default async function AccountWalletPage() {
                                   {Number(tx.amount).toFixed(2)} EGP
                                 </td>
 
-                                <td className="px-4 py-4 font-semibold text-gray-700">
+                                <td className="px-4 py-4 font-semibold text-gray-700 dark:text-slate-300">
                                   {Number(tx.balance_after).toFixed(2)} EGP
                                 </td>
 
-                                <td className="px-4 py-4 text-gray-500">
+                                <td className="px-4 py-4 text-gray-500 dark:text-slate-400">
                                   {new Date(tx.created_at).toLocaleString('en-US')}
                                 </td>
                               </tr>

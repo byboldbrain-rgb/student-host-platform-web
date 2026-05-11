@@ -18,7 +18,6 @@ export default function SignupPage() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [referralCode, setReferralCode] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -37,7 +36,7 @@ export default function SignupPage() {
         phone,
         email,
         password,
-        referralCode,
+        referralCode: '',
       })
 
       setSuccessMessage('تم إنشاء الحساب بنجاح. يمكنك تسجيل الدخول الآن.')
@@ -62,13 +61,13 @@ export default function SignupPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-white text-gray-700 relative">
-      <header className="border-b border-gray-200 bg-[#f7f7f7] sticky top-0 md:static z-40 shadow-sm md:shadow-none h-20">
-        <div className="mx-auto max-w-[1920px] px-4 h-full">
-          <div className="flex items-center justify-center h-full">
+    <main className="relative min-h-screen bg-white text-gray-700 dark:bg-[#050816] dark:text-slate-100">
+      <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:static md:shadow-none">
+        <div className="mx-auto h-full max-w-[1920px] px-4">
+          <div className="flex h-full items-center justify-center">
             <Link
               href="/properties"
-              className="flex items-center justify-center overflow-hidden h-full"
+              className="flex h-full items-center justify-center overflow-hidden"
             >
               <img
                 src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
@@ -86,8 +85,8 @@ export default function SignupPage() {
         </div>
       </header>
 
-      <section className="flex min-h-[calc(100vh-120px)] items-center justify-center px-6 py-10 bg-[#fcfcfd]">
-        <div className="w-full flex justify-center">
+      <section className="flex min-h-[calc(100vh-120px)] items-center justify-center bg-[#fcfcfd] px-6 py-10 dark:bg-[#050816]">
+        <div className="flex w-full justify-center">
           <form onSubmit={handleSubmit} className="form">
             <div id="signup-area">
               <p>SIGN UP</p>
@@ -142,35 +141,15 @@ export default function SignupPage() {
               />
             </div>
 
-            <div id="referral-area" className="input-area referral-area">
-              <input
-                placeholder="REFERRAL CODE (OPTIONAL)"
-                id="referralCode"
-                className="input uppercase"
-                type="text"
-                value={referralCode}
-                onChange={(event) => setReferralCode(event.target.value)}
-              />
-              <p className="referral-note">
-                If you have an invitation code, enter it here.
-              </p>
-            </div>
-
             <div id="footer-area">
               <button type="submit" disabled={loading}>
                 {loading ? 'Creating account...' : 'Create Account'}
               </button>
 
-              {errorMessage && (
-                <div className="error-box">
-                  {errorMessage}
-                </div>
-              )}
+              {errorMessage && <div className="error-box">{errorMessage}</div>}
 
               {successMessage && (
-                <div className="success-box">
-                  {successMessage}
-                </div>
+                <div className="success-box">{successMessage}</div>
               )}
 
               <p id="text-inside">
@@ -265,10 +244,7 @@ export default function SignupPage() {
 
             <div>
               <h3 className="footer-esaf-heading">Contact Us</h3>
-              <a
-                href="mailto:info@navienty.com"
-                className="footer-esaf-email"
-              >
+              <a href="mailto:info@navienty.com" className="footer-esaf-email">
                 info@navienty.com
               </a>
             </div>
@@ -289,7 +265,7 @@ export default function SignupPage() {
           align-items: center;
           background-color: white;
           width: clamp(20rem, 32vw, 25rem);
-          min-height: 40rem;
+          min-height: 34rem;
           border: 2px solid #1e40af;
           border-bottom-left-radius: 1.8em;
           border-top-right-radius: 1.8em;
@@ -374,23 +350,6 @@ export default function SignupPage() {
           z-index: 3;
         }
 
-        .referral-area {
-          height: 7.2em;
-          align-items: flex-start;
-          justify-content: flex-start;
-          padding-top: 0.2em;
-        }
-
-        .referral-note {
-          margin: 0.55em 0 0;
-          width: 100%;
-          font-size: 0.78em;
-          line-height: 1.4;
-          color: #2563eb;
-          text-align: left;
-          transition: all 0.25s ease;
-        }
-
         #footer-area {
           margin-top: 0%;
           padding-top: 0.6em;
@@ -420,6 +379,11 @@ export default function SignupPage() {
           box-shadow: 0px 5px 5px -3px rgb(0, 0, 0, 0.2);
           cursor: pointer;
           box-sizing: border-box;
+        }
+
+        #footer-area button:disabled {
+          opacity: 0.75;
+          cursor: not-allowed;
         }
 
         #footer-area p,
@@ -482,7 +446,7 @@ export default function SignupPage() {
 
         .form:hover {
           width: clamp(20.3rem, 33vw, 25.5rem);
-          min-height: 40.4rem;
+          min-height: 34.4rem;
         }
 
         #fullName-area:hover ~ #background-color {
@@ -505,13 +469,8 @@ export default function SignupPage() {
           height: 5.7em;
         }
 
-        #referral-area:hover ~ #background-color {
-          top: 28.4em;
-          height: 7.2em;
-        }
-
         #footer-area:hover ~ #background-color {
-          top: 35.6em;
+          top: 28.4em;
           height: 10.5em;
         }
 
@@ -529,10 +488,6 @@ export default function SignupPage() {
         }
 
         .input-area:hover ::placeholder {
-          color: white;
-        }
-
-        #referral-area:hover .referral-note {
           color: white;
         }
 
@@ -677,6 +632,85 @@ export default function SignupPage() {
           letter-spacing: -0.02em;
         }
 
+        @media (prefers-color-scheme: dark) {
+          .form {
+            background-color: #0b1220;
+            border-color: #3b82f6;
+            box-shadow:
+              -10px 0px 0px #1d4ed8,
+              -10px 7px 18px rgba(0, 0, 0, 0.38);
+          }
+
+          #behind {
+            color: #93c5fd;
+          }
+
+          .input-area input {
+            border-color: #3b82f6;
+            background-color: #111827;
+            color: #f8fafc;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          .input-area input:-webkit-autofill,
+          .input-area input:-webkit-autofill:hover,
+          .input-area input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #f8fafc;
+            box-shadow: 0 0 0 1000px #111827 inset;
+            transition: background-color 9999s ease-in-out 0s;
+          }
+
+          #footer-area {
+            color: #93c5fd;
+          }
+
+          #footer-area button {
+            border-color: #3b82f6;
+            background-color: #2563eb;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          #background-color {
+            background-color: #2563eb;
+            box-shadow: inset 5px 0px #1d4ed8;
+          }
+
+          #link-circle svg {
+            filter: drop-shadow(0 8px 14px rgba(37, 99, 235, 0.16));
+          }
+
+          ::placeholder {
+            color: #93c5fd;
+          }
+
+          .input-area:hover input {
+            border-color: #ffffff;
+            background-color: #2563eb;
+            color: #ffffff;
+          }
+
+          #footer-area button:active {
+            color: #2563eb;
+            background-color: #ffffff;
+          }
+
+          .error-box {
+            background: rgba(37, 99, 235, 0.12);
+            color: #bfdbfe;
+            border-color: rgba(147, 197, 253, 0.28);
+          }
+
+          .success-box {
+            background: rgba(22, 163, 74, 0.14);
+            color: #bbf7d0;
+            border-color: rgba(187, 247, 208, 0.28);
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -725,7 +759,7 @@ export default function SignupPage() {
         @media (max-width: 640px) {
           .form {
             width: min(90vw, 22rem);
-            min-height: 39rem;
+            min-height: 33rem;
             box-shadow:
               -8px 0px 0px #1e40af,
               -8px 6px 10px rgb(0, 0, 0, 0.16);
@@ -733,7 +767,7 @@ export default function SignupPage() {
 
           .form:hover {
             width: min(90vw, 22rem);
-            min-height: 39rem;
+            min-height: 33rem;
           }
 
           #signup-area p {
@@ -764,22 +798,21 @@ export default function SignupPage() {
             height: 5.7em;
           }
 
-          #referral-area:hover ~ #background-color {
-            top: 28.4em;
-            height: 7.2em;
-          }
-
           #footer-area:hover ~ #background-color {
-            top: 35.6em;
+            top: 28.4em;
             height: 10.5em;
           }
 
           #text-inside {
             font-size: 0.82em;
           }
+        }
 
-          .referral-note {
-            font-size: 0.75em;
+        @media (max-width: 640px) and (prefers-color-scheme: dark) {
+          .form {
+            box-shadow:
+              -8px 0px 0px #1d4ed8,
+              -8px 6px 16px rgba(0, 0, 0, 0.36);
           }
         }
       `}</style>

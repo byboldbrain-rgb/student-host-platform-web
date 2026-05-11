@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Script from 'next/script'
 import { createClient } from '../../src/lib/supabase/server'
 import PropertiesSearchBar from './PropertiesSearchBar'
 import PropertiesHeader from './PropertiesHeader'
@@ -50,6 +51,8 @@ type UniversityArea = {
 
 type PropertyImage = {
   image_url?: string | null
+  is_cover?: boolean | null
+  sort_order?: number | null
 }
 
 type PropertySellableOption = {
@@ -540,7 +543,11 @@ export default async function PropertiesPage({
       property_universities(
         university_id
       ),
-      property_images(image_url),
+      property_images(
+        image_url,
+        is_cover,
+        sort_order
+      ),
       property_sellable_options(
         code,
         option_code,
@@ -760,11 +767,27 @@ export default async function PropertiesPage({
     return `/properties/search?${params.toString()}`
   }
 
-  const getFirstImage = (property: Property) => {
-    if (!property.property_images || property.property_images.length === 0) {
+  const getCoverImage = (property: Property) => {
+    const images = (property.property_images ?? []).filter(
+      (image) => !!image.image_url
+    )
+
+    if (images.length === 0) {
       return null
     }
-    return property.property_images[0]?.image_url || null
+
+    const coverImage = images.find((image) => image.is_cover === true)
+
+    if (coverImage?.image_url) {
+      return coverImage.image_url
+    }
+
+    return [...images].sort((a, b) => {
+      const sortOrderA = a.sort_order ?? Number.POSITIVE_INFINITY
+      const sortOrderB = b.sort_order ?? Number.POSITIVE_INFINITY
+
+      return sortOrderA - sortOrderB
+    })[0]?.image_url ?? null
   }
 
   const renderGenderMeta = (property: Property) => {
@@ -781,12 +804,7 @@ export default async function PropertiesPage({
           ? 'Boys only'
           : 'Girls only'
 
-    return (
-      <span className="property-meta-gender">
-        <span className="property-meta-dot" />
-        {label}
-      </span>
-    )
+    return <span className="property-meta-gender">{label}</span>
   }
 
   const renderSeeAllCard = (
@@ -795,7 +813,7 @@ export default async function PropertiesPage({
     items: Property[]
   ) => {
     const images = items
-      .map(getFirstImage)
+      .map(getCoverImage)
       .filter(Boolean)
       .slice(0, 3) as string[]
 
@@ -831,15 +849,15 @@ export default async function PropertiesPage({
                 alt=""
               />
             ) : (
-              <div className="absolute z-10 flex h-[70%] w-[70%] items-center justify-center rounded-lg border-[2px] border-white bg-gray-100 shadow-md transition-transform duration-300 group-hover:scale-105 md:rounded-xl md:border-[3px]">
-                <span className="text-xl text-gray-400 md:text-2xl">→</span>
+              <div className="absolute z-10 flex h-[70%] w-[70%] items-center justify-center rounded-lg border-[2px] border-white bg-gray-100 shadow-md transition-transform duration-300 group-hover:scale-105 dark:border-slate-700 dark:bg-slate-800 md:rounded-xl md:border-[3px]">
+                <span className="text-xl text-gray-400 dark:text-slate-500 md:text-2xl">→</span>
               </div>
             )}
           </div>
         </div>
 
         <div className="mt-2 flex items-start justify-center pt-2 md:mt-3">
-          <span className="text-[14px] font-semibold text-gray-900 group-hover:text-black md:text-[15px]">
+          <span className="text-[14px] font-semibold text-gray-900 group-hover:text-black dark:text-slate-100 dark:group-hover:text-white md:text-[15px]">
             {t.seeAll}
           </span>
         </div>
@@ -848,7 +866,7 @@ export default async function PropertiesPage({
   }
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
-    const firstImage = getFirstImage(property)
+    const coverImage = getCoverImage(property)
     const normalizedStatus = normalizeAvailabilityStatusForUi(
       property.availability_status
     )
@@ -857,15 +875,15 @@ export default async function PropertiesPage({
     const isAvailable = normalizedStatus === 'available'
 
     return (
-      <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_10px_30px_rgba(15,23,42,0.10)] md:rounded-[28px]">
-        {firstImage ? (
+      <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_10px_30px_rgba(15,23,42,0.10)] dark:bg-slate-800 dark:shadow-[0_10px_30px_rgba(0,0,0,0.35)] md:rounded-[28px]">
+        {coverImage ? (
           <img
-            src={firstImage}
+            src={coverImage}
             alt={property.title_en}
             className="h-full w-full object-cover transition duration-700 group-hover/image:scale-[1.04]"
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 transition duration-700 group-hover/image:scale-[1.03]" />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 transition duration-700 group-hover/image:scale-[1.03]" />
         )}
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/18 via-black/5 to-transparent" />
@@ -902,19 +920,19 @@ export default async function PropertiesPage({
 
       <div className="mt-2.5 space-y-1.5 md:mt-3">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
+          <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 dark:text-slate-100 md:text-[17px]">
             {isArabic ? property.title_ar : property.title_en}
           </h3>
         </div>
 
         {renderGenderMeta(property) && (
-          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 md:text-[13px]">
+          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-400 md:text-[13px]">
             {renderGenderMeta(property)}
           </div>
         )}
 
         <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
-          <span className="font-semibold text-slate-950">
+          <span className="font-semibold text-slate-950 dark:text-white">
             {formatPrice(
               displayPriceEgp,
               selectedCurrency,
@@ -922,7 +940,7 @@ export default async function PropertiesPage({
               currencyRate
             )}
           </span>{' '}
-          <span className="text-[12px] text-slate-500 md:text-[12px]">
+          <span className="text-[12px] text-slate-500 dark:text-slate-400 md:text-[12px]">
             / {property.rental_duration === 'daily' ? t.night : t.month}
           </span>
         </p>
@@ -1002,7 +1020,7 @@ export default async function PropertiesPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0"
+      className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <div className="pwa-install-banner" id="pwa-install-banner">
         <button
@@ -1038,7 +1056,9 @@ export default async function PropertiesPage({
         </div>
       </div>
 
-      <script
+      <Script
+        id="pwa-install-banner-script"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function () {
@@ -1568,8 +1588,8 @@ export default async function PropertiesPage({
 
         .status-ribbon {
           position: absolute;
-          top: -4px;
-          left: -4px;
+          top: 0;
+          left: 0;
           width: 96px;
           height: 96px;
           overflow: hidden;
@@ -1579,73 +1599,95 @@ export default async function PropertiesPage({
 
         .status-ribbon__inner {
           position: absolute;
-          top: 20px;
-          left: -34px;
-          width: 140px;
-          height: 24px;
+          top: 18px;
+          left: -36px;
+          width: 142px;
+          height: 26px;
           display: flex;
           align-items: center;
           justify-content: center;
           transform: rotate(-45deg);
+          transform-origin: center;
           color: #ffffff;
           font-size: 8px;
-          font-weight: 800;
-          letter-spacing: 0.12em;
+          font-weight: 900;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
+          border-top: 1px solid rgba(255, 255, 255, 0.42);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
           box-shadow:
-            0 8px 18px rgba(0, 0, 0, 0.24),
-            inset 0 1px 0 rgba(255, 255, 255, 0.22);
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+            0 10px 18px rgba(15, 23, 42, 0.24),
+            inset 0 1px 0 rgba(255, 255, 255, 0.34),
+            inset 0 -8px 14px rgba(0, 0, 0, 0.16);
+          clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
           transition:
             transform 0.35s ease,
             filter 0.35s ease,
             box-shadow 0.35s ease;
         }
 
-        .status-ribbon::after {
+        .status-ribbon__inner::before,
+        .status-ribbon__inner::after {
           content: '';
           position: absolute;
-          width: 10px;
-          height: 10px;
-          left: 0;
-          bottom: 0;
-          z-index: -1;
+          inset: 0;
+          pointer-events: none;
+        }
+
+        .status-ribbon__inner::before {
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.28) 0%,
+            rgba(255, 255, 255, 0.08) 35%,
+            rgba(0, 0, 0, 0.10) 100%
+          );
+          mix-blend-mode: soft-light;
+        }
+
+        .status-ribbon__inner::after {
+          background: linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.18) 0%,
+            rgba(255, 255, 255, 0.14) 50%,
+            rgba(0, 0, 0, 0.14) 100%
+          );
+          opacity: 0.55;
+        }
+
+        .status-ribbon::before,
+        .status-ribbon::after {
+          content: none !important;
+          display: none !important;
         }
 
         .status-ribbon--available .status-ribbon__inner {
           background-image: linear-gradient(
             135deg,
-            #0b8f63 0%,
-            #18b57d 45%,
-            #34d399 100%
+            #046947 0%,
+            #0b8f63 28%,
+            #25c28b 58%,
+            #0a7a56 100%
           );
-        }
-
-        .status-ribbon--available::after {
-          box-shadow: 88px -88px #06664a;
-          background: linear-gradient(135deg, #0a7a56 0%, #0f5e45 100%);
         }
 
         .status-ribbon--reserved .status-ribbon__inner {
           background-image: linear-gradient(
             135deg,
-            #c81e4b 0%,
-            #e63b68 45%,
-            #fb7185 100%
+            #8f1239 0%,
+            #c81e4b 28%,
+            #fb7185 58%,
+            #be123c 100%
           );
-        }
-
-        .status-ribbon--reserved::after {
-          box-shadow: 88px -88px #8f1239;
-          background: linear-gradient(135deg, #9f1239 0%, #7f1d1d 100%);
         }
 
         .group:hover .status-ribbon__inner {
           transform: rotate(-45deg) scale(1.03);
-          filter: saturate(1.06) brightness(1.02);
+          filter: saturate(1.08) brightness(1.03);
           box-shadow:
-            0 12px 22px rgba(0, 0, 0, 0.28),
-            inset 0 1px 0 rgba(255, 255, 255, 0.26);
+            0 14px 24px rgba(15, 23, 42, 0.28),
+            inset 0 1px 0 rgba(255, 255, 255, 0.38),
+            inset 0 -9px 16px rgba(0, 0, 0, 0.17);
         }
 
         .property-meta-gender {
@@ -1660,15 +1702,6 @@ export default async function PropertiesPage({
           letter-spacing: -0.01em;
           white-space: nowrap;
           transition: color 0.2s ease;
-        }
-
-        .property-meta-dot {
-          width: 3px;
-          height: 3px;
-          border-radius: 999px;
-          background: currentColor;
-          opacity: 0.55;
-          flex-shrink: 0;
         }
 
         .group:hover .property-meta-gender {
@@ -1990,25 +2023,18 @@ export default async function PropertiesPage({
           .status-ribbon {
             width: 88px;
             height: 88px;
-            top: -3px;
-            left: -3px;
+            top: 0;
+            left: 0;
           }
 
           .status-ribbon__inner {
-            top: 18px;
-            left: -30px;
-            width: 120px;
+            top: 16px;
+            left: -32px;
+            width: 124px;
             height: 22px;
             font-size: 7px;
           }
 
-          .status-ribbon--available::after {
-            box-shadow: 80px -80px #06664a;
-          }
-
-          .status-ribbon--reserved::after {
-            box-shadow: 80px -80px #8f1239;
-          }
 
           .property-meta-gender {
             font-size: 12.5px;
@@ -2104,6 +2130,73 @@ export default async function PropertiesPage({
 
           .footer-esaf-copyright {
             font-size: 14px;
+          }
+        }
+
+
+        @media (prefers-color-scheme: dark) {
+          .pwa-install-banner {
+            background: #0b1220;
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+          }
+
+          .pwa-install-banner__close {
+            color: #f8fafc;
+          }
+
+          .pwa-install-banner__logo {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: #111827;
+          }
+
+          .pwa-install-banner__title {
+            color: #f8fafc;
+          }
+
+          .pwa-install-banner__ios-help {
+            background: #111827;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+          }
+
+          .menu-trigger-lines span {
+            background: #f8fafc;
+          }
+
+          .property-meta-gender {
+            color: #94a3b8;
+          }
+
+          .group:hover .property-meta-gender {
+            color: #cbd5e1;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+
+          .popular-desktop-grid > a,
+          .hide-scrollbar > a {
+            color: #f8fafc;
           }
         }
 
@@ -2206,7 +2299,7 @@ export default async function PropertiesPage({
             {showcaseSections.map((section) => (
               <div key={`${section.type}-${section.id}`}>
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-[19px] font-semibold tracking-tight text-gray-900 md:text-2xl">
+                  <h2 className="text-[19px] font-semibold tracking-tight text-gray-900 dark:text-slate-100 md:text-2xl">
                     <Link
                       href={buildSearchLink({
                         areaId:
@@ -2230,7 +2323,7 @@ export default async function PropertiesPage({
                           ? section.id
                           : undefined,
                     })}
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 md:hidden"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 md:hidden"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"

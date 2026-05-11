@@ -2,16 +2,17 @@ import Link from 'next/link'
 import { createClient } from '@/src/lib/supabase/server'
 import { requirePropertyReviewerAccess } from '@/src/lib/admin-auth'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
-import { approvePropertyAction, rejectPropertyAction } from './actions'
+import {
+  approvePropertyAction,
+  rejectPropertyAction,
+  returnPropertyToReviewAction,
+} from './actions'
 
 const primaryButtonClass =
   'inline-flex min-h-[52px] items-center justify-center rounded-full border border-blue-600 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_12px_26px_rgba(37,99,235,0.28)]'
 
 const secondaryButtonClass =
   'inline-flex min-h-[52px] items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition-all duration-200 hover:border-slate-400 hover:bg-slate-50'
-
-const inputClass =
-  'w-full rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100'
 
 type PropertyImage = {
   image_url?: string | null
@@ -30,6 +31,7 @@ type ReviewProperty = {
   rental_duration?: string | null
   availability_status?: string | null
   admin_status?: string | null
+  is_active?: boolean | null
   created_at?: string | null
   property_images?: PropertyImage[] | null
 }
@@ -70,7 +72,31 @@ function getRentalDurationLabel(value?: string | null) {
   return ''
 }
 
+function getStatusLabel(value?: string | null) {
+  if (value === 'pending_review') return 'Pending Review'
+  if (value === 'published') return 'Published'
+  if (value === 'rejected') return 'Rejected'
+  if (value === 'archived') return 'Archived'
+  if (value === 'draft') return 'Draft'
+  return 'Unknown'
+}
 
+function StatusBadge({ status }: { status?: string | null }) {
+  const isPublished = status === 'published'
+
+  return (
+    <span
+      className={[
+        'inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold',
+        isPublished
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : 'border-amber-200 bg-amber-50 text-amber-700',
+      ].join(' ')}
+    >
+      {getStatusLabel(status)}
+    </span>
+  )
+}
 
 function getPropertyImage(property: ReviewProperty) {
   const images = Array.isArray(property.property_images)
@@ -197,7 +223,9 @@ function ReviewCardCover({
         <PropertyImagePlaceholder />
       )}
 
-      <div className="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-4"></div>
+      <div className="absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-4">
+        <StatusBadge status={property.admin_status} />
+      </div>
     </div>
   )
 }
@@ -219,6 +247,7 @@ export default async function ReviewPage() {
       rental_duration,
       availability_status,
       admin_status,
+      is_active,
       created_at,
       property_images (
         image_url,
@@ -226,7 +255,7 @@ export default async function ReviewPage() {
         sort_order
       )
     `)
-    .eq('admin_status', 'pending_review')
+    .in('admin_status', ['pending_review', 'published'])
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -465,6 +494,8 @@ export default async function ReviewPage() {
                     const propertyAddress =
                       property.address_en || property.address_ar || 'No address provided'
 
+                    const isPublished = property.admin_status === 'published'
+
                     return (
                       <div
                         key={property.id}
@@ -476,9 +507,42 @@ export default async function ReviewPage() {
                         />
 
                         <div className="p-5">
-                          <h2 className="line-clamp-2 text-lg font-semibold text-slate-900">
-                            {propertyTitle}
-                          </h2>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h2 className="line-clamp-2 text-lg font-semibold text-slate-900">
+                                {propertyTitle}
+                              </h2>
+
+                              <p className="mt-2 line-clamp-2 text-sm text-slate-500">
+                                {propertyAddress}
+                              </p>
+                            </div>
+
+                            <StatusBadge status={property.admin_status} />
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-2xl bg-slate-50 p-3">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Price
+                              </p>
+                              <p className="mt-1 font-semibold text-slate-900">
+                                {formatPrice(property.price_egp)}
+                                <span className="text-xs font-medium text-slate-500">
+                                  {getRentalDurationLabel(property.rental_duration)}
+                                </span>
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-slate-50 p-3">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Created
+                              </p>
+                              <p className="mt-1 font-semibold text-slate-900">
+                                {formatDate(property.created_at)}
+                              </p>
+                            </div>
+                          </div>
 
                           <div className="mt-5">
                             <Link
@@ -490,28 +554,55 @@ export default async function ReviewPage() {
                             </Link>
                           </div>
 
-                          <div className="mt-5 grid grid-cols-2 gap-3">
-                            <form action={approvePropertyAction} className="w-full">
-                              <input type="hidden" name="property_id" value={property.id} />
+                          <div className="mt-5">
+                            {isPublished ? (
+                              <form action={returnPropertyToReviewAction} className="w-full">
+                                <input
+                                  type="hidden"
+                                  name="property_id"
+                                  value={property.id}
+                                />
 
-                              <button
-                                type="submit"
-                                className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-700 hover:bg-emerald-700"
-                              >
-                                Approve
-                              </button>
-                            </form>
+                                <button
+                                  type="submit"
+                                  className="inline-flex w-full items-center justify-center rounded-full border border-amber-600 bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:border-amber-700 hover:bg-amber-600"
+                                >
+                                  Return to Review
+                                </button>
+                              </form>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-3">
+                                <form action={approvePropertyAction} className="w-full">
+                                  <input
+                                    type="hidden"
+                                    name="property_id"
+                                    value={property.id}
+                                  />
 
-                            <form action={rejectPropertyAction} className="w-full">
-                              <input type="hidden" name="property_id" value={property.id} />
+                                  <button
+                                    type="submit"
+                                    className="inline-flex w-full items-center justify-center rounded-full border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-700 hover:bg-emerald-700"
+                                  >
+                                    Approve
+                                  </button>
+                                </form>
 
-                              <button
-                                type="submit"
-                                className="inline-flex w-full items-center justify-center rounded-full border border-red-600 bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:border-red-700 hover:bg-red-700"
-                              >
-                                Reject
-                              </button>
-                            </form>
+                                <form action={rejectPropertyAction} className="w-full">
+                                  <input
+                                    type="hidden"
+                                    name="property_id"
+                                    value={property.id}
+                                  />
+
+                                  <button
+                                    type="submit"
+                                    className="inline-flex w-full items-center justify-center rounded-full border border-red-600 bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:border-red-700 hover:bg-red-700"
+                                  >
+                                    Reject
+                                  </button>
+                                </form>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -527,12 +618,12 @@ export default async function ReviewPage() {
               </div>
 
               <h2 className="text-lg font-semibold text-slate-900">
-                No properties pending review
+                No properties pending review or published
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                Once brokers or users submit new properties, they will appear here
-                for approval or rejection.
+                Pending and published properties will appear here so you can review,
+                publish, reject, or return them to review.
               </p>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">

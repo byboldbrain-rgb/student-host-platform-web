@@ -420,26 +420,26 @@ export default function PropertiesSearchBar({
       ? labels.chooseArea
       : `${labels.selectCity} / ${labels.selectUniversity}`
 
-  const disabledValueTextClass = 'text-[#a1a1a1]'
+  const disabledValueTextClass = 'text-[#a1a1a1] dark:text-slate-600'
 
   const panelClass = isArabic
-    ? 'absolute right-0 top-[calc(100%+8px)] z-[80] max-h-72 w-full min-w-[220px] overflow-auto rounded-2xl border border-[#dddddd] bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]'
-    : 'absolute left-0 top-[calc(100%+8px)] z-[80] max-h-72 w-full min-w-[220px] overflow-auto rounded-2xl border border-[#dddddd] bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)]'
+    ? 'absolute right-0 top-[calc(100%+8px)] z-[80] max-h-72 w-full min-w-[220px] overflow-auto rounded-2xl border border-[#dddddd] bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_16px_40px_rgba(0,0,0,0.35)]'
+    : 'absolute left-0 top-[calc(100%+8px)] z-[80] max-h-72 w-full min-w-[220px] overflow-auto rounded-2xl border border-[#dddddd] bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_16px_40px_rgba(0,0,0,0.35)]'
 
   const itemClass =
-    'block w-full rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100'
+    'block w-full rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-white/10'
 
-  const inlineInputClass = `mt-1 w-full bg-transparent p-0 text-[16px] font-normal text-[#222222] outline-none placeholder:text-[#6a6a6a] ${
+  const inlineInputClass = `mt-1 w-full bg-transparent p-0 text-[16px] font-normal text-[#222222] outline-none placeholder:text-[#6a6a6a] dark:text-slate-100 dark:placeholder:text-slate-500 ${
     isArabic ? 'text-right' : 'text-left'
   }`
 
   const valueTextClass = isCompact
-    ? 'truncate text-[14px] font-semibold leading-none text-[#222222]'
-    : 'mt-1 truncate text-[16px] font-normal text-[#6a6a6a]'
+    ? 'truncate text-[14px] font-semibold leading-none text-[#222222] dark:text-slate-100'
+    : 'mt-1 truncate text-[16px] font-normal text-[#6a6a6a] dark:text-slate-400'
 
   const titleTextClass = isCompact
     ? 'sr-only'
-    : 'text-[14px] font-semibold leading-none text-[#222222]'
+    : 'text-[14px] font-semibold leading-none text-[#222222] dark:text-slate-100'
 
   const sectionPaddingClass = isCompact ? 'px-3 py-2' : 'px-5 py-3'
 
@@ -453,15 +453,33 @@ export default function PropertiesSearchBar({
 
     return (
       <div dir={isArabic ? 'rtl' : 'ltr'} className="w-full">
+
+      <style>{`
+        @media (prefers-color-scheme: dark) {
+          input {
+            color-scheme: dark;
+          }
+
+          input:-webkit-autofill,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #f8fafc;
+            box-shadow: 0 0 0 1000px #111827 inset;
+            transition: background-color 9999s ease-in-out 0s;
+          }
+        }
+      `}</style>
+
+
         <div className="space-y-3">
           <div
             className={cn(
-              'rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)]',
+              'rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.32)]',
               mobileSearchBarClassName
             )}
           >
             <div className="mb-4">
-              <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222]">
+              <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222] dark:text-slate-100">
                 {openMenu === 'city'
                   ? labels.selectCity
                   : openMenu === 'university'
@@ -472,7 +490,7 @@ export default function PropertiesSearchBar({
 
             {openMenu === 'city' && (
               <>
-                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5">
+                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
                   <SearchIcon />
                   <input
                     ref={cityInputRef}
@@ -480,7 +498,7 @@ export default function PropertiesSearchBar({
                     value={cityQuery}
                     onChange={(e) => setCityQuery(e.target.value)}
                     placeholder={labels.searchCities}
-                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] ${
+                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] dark:text-slate-100 dark:placeholder:text-slate-500 ${
                       isArabic ? 'text-right' : 'text-left'
                     }`}
                   />
@@ -501,12 +519,12 @@ export default function PropertiesSearchBar({
                         setAreaQuery('')
                         setOpenMenu('university')
                       }}
-                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] ${
+                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
                         isArabic ? 'text-right' : 'text-left'
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a]">
+                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
                           {getCityName(city)}
                         </p>
                       </div>
@@ -518,7 +536,7 @@ export default function PropertiesSearchBar({
 
             {openMenu === 'university' && (
               <>
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
+                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
                   <button
                     type="button"
                     onClick={() => {
@@ -527,12 +545,12 @@ export default function PropertiesSearchBar({
                     }}
                     className="flex w-full items-center justify-between text-left"
                   >
-                    <p className="text-[13px] font-medium text-[#6f6f6f]">
+                    <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
                       {labels.selectCity}
                     </p>
 
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222]">
+                      <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
                         {draftCityId ? selectedCityLabel : labels.selectCity}
                       </span>
                       <ChevronDownIcon />
@@ -540,7 +558,7 @@ export default function PropertiesSearchBar({
                   </button>
                 </div>
 
-                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5">
+                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
                   <SearchIcon />
                   <input
                     ref={universityInputRef}
@@ -549,7 +567,7 @@ export default function PropertiesSearchBar({
                     onChange={(e) => setUniversityQuery(e.target.value)}
                     placeholder={universityPlaceholder}
                     disabled={!canOpenUniversity}
-                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] ${
+                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:text-slate-600 ${
                       isArabic ? 'text-right' : 'text-left'
                     }`}
                   />
@@ -567,12 +585,12 @@ export default function PropertiesSearchBar({
                         setAreaQuery('')
                         setOpenMenu('area')
                       }}
-                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] ${
+                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
                         isArabic ? 'text-right' : 'text-left'
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a]">
+                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
                           {getUniversityName(university)}
                         </p>
                       </div>
@@ -584,18 +602,18 @@ export default function PropertiesSearchBar({
 
             {openMenu === 'area' && (
               <>
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
+                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
                   <button
                     type="button"
                     onClick={() => setOpenMenu('city')}
                     className="flex w-full items-center justify-between text-left"
                   >
-                    <p className="text-[13px] font-medium text-[#6f6f6f]">
+                    <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
                       {labels.selectCity}
                     </p>
 
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222]">
+                      <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
                         {draftCityId ? selectedCityLabel : labels.selectCity}
                       </span>
                       <ChevronDownIcon />
@@ -603,7 +621,7 @@ export default function PropertiesSearchBar({
                   </button>
                 </div>
 
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]">
+                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
                   <button
                     type="button"
                     onClick={() => {
@@ -616,12 +634,12 @@ export default function PropertiesSearchBar({
                     }}
                     className="flex w-full items-center justify-between text-left"
                   >
-                    <p className="text-[13px] font-medium text-[#6f6f6f]">
+                    <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
                       {labels.selectUniversity}
                     </p>
 
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222]">
+                      <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
                         {draftUniversityId
                           ? selectedUniversityLabel
                           : labels.selectUniversity}
@@ -631,7 +649,7 @@ export default function PropertiesSearchBar({
                   </button>
                 </div>
 
-                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5">
+                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
                   <SearchIcon />
                   <input
                     ref={areaInputRef}
@@ -640,7 +658,7 @@ export default function PropertiesSearchBar({
                     onChange={(e) => setAreaQuery(e.target.value)}
                     placeholder={areaPlaceholder}
                     disabled={!canOpenArea}
-                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] ${
+                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:text-slate-600 ${
                       isArabic ? 'text-right' : 'text-left'
                     }`}
                   />
@@ -654,12 +672,12 @@ export default function PropertiesSearchBar({
                       setAreaQuery('')
                       setOpenMenu(null)
                     }}
-                    className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] ${
+                    className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
                       isArabic ? 'text-right' : 'text-left'
                     }`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a]">
+                      <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
                         {labels.anyArea}
                       </p>
                     </div>
@@ -674,12 +692,12 @@ export default function PropertiesSearchBar({
                         setAreaQuery('')
                         setOpenMenu(null)
                       }}
-                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] ${
+                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
                         isArabic ? 'text-right' : 'text-left'
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a]">
+                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
                           {getAreaName(area)}
                         </p>
                       </div>
@@ -697,15 +715,15 @@ export default function PropertiesSearchBar({
                 setCityQuery('')
                 setOpenMenu('city')
               }}
-              className="flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+              className="flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.24)]"
             >
               <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f]">
+                <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
                   {labels.city}
                 </p>
               </div>
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222]">
+                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
                   {draftCityId ? selectedCityLabel : labels.selectCity}
                 </span>
                 <ChevronDownIcon />
@@ -717,17 +735,17 @@ export default function PropertiesSearchBar({
             <button
               type="button"
               onClick={openUniversityMenu}
-              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${
+              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.24)] ${
                 canOpenUniversity ? '' : 'cursor-not-allowed opacity-55'
               }`}
             >
               <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f]">
+                <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
                   {labels.university}
                 </p>
               </div>
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222]">
+                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
                   {draftUniversityId
                     ? selectedUniversityLabel
                     : labels.selectUniversity}
@@ -741,17 +759,17 @@ export default function PropertiesSearchBar({
             <button
               type="button"
               onClick={openAreaMenu}
-              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${
+              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.24)] ${
                 canOpenArea ? '' : 'cursor-not-allowed opacity-55'
               }`}
             >
               <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f]">
+                <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
                   {labels.area}
                 </p>
               </div>
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222]">
+                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
                   {draftAreaId ? selectedAreaLabel : labels.selectArea}
                 </span>
                 <ChevronDownIcon />
@@ -763,7 +781,7 @@ export default function PropertiesSearchBar({
             <button
               type="button"
               onClick={resetAll}
-              className="text-[15px] font-medium text-[#222222]"
+              className="text-[15px] font-medium text-[#222222] dark:text-slate-100"
             >
               {clearAllLabel}
             </button>
@@ -788,7 +806,7 @@ export default function PropertiesSearchBar({
 
                 applySearch()
               }}
-              className="flex h-[46px] items-center justify-center gap-2 rounded-full bg-[#0047ff] px-6 text-[16px] font-semibold text-white shadow-sm transition-all duration-200 hover:scale-[1.02]"
+              className="flex h-[46px] items-center justify-center gap-2 rounded-full bg-[#0047ff] px-6 text-[16px] font-semibold text-white shadow-sm transition-all duration-200 hover:scale-[1.02] dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8]"
             >
               <SearchIcon />
               <span>{searchLabel}</span>
@@ -801,15 +819,33 @@ export default function PropertiesSearchBar({
 
   return (
     <div className="pointer-events-auto w-full">
+
+      <style>{`
+        @media (prefers-color-scheme: dark) {
+          input {
+            color-scheme: dark;
+          }
+
+          input:-webkit-autofill,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #f8fafc;
+            box-shadow: 0 0 0 1000px #111827 inset;
+            transition: background-color 9999s ease-in-out 0s;
+          }
+        }
+      `}</style>
+
+
       <div
         ref={wrapperRef}
         dir={isArabic ? 'rtl' : 'ltr'}
-        className={`pointer-events-auto relative z-[70] mx-auto flex items-center rounded-full border border-[#dddddd] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 ${
+        className={`pointer-events-auto relative z-[70] mx-auto flex items-center rounded-full border border-[#dddddd] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.30)] ${
           isCompact ? 'w-fit max-w-full px-1 py-1' : 'w-full max-w-[900px]'
         }`}
       >
         <div
-          className={`relative z-[71] min-w-0 transition hover:bg-[#f7f7f7] ${
+          className={`relative z-[71] min-w-0 transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
             isArabic ? 'rounded-r-full' : 'rounded-l-full'
           } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
         >
@@ -858,7 +894,7 @@ export default function PropertiesSearchBar({
                   }}
                   className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
                     String(draftCityId) === String(city.id)
-                      ? 'bg-gray-100 font-semibold text-gray-900'
+                      ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100'
                       : ''
                   }`}
                 >
@@ -870,12 +906,12 @@ export default function PropertiesSearchBar({
         </div>
 
         <div
-          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
+          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd] dark:bg-white/10`}
         />
 
         <div
           className={`relative z-[71] min-w-0 transition ${
-            canOpenUniversity ? 'hover:bg-[#f7f7f7]' : 'opacity-55'
+            canOpenUniversity ? 'hover:bg-[#f7f7f7] dark:hover:bg-white/10' : 'opacity-55'
           } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
         >
           <button
@@ -926,7 +962,7 @@ export default function PropertiesSearchBar({
                   }}
                   className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
                     String(draftUniversityId) === String(university.id)
-                      ? 'bg-gray-100 font-semibold text-gray-900'
+                      ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100'
                       : ''
                   }`}
                 >
@@ -938,12 +974,12 @@ export default function PropertiesSearchBar({
         </div>
 
         <div
-          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd]`}
+          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd] dark:bg-white/10`}
         />
 
         <div
           className={`relative z-[71] min-w-0 transition ${
-            canOpenArea ? 'hover:bg-[#f7f7f7]' : 'opacity-55'
+            canOpenArea ? 'hover:bg-[#f7f7f7] dark:hover:bg-white/10' : 'opacity-55'
           } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
         >
           <button
@@ -989,7 +1025,7 @@ export default function PropertiesSearchBar({
                   setOpenMenu(null)
                 }}
                 className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                  !draftAreaId ? 'bg-gray-100 font-semibold text-gray-900' : ''
+                  !draftAreaId ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100' : ''
                 }`}
               >
                 {labels.anyArea}
@@ -1006,7 +1042,7 @@ export default function PropertiesSearchBar({
                   }}
                   className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
                     String(draftAreaId) === String(area.id)
-                      ? 'bg-gray-100 font-semibold text-gray-900'
+                      ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100'
                       : ''
                   }`}
                 >
@@ -1038,7 +1074,7 @@ export default function PropertiesSearchBar({
 
               applySearch()
             }}
-            className={`flex items-center justify-center rounded-full bg-[#0047ff] text-white shadow-sm transition-all duration-200 hover:scale-[1.05] ${
+            className={`flex items-center justify-center rounded-full bg-[#0047ff] text-white shadow-sm transition-all duration-200 hover:scale-[1.05] dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8] ${
               isExpandedSearch
                 ? 'h-[44px] gap-2 px-4'
                 : isCompact

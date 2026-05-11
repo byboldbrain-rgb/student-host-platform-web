@@ -312,7 +312,7 @@ export default async function CommunityPage({
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0"
+      className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <div className="pwa-install-banner" id="pwa-install-banner">
         <button
@@ -805,6 +805,117 @@ export default async function CommunityPage({
           letter-spacing: 0.01em;
         }
 
+
+        @media (prefers-color-scheme: dark) {
+          .pwa-install-banner {
+            background: rgba(11, 18, 32, 0.98);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+          }
+
+          .pwa-install-banner__close {
+            color: #f8fafc;
+          }
+
+          .pwa-install-banner__logo {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: #0b1220;
+          }
+
+          .pwa-install-banner__title {
+            color: #f8fafc;
+          }
+
+          .pwa-install-banner__button {
+            background: #2563eb;
+          }
+
+          .pwa-install-banner__button:hover {
+            background: #1d4ed8;
+          }
+
+          .pwa-install-banner__ios-help {
+            background: #111827;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+          }
+
+          .navienty-logo {
+            color: #f8fafc;
+          }
+
+          .header-join-btn {
+            background: #2563eb;
+            box-shadow: 0 10px 26px rgba(37, 99, 235, 0.22);
+          }
+
+          .header-join-btn:hover {
+            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.28);
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.95);
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+
+          [data-community-feed] {
+            color-scheme: dark;
+          }
+        }
+
+
+        @media (prefers-color-scheme: dark) {
+          [data-community-feed] article,
+          [data-community-feed] .post-card,
+          [data-community-feed] .feed-post-card {
+            background-color: #0b1220;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+          }
+
+          [data-community-feed] p,
+          [data-community-feed] span,
+          [data-community-feed] h1,
+          [data-community-feed] h2,
+          [data-community-feed] h3 {
+            border-color: rgba(255, 255, 255, 0.1);
+          }
+
+          [data-community-feed] button {
+            color: inherit;
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -901,7 +1012,7 @@ export default async function CommunityPage({
         }
       `}</style>
 
-      <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+      <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
         <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
           <Link
             href={homeHref}
@@ -934,11 +1045,11 @@ export default async function CommunityPage({
       <section className="px-0 pb-10 md:pb-14">
         <div className="mx-auto w-full max-w-[450px]" data-community-feed>
           {error ? (
-            <div className="mx-4 rounded-[20px] bg-white p-5 text-sm font-medium text-red-600 shadow-[0_6px_18px_rgba(0,0,0,0.04)] md:mx-6">
+            <div className="mx-4 rounded-[20px] bg-white p-5 text-sm font-medium text-red-600 shadow-[0_6px_18px_rgba(0,0,0,0.04)] dark:border dark:border-red-400/20 dark:bg-[#111827] dark:text-red-300 dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)] md:mx-6">
               {t.failedToLoadPosts}
             </div>
           ) : feedPosts.length === 0 ? (
-            <div className="mx-4 rounded-[20px] bg-white p-8 text-center text-sm text-[#5b5d68] shadow-[0_6px_18px_rgba(0,0,0,0.04)] md:mx-6">
+            <div className="mx-4 rounded-[20px] bg-white p-8 text-center text-sm text-[#5b5d68] shadow-[0_6px_18px_rgba(0,0,0,0.04)] dark:border dark:border-white/10 dark:bg-[#111827] dark:text-slate-400 dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)] md:mx-6">
               {t.noPosts}
             </div>
           ) : (

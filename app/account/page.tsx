@@ -1048,6 +1048,117 @@ function AccountPageContent() {
           text-align: left;
         }
 
+
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --menu-blue: #054aff;
+            --menu-cream: #f8fafc;
+            --menu-cream-soft: rgba(248, 250, 252, 0.92);
+          }
+
+          .menu-trigger-lines span {
+            background: #f8fafc !important;
+          }
+
+          .mega-menu-overlay {
+            background: #054aff;
+            color: #f8fafc;
+          }
+
+          .mega-menu-small-link,
+          .mega-menu-main-link,
+          .mega-menu-close {
+            color: #f8fafc;
+          }
+
+          .mega-menu-footer-link {
+            color: rgba(248, 250, 252, 0.86);
+          }
+
+          .mega-menu-footer-link:hover {
+            color: #ffffff;
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+
+          .language-pill {
+            border-color: rgba(96, 165, 250, 0.18);
+            background: #0b1220;
+            color: #e2e8f0;
+          }
+
+          .language-pill:hover {
+            border-color: rgba(96, 165, 250, 0.34);
+            background: #111827;
+          }
+
+          .language-pill.is-active {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+          }
+
+          .wallet-back {
+            background: #182b1a;
+            box-shadow:
+              inset 0 25px 35px rgba(0, 0, 0, 0.5),
+              inset 0 5px 15px rgba(0, 0, 0, 0.55);
+          }
+
+          .pocket {
+            filter: drop-shadow(0 16px 28px rgba(0, 0, 0, 0.45));
+          }
+
+          .balance-stars {
+            color: #9ab892;
+          }
+
+          .balance-real {
+            color: #bbf7d0;
+          }
+
+          .wallet-balance-label {
+            color: #9ab892;
+          }
+
+          .wallet-hover-hint {
+            color: #bbf7d0;
+          }
+
+          .eye-icon {
+            stroke: #86efac;
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -1249,9 +1360,9 @@ function AccountPageContent() {
 
       <div
         dir={isArabic ? 'rtl' : 'ltr'}
-        className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0"
+        className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
       >
-        <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+        <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <Link
               href={propertiesHref}
@@ -1381,31 +1492,31 @@ function AccountPageContent() {
           </div>
         </div>
 
-        <main className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] sm:px-6 lg:px-8">
+        <main className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] dark:bg-[#050816] dark:text-slate-100 sm:px-6 lg:px-8">
           {loading ? (
             <div className="mx-auto max-w-6xl animate-pulse">
-              <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-6">
+              <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_46px_rgba(0,0,0,0.32)] sm:p-6">
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="h-20 w-20 rounded-[24px] bg-gray-200" />
+                    <div className="h-20 w-20 rounded-[24px] bg-gray-200 dark:bg-slate-800" />
                     <div className="space-y-3">
-                      <div className="h-7 w-40 rounded-xl bg-gray-200" />
-                      <div className="h-4 w-64 rounded-xl bg-gray-100" />
+                      <div className="h-7 w-40 rounded-xl bg-gray-200 dark:bg-slate-800" />
+                      <div className="h-4 w-64 rounded-xl bg-gray-100 dark:bg-slate-800/70" />
                     </div>
                   </div>
-                  <div className="h-24 w-full rounded-[24px] bg-gray-100 lg:w-[320px]" />
+                  <div className="h-24 w-full rounded-[24px] bg-gray-100 dark:bg-slate-800/70 lg:w-[320px]" />
                 </div>
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-2">
                   {[1, 2, 3].map((item) => (
                     <div
                       key={item}
-                      className="rounded-[28px] border border-gray-100 bg-white p-5"
+                      className="rounded-[28px] border border-gray-100 bg-white p-5 dark:border-white/10 dark:bg-[#111827]"
                     >
-                      <div className="h-12 w-12 rounded-[18px] bg-gray-100" />
-                      <div className="mt-4 h-5 w-36 rounded bg-gray-200" />
-                      <div className="mt-3 h-4 w-full rounded bg-gray-100" />
-                      <div className="mt-2 h-4 w-3/4 rounded bg-gray-100" />
+                      <div className="h-12 w-12 rounded-[18px] bg-gray-100 dark:bg-slate-800" />
+                      <div className="mt-4 h-5 w-36 rounded bg-gray-200 dark:bg-slate-800" />
+                      <div className="mt-3 h-4 w-full rounded bg-gray-100 dark:bg-slate-800/70" />
+                      <div className="mt-2 h-4 w-3/4 rounded bg-gray-100 dark:bg-slate-800/70" />
                     </div>
                   ))}
                 </div>
@@ -1413,7 +1524,7 @@ function AccountPageContent() {
             </div>
           ) : (
             <div className="mx-auto max-w-6xl">
-              <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:p-6 lg:p-8">
+              <div className="rounded-[32px] border border-black/5 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_46px_rgba(0,0,0,0.32)] sm:p-6 lg:p-8">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
                   <section className="relative overflow-hidden rounded-[30px] border border-[#dbe5ff] bg-gradient-to-l from-[#08152f] via-[#0b1f46] to-[#123a8f] p-5 text-white shadow-[0_16px_40px_rgba(8,21,47,0.18)] sm:p-6 lg:p-7">
                     <div className="pointer-events-none absolute inset-0">
@@ -1483,7 +1594,7 @@ function AccountPageContent() {
                     </div>
                   </section>
 
-                  <section className="account-wallet-section rounded-[28px] bg-[#f3f6ff] p-4 shadow-[0_12px_30px_rgba(5,74,255,0.12)] sm:p-5">
+                  <section className="account-wallet-section rounded-[28px] bg-[#f3f6ff] p-4 shadow-[0_12px_30px_rgba(5,74,255,0.12)] dark:bg-[#111827] dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)] sm:p-5">
                     <button
                       type="button"
                       onClick={() => setShowWalletBalance((prev) => !prev)}
@@ -1647,10 +1758,10 @@ function AccountPageContent() {
                   <div className="grid gap-4 lg:grid-cols-2">
                     <Link
                       href={buildLocalizedHref('/account/wallet')}
-                      className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)]"
+                      className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:hover:shadow-[0_14px_34px_rgba(0,0,0,0.34)]"
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff]">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff] dark:bg-[#0b1220]">
                           <img
                             src="https://i.ibb.co/zT33t0Rq/wallet-2527543.png"
                             alt="Add Balance icon"
@@ -1659,17 +1770,17 @@ function AccountPageContent() {
                         </div>
                       </div>
 
-                      <h3 className="mt-5 text-lg font-bold text-gray-900">
+                      <h3 className="mt-5 text-lg font-bold text-gray-900 dark:text-slate-100">
                         {t.addBalance}
                       </h3>
                     </Link>
 
                     <Link
                       href={buildLocalizedHref('/account/reservations')}
-                      className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)]"
+                      className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:hover:shadow-[0_14px_34px_rgba(0,0,0,0.34)]"
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff]">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff] dark:bg-[#0b1220]">
                           <img
                             src="https://i.ibb.co/BHkWcRkv/calendar.png"
                             alt="Reservations icon"
@@ -1678,21 +1789,21 @@ function AccountPageContent() {
                         </div>
                       </div>
 
-                      <h3 className="mt-5 text-lg font-bold text-gray-900">
+                      <h3 className="mt-5 text-lg font-bold text-gray-900 dark:text-slate-100">
                         {t.reservations}
                       </h3>
                     </Link>
 
-                    <div className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] lg:col-span-2">
+                    <div className="group rounded-[28px] border border-black/5 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:hover:shadow-[0_14px_34px_rgba(0,0,0,0.34)] lg:col-span-2">
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff]">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#ffffff] dark:bg-[#0b1220]">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             fill="none"
                             viewBox="0 0 24 24"
                             strokeWidth={1.9}
                             stroke="currentColor"
-                            className="account-menu-icon text-[#054aff]"
+                            className="account-menu-icon text-[#054aff] dark:text-[#60a5fa]"
                           >
                             <path
                               strokeLinecap="round"
@@ -1705,10 +1816,10 @@ function AccountPageContent() {
 
                       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <h3 className="text-lg font-bold text-gray-900">
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">
                             {t.language}
                           </h3>
-                          <p className="mt-1 text-sm font-medium text-gray-500">
+                          <p className="mt-1 text-sm font-medium text-gray-500 dark:text-slate-400">
                             {t.currentLanguage}:{' '}
                             {language === 'ar' ? t.arabic : t.english}
                           </p>
@@ -1842,7 +1953,7 @@ export default function AccountPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222]">
+        <div className="min-h-screen bg-[#f7f7f7] px-4 py-6 text-[#222222] dark:bg-[#050816] dark:text-slate-100">
           Loading...
         </div>
       }

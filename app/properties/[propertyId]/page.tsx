@@ -1659,7 +1659,7 @@ export default async function PropertyPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-32 text-gray-700 md:pb-0"
+      className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <PwaInstallBanner />
       <input
@@ -1675,6 +1675,67 @@ export default async function PropertyPage({
         className="mobile-rooms-toggle sr-only"
         aria-hidden="true"
       />
+
+
+      <style>{`
+        @media (prefers-color-scheme: dark) {
+          .property-address {
+            color: #cbd5e1;
+          }
+
+          .property-address__text {
+            color: #cbd5e1;
+          }
+
+          .property-address__icon-wrap {
+            background: rgba(96, 165, 250, 0.10);
+          }
+
+          .property-meta-gender {
+            color: #94a3b8;
+          }
+
+          .property-meta-dot {
+            background: currentColor;
+            opacity: 0.55;
+          }
+
+          .broker-card-name {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.10);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+        }
+      `}</style>
 
       <PropertiesHeader
         homeHref={buildPageLink()}
@@ -1773,11 +1834,11 @@ export default async function PropertyPage({
             isArabic={isArabic}
           />
 
-          <div className="relative -mt-7 rounded-t-[28px] bg-white px-5 pb-8 pt-5 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-            <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200" />
+          <div className="relative -mt-7 rounded-t-[28px] bg-white px-5 pb-8 pt-5 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] dark:bg-[#050816] dark:shadow-[0_-10px_28px_rgba(0,0,0,0.35)]">
+            <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200 dark:bg-white/15" />
 
             <div className="text-center">
-              <h1 className="text-[22px] font-bold leading-8 tracking-tight text-slate-950">
+              <h1 className="text-[22px] font-bold leading-8 tracking-tight text-slate-950 dark:text-slate-100">
                 {propertyTitle}
               </h1>
 
@@ -1791,7 +1852,7 @@ export default async function PropertyPage({
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[15px] font-medium leading-6 text-slate-700">
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[15px] font-medium leading-6 text-slate-700 dark:text-slate-300">
                 <span>{apartmentSummaryText}</span>
                 <GenderMeta
                   gender={typedProperty.gender}
@@ -1818,20 +1879,20 @@ export default async function PropertyPage({
               title={t.whatThisPlaceOffers}
               showAllLabel={t.showAllAmenities}
               items={offers}
-              sectionClassName="mt-6 border-b border-slate-200 pb-8 px-1 sm:px-2"
+              sectionClassName="mt-6 border-b border-slate-200 pb-8 px-1 sm:px-2 dark:border-white/10"
               showAllButtonClassName="inline-flex h-11 items-center justify-center rounded-[18px] bg-[#054aff] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#043be0]"
             />
 
             {similarProperties.length > 0 && (
               <section className="px-5 pb-6 pt-6">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <h2 className="text-[24px] font-bold tracking-tight text-slate-950">
+                  <h2 className="text-[24px] font-bold tracking-tight text-slate-950 dark:text-slate-100">
                     {t.similarProperties}
                   </h2>
 
                   <Link
                     href={buildSearchResultsLink()}
-                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-[13px] font-semibold leading-none text-slate-900 whitespace-nowrap shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-[13px] font-semibold leading-none text-slate-900 whitespace-nowrap shadow-sm transition hover:border-slate-900 hover:bg-slate-50 dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:hover:border-white/20 dark:hover:bg-[#111827]"
                   >
                     <span>{t.viewAll}</span>
 
@@ -1886,7 +1947,7 @@ export default async function PropertyPage({
                         <Link
                           key={item.property_id}
                           href={buildPropertyDetailsLink(item.property_id)}
-                          className="group w-[280px] shrink-0 overflow-hidden rounded-[28px] bg-[#f6f6f6] shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-1"
+                          className="group w-[280px] shrink-0 overflow-hidden rounded-[28px] bg-[#f6f6f6] shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 dark:bg-[#0b1220] dark:shadow-[0_14px_34px_rgba(0,0,0,0.32)]"
                         >
                           <div className="overflow-hidden rounded-[28px]">
                             <img
@@ -1897,7 +1958,7 @@ export default async function PropertyPage({
                           </div>
 
                           <div className="px-4 pb-5 pt-4">
-                            <h3 className="line-clamp-2 text-[18px] font-bold tracking-tight text-slate-900">
+                            <h3 className="line-clamp-2 text-[18px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
                               {itemTitle}
                             </h3>
 
@@ -1921,12 +1982,12 @@ export default async function PropertyPage({
                             )}
 
                             {formattedPrice && (
-                              <div className="mt-4 text-[16px] text-slate-800">
+                              <div className="mt-4 text-[16px] text-slate-800 dark:text-slate-300">
                                 <span className="font-medium">{t.from}</span>{' '}
-                                <span className="font-bold text-[18px] text-emerald-700">
+                                <span className="font-bold text-[18px] text-emerald-700 dark:text-emerald-400">
                                   {formattedPrice}
                                 </span>{' '}
-                                <span className="text-slate-700">
+                                <span className="text-slate-700 dark:text-slate-400">
                                   {item.rental_duration === 'daily'
                                     ? t.perDay
                                     : t.perMonth}
@@ -1949,7 +2010,7 @@ export default async function PropertyPage({
         <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3">
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-950 md:text-[22px] lg:text-[26px]">
+              <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[22px] lg:text-[26px]">
                 {propertyTitle}
               </h1>
 
@@ -1970,15 +2031,15 @@ export default async function PropertyPage({
                 isArabic={isArabic}
               />
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-slate-600">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-slate-600 dark:border-white/15 dark:bg-[#0b1220] dark:text-slate-400">
                 {t.noImages}
               </div>
             )}
           </section>
 
-          <section className="mt-6 border-b border-slate-200 pb-6">
+          <section className="mt-6 border-b border-slate-200 pb-6 dark:border-white/10">
             <div className="max-w-4xl">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-medium text-slate-700 md:text-[16px]">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-medium text-slate-700 dark:text-slate-300 md:text-[16px]">
                 <span>{apartmentSummaryText}</span>
                 <GenderMeta
                   gender={typedProperty.gender}
@@ -1996,8 +2057,8 @@ export default async function PropertyPage({
                 showAllLabel={t.showAllAmenities}
                 items={offers}
                 hideBottomBorder
-                sectionClassName="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.05)] xl:min-h-[100%]"
-                titleClassName="text-[24px] font-bold tracking-tight text-slate-950"
+                sectionClassName="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_42px_rgba(0,0,0,0.32)] xl:min-h-[100%]"
+                titleClassName="text-[24px] font-bold tracking-tight text-slate-950 dark:text-slate-100"
                 gridClassName="mt-6 grid grid-cols-2 gap-x-8 gap-y-5"
                 showAllButtonClassName="inline-flex h-11 items-center justify-center rounded-[18px] bg-[#054aff] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#043be0]"
               />
@@ -2022,7 +2083,7 @@ export default async function PropertyPage({
 
           <section className="mt-8">
             <div className="mb-4 flex items-center justify-between gap-4">
-              <h2 className="text-[18px] font-bold tracking-tight text-slate-950 md:text-[22px]">
+              <h2 className="text-[18px] font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[22px]">
                 {t.availableRooms}
               </h2>
             </div>
@@ -2039,12 +2100,12 @@ export default async function PropertyPage({
                 return (
                   <div
                     key={option.code}
-                    className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.04)]"
+                    className="overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_26px_rgba(0,0,0,0.30)]"
                   >
                     <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-[18px] font-bold leading-tight tracking-tight text-slate-900 lg:text-[20px]">
+                          <h3 className="text-[18px] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-[20px]">
                             {option.label}
                           </h3>
                         </div>
@@ -2055,7 +2116,7 @@ export default async function PropertyPage({
                           <div className="text-[24px] font-bold leading-none tracking-tight text-[#054aff] lg:text-[26px]">
                             {formattedPrice}
                           </div>
-                          <div className="mt-1 text-[13px] text-slate-600">
+                          <div className="mt-1 text-[13px] text-slate-600 dark:text-slate-400">
                             {typedProperty.rental_duration === 'daily'
                               ? t.perDay
                               : t.perMonth}
@@ -2079,7 +2140,7 @@ export default async function PropertyPage({
                         <button
                           type="button"
                           disabled
-                          className="inline-flex min-h-[38px] w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-4 text-[13px] font-semibold text-slate-500"
+                          className="inline-flex min-h-[38px] w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-4 text-[13px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-500"
                         >
                           {t.booked}
                         </button>
@@ -2094,13 +2155,13 @@ export default async function PropertyPage({
           {similarProperties.length > 0 && (
             <section className="mt-10">
               <div className="mb-5 flex items-center justify-between gap-4">
-                <h2 className="text-[22px] font-bold tracking-tight text-slate-950 md:text-[26px]">
+                <h2 className="text-[22px] font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[26px]">
                   {t.similarProperties}
                 </h2>
 
                 <Link
                   href={buildSearchResultsLink()}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-900 transition hover:border-slate-900"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-900 transition hover:border-slate-900 dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:hover:border-white/25"
                 >
                   {t.viewAll}
                   <svg
@@ -2153,7 +2214,7 @@ export default async function PropertyPage({
                     <Link
                       key={item.property_id}
                       href={buildPropertyDetailsLink(item.property_id)}
-                      className="group overflow-hidden rounded-[22px] bg-[#f6f6f6] shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-1"
+                      className="group overflow-hidden rounded-[22px] bg-[#f6f6f6] shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-1 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.30)]"
                     >
                       <div className="overflow-hidden rounded-[22px]">
                         <img
@@ -2164,7 +2225,7 @@ export default async function PropertyPage({
                       </div>
 
                       <div className="px-4 pb-4 pt-3">
-                        <h3 className="line-clamp-2 text-[15px] font-bold leading-6 tracking-tight text-slate-900 xl:text-[16px]">
+                        <h3 className="line-clamp-2 text-[15px] font-bold leading-6 tracking-tight text-slate-900 dark:text-slate-100 xl:text-[16px]">
                           {itemTitle}
                         </h3>
 
@@ -2193,7 +2254,7 @@ export default async function PropertyPage({
                             <span className="font-bold text-[15px] text-emerald-700 xl:text-[16px]">
                               {formattedPrice}
                             </span>{' '}
-                            <span className="text-slate-700">
+                            <span className="text-slate-700 dark:text-slate-400">
                               {item.rental_duration === 'daily'
                                 ? t.perDay
                                 : t.perMonth}
@@ -2295,7 +2356,7 @@ export default async function PropertyPage({
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-[20px] font-bold leading-7 tracking-tight text-slate-900">
+                              <h3 className="text-[20px] font-bold leading-7 tracking-tight text-slate-900 dark:text-slate-100">
                                 {option.label}
                               </h3>
                             </div>

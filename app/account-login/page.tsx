@@ -70,7 +70,7 @@ export default async function AccountLoginPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="min-h-screen bg-[#f7f7f7] pb-24 text-[#222222]"
+      className="min-h-screen bg-[#f7f7f7] pb-24 text-[#222222] dark:bg-[#050816] dark:text-slate-100"
     >
       <style>{`
         .account-login-shell {
@@ -272,6 +272,78 @@ export default async function AccountLoginPage({
           line-height: 1;
           font-weight: 500;
           letter-spacing: 0.01em;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .account-login-shell {
+            background: #050816;
+          }
+
+          .account-login-card {
+            background: #0b1220;
+            border-color: rgba(255, 255, 255, 0.1);
+          }
+
+          .account-login-button {
+            background: #2563eb;
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+          }
+
+          .account-login-button:hover {
+            background: #1d4ed8;
+          }
+
+          .account-login-language-section {
+            background: #0b1220;
+            border-top-color: rgba(255, 255, 255, 0.1);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+          }
+
+          .account-login-language-row {
+            background: #0b1220;
+            color: #f8fafc;
+          }
+
+          .account-login-language-row:hover {
+            background: #111827;
+          }
+
+          .account-login-language-value,
+          .account-login-language-text,
+          .account-login-language-icon {
+            color: #f8fafc;
+          }
+
+          .account-login-language-text {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
         }
 
         @media (max-width: 420px) {

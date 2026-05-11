@@ -783,7 +783,7 @@ function CommunityJoinPageContent() {
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] md:pb-0"
+      className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <PwaInstallBanner />
 
@@ -1322,6 +1322,110 @@ function CommunityJoinPageContent() {
           letter-spacing: 0.01em;
         }
 
+
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --menu-blue: #054aff;
+            --menu-cream: #f8fafc;
+            --menu-cream-soft: rgba(248, 250, 252, 0.92);
+          }
+
+          .pwa-install-banner {
+            background: rgba(11, 18, 32, 0.98);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+          }
+
+          .pwa-install-banner__close {
+            color: #f8fafc;
+          }
+
+          .pwa-install-banner__logo {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: #0b1220;
+          }
+
+          .pwa-install-banner__title {
+            color: #f8fafc;
+          }
+
+          .pwa-install-banner__button {
+            background: #2563eb;
+          }
+
+          .pwa-install-banner__button:hover {
+            background: #1d4ed8;
+          }
+
+          .pwa-install-banner__ios-help {
+            background: #111827;
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+          }
+
+          .navienty-logo {
+            color: #f8fafc;
+          }
+
+          .menu-trigger-lines span {
+            background: #f8fafc !important;
+          }
+
+          .mega-menu-overlay {
+            background: #054aff;
+            color: #f8fafc;
+          }
+
+          .mega-menu-small-link,
+          .mega-menu-main-link,
+          .mega-menu-close {
+            color: #f8fafc;
+          }
+
+          .mega-menu-footer-link {
+            color: rgba(248, 250, 252, 0.86);
+          }
+
+          .mega-menu-footer-link:hover {
+            color: #ffffff;
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.95);
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -1475,7 +1579,7 @@ function CommunityJoinPageContent() {
         }
       `}</style>
 
-      <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
+      <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
         <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
           <Link
             href={buildUrl("/properties", selectedLanguage, selectedCurrency)}
@@ -1557,7 +1661,7 @@ function CommunityJoinPageContent() {
         </div>
       </div>
 
-      <section className="flex min-h-[calc(100vh-120px)] items-center justify-center bg-[#fcfcfd] px-6 py-10">
+      <section className="flex min-h-[calc(100vh-120px)] items-center justify-center bg-[#fcfcfd] px-6 py-10 dark:bg-[#050816]">
         <div className="w-full flex justify-center">
           <form onSubmit={handleSubmit} className="community-form">
             <div id="signup-area">
@@ -2294,6 +2398,146 @@ function CommunityJoinPageContent() {
           box-sizing: border-box;
         }
 
+
+        @media (prefers-color-scheme: dark) {
+          .community-form {
+            background-color: #0b1220;
+            border-color: #3b82f6;
+            box-shadow:
+              -10px 0px 0px #1d4ed8,
+              -10px 7px 18px rgba(0, 0, 0, 0.38);
+          }
+
+          :global([dir='rtl']) .community-form {
+            box-shadow:
+              10px 0px 0px #1d4ed8,
+              10px 7px 18px rgba(0, 0, 0, 0.38);
+          }
+
+          #behind {
+            color: #93c5fd;
+          }
+
+          .input-area :global(.input),
+          .input-area input {
+            border-color: #3b82f6;
+            background-color: #111827;
+            color: #93c5fd;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          .input-area :global(.custom-select-trigger) {
+            border-color: #3b82f6;
+            background-color: #111827;
+            color: #93c5fd;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          .input-area :global(.custom-select-trigger__arrow) {
+            color: #93c5fd;
+          }
+
+          :global(.custom-select-options) {
+            border-color: #3b82f6;
+            background: #0b1220;
+            box-shadow:
+              0 22px 55px rgba(0, 0, 0, 0.42),
+              0 10px 22px rgba(0, 0, 0, 0.3);
+          }
+
+          :global(.custom-select-option) {
+            color: #e2e8f0;
+          }
+
+          :global(.custom-select-option:hover) {
+            background: #111827;
+            color: #93c5fd;
+          }
+
+          :global(.custom-select-option--active) {
+            background: #2563eb;
+            color: #ffffff;
+          }
+
+          :global(.custom-select-empty) {
+            color: #94a3b8;
+          }
+
+          #footer-area {
+            color: #93c5fd;
+          }
+
+          #footer-area button {
+            border-color: #3b82f6;
+            background-color: #2563eb;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          #background-color {
+            background-color: #2563eb;
+            box-shadow: inset 5px 0px #1d4ed8;
+          }
+
+          :global([dir='rtl']) #background-color {
+            box-shadow: inset -5px 0px #1d4ed8;
+          }
+
+          #link-circle svg {
+            filter: drop-shadow(0 8px 14px rgba(37, 99, 235, 0.16));
+          }
+
+          ::placeholder {
+            color: #93c5fd;
+          }
+
+          .input-area:hover input {
+            border-color: #ffffff;
+            background-color: #2563eb;
+            color: #ffffff;
+          }
+
+          .input-area:hover :global(.custom-select-trigger) {
+            border-color: #ffffff;
+            background-color: #2563eb;
+            color: #ffffff;
+          }
+
+          .input-area:hover :global(.custom-select-trigger__arrow) {
+            color: #ffffff;
+          }
+
+          #footer-area button:active {
+            color: #2563eb;
+            background-color: #ffffff;
+          }
+
+          .error-box {
+            background: rgba(37, 99, 235, 0.12);
+            color: #bfdbfe;
+            border-color: rgba(147, 197, 253, 0.28);
+          }
+
+          .success-box {
+            background: rgba(22, 163, 74, 0.14);
+            color: #bbf7d0;
+            border-color: rgba(187, 247, 208, 0.28);
+          }
+
+          input,
+          select,
+          textarea {
+            color-scheme: dark;
+          }
+
+          input:-webkit-autofill,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #f8fafc;
+            box-shadow: 0 0 0 1000px #111827 inset;
+            transition: background-color 9999s ease-in-out 0s;
+          }
+        }
+
         @media (max-width: 640px) {
           .community-form {
             width: min(90vw, 22rem);
@@ -2331,6 +2575,21 @@ function CommunityJoinPageContent() {
             font-size: 0.92rem;
           }
         }
+
+        @media (max-width: 640px) and (prefers-color-scheme: dark) {
+          .community-form {
+            box-shadow:
+              -8px 0px 0px #1d4ed8,
+              -8px 6px 16px rgba(0, 0, 0, 0.36);
+          }
+
+          :global([dir='rtl']) .community-form {
+            box-shadow:
+              8px 0px 0px #1d4ed8,
+              8px 6px 16px rgba(0, 0, 0, 0.36);
+          }
+        }
+
       `}</style>
     </main>
   );
@@ -2340,7 +2599,7 @@ export default function CommunityJoinPage() {
   return (
     <Suspense
       fallback={
-        <main className="relative min-h-screen bg-[#f7f7f8] px-6 py-10 text-[#20212a]">
+        <main className="relative min-h-screen bg-[#f7f7f8] px-6 py-10 text-[#20212a] dark:bg-[#050816] dark:text-slate-100">
           Loading...
         </main>
       }

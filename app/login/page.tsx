@@ -51,8 +51,8 @@ export default function LoginPage() {
   ]
 
   return (
-    <main className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0">
-      <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm md:static md:shadow-none">
+    <main className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0">
+      <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:static md:shadow-none">
         <div className="mx-auto h-full max-w-[1920px] px-4">
           <div className="flex h-full items-center justify-center">
             <Link
@@ -75,7 +75,7 @@ export default function LoginPage() {
         </div>
       </header>
 
-      <section className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#fcfcfd] px-6 py-10 md:min-h-[calc(100vh-120px)]">
+      <section className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#fcfcfd] px-6 py-10 dark:bg-[#050816] md:min-h-[calc(100vh-120px)]">
         <div className="flex w-full justify-center">
           <form onSubmit={handleSubmit} className="form">
             <div id="login-area">
@@ -391,6 +391,11 @@ export default function LoginPage() {
           box-sizing: border-box;
         }
 
+        #footer-area button:disabled {
+          opacity: 0.75;
+          cursor: not-allowed;
+        }
+
         #footer-area p,
         #footer-area a {
           font-size: 0.84em;
@@ -639,6 +644,84 @@ export default function LoginPage() {
           letter-spacing: -0.02em;
         }
 
+        @media (prefers-color-scheme: dark) {
+          .form {
+            background-color: #0b1220;
+            border-color: #3b82f6;
+            box-shadow:
+              -10px 0px 0px #1d4ed8,
+              -10px 7px 18px rgba(0, 0, 0, 0.38);
+          }
+
+          #behind {
+            color: #93c5fd;
+          }
+
+          #email-area input,
+          #password-area input {
+            border-color: #3b82f6;
+            background-color: #111827;
+            color: #f8fafc;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          #email-area input:-webkit-autofill,
+          #email-area input:-webkit-autofill:hover,
+          #email-area input:-webkit-autofill:focus,
+          #password-area input:-webkit-autofill,
+          #password-area input:-webkit-autofill:hover,
+          #password-area input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #f8fafc;
+            box-shadow: 0 0 0 1000px #111827 inset;
+            transition: background-color 9999s ease-in-out 0s;
+          }
+
+          #footer-area {
+            color: #93c5fd;
+          }
+
+          #footer-area button {
+            border-color: #3b82f6;
+            background-color: #2563eb;
+            box-shadow: 0px 8px 18px -8px rgba(0, 0, 0, 0.55);
+          }
+
+          #background-color {
+            background-color: #2563eb;
+            box-shadow: inset 5px 0px #1d4ed8;
+          }
+
+          #link-circle svg {
+            filter: drop-shadow(0 8px 14px rgba(37, 99, 235, 0.16));
+          }
+
+          ::placeholder {
+            color: #93c5fd;
+          }
+
+          #email-area:hover input,
+          #password-area:hover input {
+            border-color: #ffffff;
+            background-color: #2563eb;
+            color: #ffffff;
+          }
+
+          #footer-area button:active {
+            color: #2563eb;
+            background-color: #ffffff;
+          }
+
+          .error-box {
+            background: rgba(37, 99, 235, 0.12);
+            color: #bfdbfe;
+            border-color: rgba(147, 197, 253, 0.28);
+          }
+
+          .footer-esaf {
+            background: #054aff;
+          }
+        }
+
         @media (max-width: 1100px) {
           .footer-esaf-top {
             grid-template-columns: 1fr 1fr;
@@ -723,6 +806,14 @@ export default function LoginPage() {
 
           #text-inside {
             font-size: 0.82em;
+          }
+        }
+
+        @media (max-width: 640px) and (prefers-color-scheme: dark) {
+          .form {
+            box-shadow:
+              -8px 0px 0px #1d4ed8,
+              -8px 6px 16px rgba(0, 0, 0, 0.36);
           }
         }
       `}</style>

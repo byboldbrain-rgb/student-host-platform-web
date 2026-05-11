@@ -20,6 +20,7 @@ type SearchParams = {
   currency?: string
   page?: string
   sort?: string
+  amenity_ids?: string
 }
 
 type City = {
@@ -49,6 +50,28 @@ type UniversityArea = {
   area_id: string | number
 }
 
+type AmenityOption = {
+  id: string
+  name_en: string
+  name_ar: string
+  icon_url?: string | null
+  sort_order?: number | null
+  is_active?: boolean | null
+}
+
+type Amenity = {
+  id: string
+  name_en: string
+  name_ar: string
+  icon_url?: string | null
+  sort_order?: number | null
+  is_active?: boolean | null
+}
+
+type PropertyAmenityLink = {
+  amenity_id?: string | number | null
+}
+
 type PropertyImage = {
   image_url?: string | null
 }
@@ -76,6 +99,11 @@ type PropertyRoom = {
 
 type PropertyUniversityLink = {
   university_id?: string | number | null
+}
+
+type PropertyAmenityMatch = {
+  property_id_ref?: string | number | null
+  amenity_id?: string | number | null
 }
 
 type Property = {
@@ -144,6 +172,13 @@ const PRICE_PRIORITY = [
   'full_apartment',
 ] as const
 
+const FILTER_AMENITY_IDS = [
+  '75f3d5b8-647d-4229-8c05-695ac765952b',
+  'a732f6a4-cf50-4de1-b2db-5df5dc47e2c1',
+  'f5ab16f9-5941-4ebe-96a0-47f19dbe7f05',
+  '945a09ce-c3f3-4fb3-a0fd-7c33c939343a',
+]
+
 type PricePriorityCode = (typeof PRICE_PRIORITY)[number]
 
 const TRANSLATIONS = {
@@ -180,6 +215,7 @@ const TRANSLATIONS = {
     startSearch: 'Start your search',
     noResults: 'No properties found matching your search.',
     sortBy: 'Sort By',
+    amenities: 'Amenities',
     newlyListed: 'Newly listed',
     lowestPrice: 'Lowest price',
     highestPrice: 'Highest price',
@@ -237,6 +273,7 @@ const TRANSLATIONS = {
     searchResults: 'نتائج البحث',
     noResults: 'لم يتم العثور على عقارات تطابق بحثك.',
     sortBy: 'ترتيب حسب',
+    amenities: 'المميزات',
     newlyListed: 'الأحدث',
     lowestPrice: 'الأقل سعرًا',
     highestPrice: 'الأعلى سعرًا',
@@ -333,15 +370,6 @@ function translateAvailabilityStatus(
   if (normalized === 'available') return TRANSLATIONS[language].available
   if (normalized === 'reserved') return TRANSLATIONS[language].reserved
   if (normalized === 'unavailable') return TRANSLATIONS[language].unavailable
-
-  return value
-}
-
-function translateRentalDuration(value: string, language: SupportedLanguage) {
-  const normalized = value?.toLowerCase?.() || ''
-
-  if (normalized === 'daily') return TRANSLATIONS[language].daily
-  if (normalized === 'monthly') return TRANSLATIONS[language].monthly
 
   return value
 }
@@ -487,6 +515,20 @@ function formatPrice(
   }).format(converted)
 }
 
+
+function normalizeAmenityIds(value?: string) {
+  if (!value) return []
+
+  return Array.from(
+    new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
 function buildVisiblePages(currentPage: number, totalPages: number) {
   const pages: (number | 'dots')[] = []
 
@@ -520,6 +562,7 @@ export default async function SearchResultsPage({
   const selectedLanguage = normalizeLanguage(params.lang)
   const selectedCurrency = normalizeCurrency(params.currency)
   const selectedSort = normalizeSort(params.sort)
+  const selectedAmenityIds = normalizeAmenityIds(params.amenity_ids)
   const t = TRANSLATIONS[selectedLanguage]
   const isArabic = selectedLanguage === 'ar'
   const currencyRate = await getCurrencyRate(selectedCurrency)
@@ -559,6 +602,45 @@ export default async function SearchResultsPage({
   const { data: universityAreas } = await supabase
     .from('university_property_areas')
     .select('id, university_id, area_id')
+
+  const { data: amenities } = await supabase
+    .from('amenities')
+    .select('id, name_en, name_ar, icon_url, sort_order, is_active')
+    .eq('is_active', true)
+    .in('id', FILTER_AMENITY_IDS)
+    .order('sort_order', { ascending: true })
+    .order('name_en', { ascending: true })
+
+  let matchingPropertyIdsByAmenities: string[] | null = null
+
+  if (selectedAmenityIds.length > 0) {
+    const { data: amenityMatches } = await supabase
+      .from('property_amenities')
+      .select('property_id_ref, amenity_id')
+      .in('amenity_id', selectedAmenityIds)
+
+    const amenityIdsByProperty = new Map<string, Set<string>>()
+
+    for (const item of (amenityMatches as PropertyAmenityMatch[]) ?? []) {
+      if (!item.property_id_ref || !item.amenity_id) continue
+
+      const propertyId = String(item.property_id_ref)
+      const amenityId = String(item.amenity_id)
+      const existingAmenityIds =
+        amenityIdsByProperty.get(propertyId) ?? new Set<string>()
+
+      existingAmenityIds.add(amenityId)
+      amenityIdsByProperty.set(propertyId, existingAmenityIds)
+    }
+
+    matchingPropertyIdsByAmenities = Array.from(amenityIdsByProperty.entries())
+      .filter(([, propertyAmenityIds]) =>
+        selectedAmenityIds.every((amenityId) =>
+          propertyAmenityIds.has(amenityId)
+        )
+      )
+      .map(([propertyId]) => propertyId)
+  }
 
   let query = supabase
     .from('properties')
@@ -614,6 +696,13 @@ export default async function SearchResultsPage({
 
   if (selectedSort === 'boys' || selectedSort === 'girls') {
     query = query.eq('gender', selectedSort)
+  }
+
+  if (matchingPropertyIdsByAmenities) {
+    query =
+      matchingPropertyIdsByAmenities.length > 0
+        ? query.in('id', matchingPropertyIdsByAmenities)
+        : query.in('id', ['00000000-0000-0000-0000-000000000000'])
   }
 
   query = query.order('created_at', { ascending: false })
@@ -792,7 +881,7 @@ export default async function SearchResultsPage({
       <Link
         href={backToPropertiesHref}
         aria-label={t.backToProperties}
-        className="flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white text-[#111827] shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition hover:bg-[#f8fafc]"
+        className="flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white text-[#111827] shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition hover:bg-[#f8fafc] dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:shadow-[0_8px_20px_rgba(0,0,0,0.28)] dark:hover:bg-[#111827]"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -819,7 +908,9 @@ export default async function SearchResultsPage({
         isArabic={isArabic}
         selectedSort={selectedSort}
         sortByLabel={t.sortBy}
+        amenitiesLabel={t.amenities}
         options={sortOptions}
+        amenities={(amenities as Amenity[]) ?? []}
       />
     ),
     mobileSearchBarClassName: 'mt-0',
@@ -853,7 +944,7 @@ export default async function SearchResultsPage({
     const propertyTitle = isArabic ? property.title_ar : property.title_en
 
     return (
-      <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:rounded-[28px] md:shadow-[0_10px_30px_rgba(15,23,42,0.10)]">
+      <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_6px_18px_rgba(15,23,42,0.08)] dark:bg-slate-800 dark:shadow-[0_10px_30px_rgba(0,0,0,0.35)] md:rounded-[28px] md:shadow-[0_10px_30px_rgba(15,23,42,0.10)]">
         <PropertyImageSlider
           images={images}
           title={propertyTitle}
@@ -882,12 +973,7 @@ export default async function SearchResultsPage({
 
     const label = gender === 'boys' ? t.boysMeta : t.girlsMeta
 
-    return (
-      <span className="property-meta-gender">
-        <span className="property-meta-dot" />
-        {label}
-      </span>
-    )
+    return <span className="property-meta-gender">{label}</span>
   }
 
   const renderPropertyCard = (property: Property) => {
@@ -909,21 +995,19 @@ export default async function SearchResultsPage({
 
         <div className="mt-2.5 space-y-1 md:mt-3">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 md:text-[17px]">
+            <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 dark:text-slate-100 md:text-[17px]">
               {isArabic ? property.title_ar : property.title_en}
             </h3>
           </div>
 
-          <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-slate-500 md:text-[13px]">
-            <span className="truncate capitalize">
-              {translateRentalDuration(property.rental_duration, selectedLanguage)}{' '}
-              {t.stay}
-            </span>
-            {renderGenderMeta(property)}
-          </div>
+          {renderGenderMeta(property) && (
+            <div className="flex min-w-0 items-center text-[12px] text-slate-500 dark:text-slate-400 md:text-[13px]">
+              {renderGenderMeta(property)}
+            </div>
+          )}
 
           <p className="truncate pt-0.5 text-[13px] md:pt-1 md:text-[14px]">
-            <span className="font-semibold text-slate-950">
+            <span className="font-semibold text-slate-950 dark:text-white">
               {formatPrice(
                 displayPriceEgp,
                 selectedCurrency,
@@ -931,7 +1015,7 @@ export default async function SearchResultsPage({
                 currencyRate
               )}
             </span>{' '}
-            <span className="text-[11px] text-slate-500 md:text-[12px]">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 md:text-[12px]">
               / {property.rental_duration === 'daily' ? t.night : t.month}
             </span>
           </p>
@@ -943,7 +1027,7 @@ export default async function SearchResultsPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-24 text-gray-700 md:pb-0"
+      className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <input
         id="nav-menu-toggle"
@@ -1367,8 +1451,8 @@ export default async function SearchResultsPage({
 
         .status-ribbon {
           position: absolute;
-          top: -4px;
-          left: -4px;
+          top: 0;
+          left: 0;
           width: 96px;
           height: 96px;
           overflow: hidden;
@@ -1378,61 +1462,86 @@ export default async function SearchResultsPage({
 
         .status-ribbon__inner {
           position: absolute;
-          top: 20px;
-          left: -34px;
-          width: 140px;
-          height: 24px;
+          top: 18px;
+          left: -36px;
+          width: 142px;
+          height: 26px;
           display: flex;
           align-items: center;
           justify-content: center;
           transform: rotate(-45deg);
+          transform-origin: center;
           color: #ffffff;
           font-size: 8px;
-          font-weight: 800;
-          letter-spacing: 0.12em;
+          font-weight: 900;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
+          border-top: 1px solid rgba(255, 255, 255, 0.42);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
           box-shadow:
-            0 8px 18px rgba(0, 0, 0, 0.24),
-            inset 0 1px 0 rgba(255, 255, 255, 0.22);
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+            0 10px 18px rgba(15, 23, 42, 0.24),
+            inset 0 1px 0 rgba(255, 255, 255, 0.34),
+            inset 0 -8px 14px rgba(0, 0, 0, 0.16);
+          clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+          transition:
+            transform 0.35s ease,
+            filter 0.35s ease,
+            box-shadow 0.35s ease;
         }
 
-        .status-ribbon::after {
+        .status-ribbon__inner::before,
+        .status-ribbon__inner::after {
           content: '';
           position: absolute;
-          width: 10px;
-          height: 10px;
-          left: 0;
-          bottom: 0;
-          z-index: -1;
+          inset: 0;
+          pointer-events: none;
+        }
+
+        .status-ribbon__inner::before {
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.28) 0%,
+            rgba(255, 255, 255, 0.08) 35%,
+            rgba(0, 0, 0, 0.10) 100%
+          );
+          mix-blend-mode: soft-light;
+        }
+
+        .status-ribbon__inner::after {
+          background: linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.18) 0%,
+            rgba(255, 255, 255, 0.14) 50%,
+            rgba(0, 0, 0, 0.14) 100%
+          );
+          opacity: 0.55;
+        }
+
+        .status-ribbon::before,
+        .status-ribbon::after {
+          content: none !important;
+          display: none !important;
         }
 
         .status-ribbon--available .status-ribbon__inner {
           background-image: linear-gradient(
             135deg,
-            #0b8f63 0%,
-            #18b57d 45%,
-            #34d399 100%
+            #046947 0%,
+            #0b8f63 28%,
+            #25c28b 58%,
+            #0a7a56 100%
           );
-        }
-
-        .status-ribbon--available::after {
-          box-shadow: 88px -88px #06664a;
-          background: linear-gradient(135deg, #0a7a56 0%, #0f5e45 100%);
         }
 
         .status-ribbon--reserved .status-ribbon__inner {
           background-image: linear-gradient(
             135deg,
-            #c81e4b 0%,
-            #e63b68 45%,
-            #fb7185 100%
+            #8f1239 0%,
+            #c81e4b 28%,
+            #fb7185 58%,
+            #be123c 100%
           );
-        }
-
-        .status-ribbon--reserved::after {
-          box-shadow: 88px -88px #8f1239;
-          background: linear-gradient(135deg, #9f1239 0%, #7f1d1d 100%);
         }
 
         .property-meta-gender {
@@ -1446,15 +1555,6 @@ export default async function SearchResultsPage({
           font-weight: 500;
           letter-spacing: -0.01em;
           white-space: nowrap;
-        }
-
-        .property-meta-dot {
-          width: 3px;
-          height: 3px;
-          border-radius: 999px;
-          background: currentColor;
-          opacity: 0.55;
-          flex-shrink: 0;
         }
 
         [dir='rtl'] .property-meta-gender {
@@ -1753,28 +1853,19 @@ export default async function SearchResultsPage({
           }
 
           .status-ribbon {
-            width: 108px;
-            height: 108px;
-            top: -5px;
-            left: -5px;
+            width: 96px;
+            height: 96px;
+            top: 0;
+            left: 0;
           }
 
           .status-ribbon__inner {
-            top: 24px;
-            left: -35px;
-            width: 155px;
-            height: 30px;
+            top: 18px;
+            left: -36px;
+            width: 142px;
+            height: 26px;
             font-size: 8px;
             letter-spacing: 0.14em;
-            border-radius: 2px;
-          }
-
-          .status-ribbon--available::after {
-            box-shadow: 100px -100px #06664a;
-          }
-
-          .status-ribbon--reserved::after {
-            box-shadow: 100px -100px #8f1239;
           }
 
           .property-meta-gender {
@@ -1871,36 +1962,94 @@ export default async function SearchResultsPage({
           }
 
           .status-ribbon {
-            width: 100px;
-            height: 100px;
-            top: -5px;
-            left: -5px;
+            width: 92px;
+            height: 92px;
+            top: 0;
+            left: 0;
           }
 
           .status-ribbon__inner {
-            top: 23px;
-            left: -35px;
-            width: 148px;
-            height: 28px;
+            top: 17px;
+            left: -36px;
+            width: 138px;
+            height: 25px;
             font-size: 7px;
             letter-spacing: 0.12em;
-            border-radius: 2px;
             box-shadow:
-              0 5px 12px rgba(0, 0, 0, 0.18),
-              inset 0 1px 0 rgba(255, 255, 255, 0.18);
-          }
-
-          .status-ribbon--available::after {
-            box-shadow: 92px -92px #06664a;
-          }
-
-          .status-ribbon--reserved::after {
-            box-shadow: 92px -92px #8f1239;
+              0 7px 14px rgba(15, 23, 42, 0.20),
+              inset 0 1px 0 rgba(255, 255, 255, 0.30),
+              inset 0 -7px 12px rgba(0, 0, 0, 0.14);
           }
 
           .mobile-bottom-nav__item,
           .mobile-bottom-nav__icon--image {
             transition: none;
+          }
+        }
+
+
+        @media (prefers-color-scheme: dark) {
+          .menu-trigger-lines span {
+            background: #f8fafc;
+          }
+
+          .property-media-card {
+            background-color: #111827;
+          }
+
+          .property-media-gradient {
+            opacity: 0.88;
+          }
+
+          .property-media-slider__dots {
+            background: rgba(2, 6, 23, 0.42);
+          }
+
+          .property-media-slider__dot {
+            background: rgba(255, 255, 255, 0.56);
+          }
+
+          .property-media-slider__dot--active {
+            background: rgba(255, 255, 255, 0.96);
+          }
+
+          .property-meta-gender {
+            color: #94a3b8;
+          }
+
+          .group:hover .property-meta-gender {
+            color: #cbd5e1;
+          }
+
+          .mobile-bottom-nav {
+            background: rgba(11, 18, 32, 0.96);
+            border-top-color: rgba(255, 255, 255, 0.10);
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
+          }
+
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.85);
+          }
+
+          .footer-esaf {
+            background: #054aff;
           }
         }
 
@@ -1930,7 +2079,9 @@ export default async function SearchResultsPage({
           isArabic,
           selectedSort,
           sortByLabel: t.sortBy,
+          amenitiesLabel: t.amenities,
           options: sortOptions,
+          amenities: (amenities as Amenity[]) ?? [],
         }}
       />
 
@@ -2020,7 +2171,9 @@ export default async function SearchResultsPage({
             isArabic={isArabic}
             selectedSort={selectedSort}
             sortByLabel={t.sortBy}
+            amenitiesLabel={t.amenities}
             options={sortOptions}
+            amenities={(amenities as Amenity[]) ?? []}
           />
         </div>
 
@@ -2040,9 +2193,13 @@ export default async function SearchResultsPage({
                   aria-disabled={currentPage === 1}
                   className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
                     currentPage === 1
-                      ? 'pointer-events-none text-gray-300'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'pointer-events-none hover:bg-transparent'
+                      : 'hover:bg-[#054aff]/10'
                   }`}
+                  style={{
+                    color:
+                      currentPage === 1 ? 'rgba(5, 74, 255, 0.3)' : '#054aff',
+                  }}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -2065,7 +2222,8 @@ export default async function SearchResultsPage({
                     item === 'dots' ? (
                       <span
                         key={`dots-${index}`}
-                        className="flex h-10 min-w-[24px] items-center justify-center text-[18px] font-semibold text-gray-500"
+                        className="flex h-10 min-w-[24px] items-center justify-center text-[18px] font-semibold"
+                        style={{ color: '#054aff' }}
                       >
                         ...
                       </span>
@@ -2075,9 +2233,10 @@ export default async function SearchResultsPage({
                         href={buildPageLink(item)}
                         className={`flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold transition ${
                           currentPage === item
-                            ? 'bg-[#222222] text-white'
-                            : 'text-[#222222] hover:bg-gray-100'
+                            ? 'bg-[#054aff]'
+                            : 'hover:bg-[#054aff]/10'
                         }`}
+                        style={{ color: currentPage === item ? '#ffffff' : '#054aff' }}
                       >
                         {item}
                       </Link>
@@ -2090,9 +2249,15 @@ export default async function SearchResultsPage({
                   aria-disabled={currentPage === totalPages}
                   className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
                     currentPage === totalPages
-                      ? 'pointer-events-none text-gray-300'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'pointer-events-none hover:bg-transparent'
+                      : 'hover:bg-[#054aff]/10'
                   }`}
+                  style={{
+                    color:
+                      currentPage === totalPages
+                        ? 'rgba(5, 74, 255, 0.3)'
+                        : '#054aff',
+                  }}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -2113,8 +2278,8 @@ export default async function SearchResultsPage({
             )}
           </>
         ) : (
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 py-20 text-center">
-            <p className="text-lg text-slate-500">{t.noResults}</p>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 py-20 text-center dark:border-white/10 dark:bg-[#0b1220]">
+            <p className="text-lg text-slate-500 dark:text-slate-400">{t.noResults}</p>
           </div>
         )}
       </section>

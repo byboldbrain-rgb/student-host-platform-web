@@ -16,15 +16,26 @@ type SortOption = {
   href: string
 }
 
+type AmenityOption = {
+  id: string
+  name_en: string
+  name_ar: string
+  icon_url?: string | null
+  sort_order?: number | null
+  is_active?: boolean | null
+}
+
 type SortDropdownProps = {
   isArabic: boolean
   selectedSort: SupportedSort
   sortByLabel: string
   genderLabel?: string
+  amenitiesLabel?: string
   showResultsLabel?: string
   clearAllLabel?: string
   closeLabel?: string
   options: SortOption[]
+  amenities?: AmenityOption[]
 }
 
 type GenderValue = 'boys' | 'girls'
@@ -100,7 +111,26 @@ function buildSectionedOptions(options: SortOption[]) {
   }
 }
 
-function GenderIcon({ value, label }: { value: SupportedSort; label: string }) {
+function normalizeSelectedAmenityIds(value: string | null) {
+  if (!value) return []
+
+  return Array.from(
+    new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
+function GenderImage({
+  value,
+  label,
+}: {
+  value: SupportedSort
+  label: string
+}) {
   const iconSrc =
     value === 'boys'
       ? 'https://i.ibb.co/Pzg14kFJ/Navienty-22.png'
@@ -110,8 +140,9 @@ function GenderIcon({ value, label }: { value: SupportedSort; label: string }) {
     <img
       src={iconSrc}
       alt={label}
-      className="h-[100px] w-[100px] object-contain"
+      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]"
       loading="lazy"
+      draggable={false}
     />
   )
 }
@@ -126,21 +157,70 @@ function GenderCard({
   onSelect: () => void
 }) {
   return (
-    <button type="button" onClick={onSelect} className="group block text-start">
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={option.label}
+      aria-pressed={isActive}
+      className="group block min-w-0 overflow-hidden rounded-[24px] outline-none transition duration-300 hover:-translate-y-0.5"
+    >
       <div
-        className={`rounded-[18px] border bg-white px-3 py-4 transition ${
+        className={`aspect-[1.45/1] overflow-hidden rounded-[24px] border bg-white transition duration-300 dark:bg-[#0b1220] ${
           isActive
-            ? 'border-[#222222]'
-            : 'border-[#d9d9d9] hover:border-[#bdbdbd]'
+            ? 'border-[#0A46FF] shadow-[0_16px_38px_rgba(10,70,255,0.16)] ring-4 ring-[#0A46FF]/10 dark:border-[#60a5fa] dark:shadow-[0_18px_42px_rgba(96,165,250,0.14)] dark:ring-[#60a5fa]/10'
+            : 'border-[#e5e7eb] shadow-[0_10px_28px_rgba(15,23,42,0.08)] hover:border-[#cbd5e1] hover:shadow-[0_16px_38px_rgba(15,23,42,0.12)] dark:border-white/10 dark:shadow-[0_12px_30px_rgba(0,0,0,0.28)] dark:hover:border-white/20'
         }`}
       >
-        <div className="flex h-[96px] items-center justify-center rounded-[14px] bg-white">
-          <GenderIcon value={option.value} label={option.label} />
-        </div>
+        <GenderImage value={option.value} label={option.label} />
+      </div>
+    </button>
+  )
+}
+
+function AmenityCard({
+  amenity,
+  label,
+  isActive,
+  onToggle,
+}: {
+  amenity: AmenityOption
+  label: string
+  isActive: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={isActive}
+      className="group block min-w-0 rounded-[18px] outline-none"
+      title={label}
+    >
+      <div
+        className={`flex h-[106px] items-center justify-center overflow-hidden rounded-[16px] border bg-white px-4 py-3 transition duration-300 dark:bg-[#0b1220] sm:h-[112px] ${
+          isActive
+            ? 'border-[#0A46FF] shadow-[0_10px_24px_rgba(10,70,255,0.14)] ring-4 ring-[#0A46FF]/10 dark:border-[#60a5fa] dark:shadow-[0_14px_30px_rgba(96,165,250,0.14)] dark:ring-[#60a5fa]/10'
+            : 'border-[#dddddd] shadow-none hover:border-[#bdbdbd] dark:border-white/10 dark:hover:border-white/20'
+        }`}
+      >
+        {amenity.icon_url ? (
+          <img
+            src={amenity.icon_url}
+            alt={label}
+            className="h-[62px] w-[62px] object-contain transition duration-300 group-hover:scale-[1.04] sm:h-[68px] sm:w-[68px]"
+            loading="lazy"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-[62px] w-[62px] items-center justify-center rounded-full bg-[#f8fafc] px-2 text-center text-[10px] font-semibold text-[#64748b] dark:bg-[#111827] dark:text-slate-300 sm:h-[68px] sm:w-[68px]">
+            {label}
+          </div>
+        )}
       </div>
 
-      <div className="pt-3 text-center text-[14px] font-medium leading-snug text-[#222222]">
-        {option.label}
+      <div className="mt-3 text-center text-[14px] font-medium leading-snug tracking-[-0.01em] text-[#222222] dark:text-slate-100 sm:text-[15px]">
+        {label}
       </div>
     </button>
   )
@@ -210,10 +290,12 @@ export default function SortDropdown({
   selectedSort,
   sortByLabel,
   genderLabel,
+  amenitiesLabel,
   showResultsLabel,
   clearAllLabel,
   closeLabel,
   options,
+  amenities = [],
 }: SortDropdownProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -222,8 +304,24 @@ export default function SortDropdown({
   const [isOpen, setIsOpen] = useState(false)
   const groupedOptions = useMemo(() => buildSectionedOptions(options), [options])
 
+  const visibleAmenities = useMemo(
+    () =>
+      amenities
+        .filter((amenity) => amenity.is_active !== false)
+        .sort((a, b) => {
+          const sortA = a.sort_order ?? Number.POSITIVE_INFINITY
+          const sortB = b.sort_order ?? Number.POSITIVE_INFINITY
+
+          if (sortA !== sortB) return sortA - sortB
+
+          return a.name_en.localeCompare(b.name_en)
+        }),
+    [amenities]
+  )
+
   const labels = {
     gender: genderLabel ?? (isArabic ? 'النوع' : 'Gender'),
+    amenities: amenitiesLabel ?? (isArabic ? 'المميزات' : 'Amenities'),
     sortBy: sortByLabel ?? (isArabic ? 'ترتيب حسب' : 'Sort by'),
     clearAll: clearAllLabel ?? (isArabic ? 'مسح الكل' : 'Clear all'),
     showResults: showResultsLabel ?? (isArabic ? 'عرض النتائج' : 'Show results'),
@@ -268,6 +366,11 @@ export default function SortDropdown({
       : null
   }, [groupedOptions.sortBy, searchParams, selectedSort])
 
+  const currentAmenityIds = useMemo(
+    () => normalizeSelectedAmenityIds(searchParams.get('amenity_ids')),
+    [searchParams]
+  )
+
   const [tempSelectedGender, setTempSelectedGender] =
     useState<GenderValue | null>(
       (currentGenderOption?.value as GenderValue | null) ?? null
@@ -278,6 +381,9 @@ export default function SortDropdown({
       (currentSortOption?.value as SortValue | null) ?? null
     )
 
+  const [tempSelectedAmenityIds, setTempSelectedAmenityIds] =
+    useState<string[]>(currentAmenityIds)
+
   useEffect(() => {
     if (!isOpen) return
 
@@ -287,6 +393,7 @@ export default function SortDropdown({
     setTempSelectedSortOption(
       (currentSortOption?.value as SortValue | null) ?? null
     )
+    setTempSelectedAmenityIds(currentAmenityIds)
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -301,7 +408,7 @@ export default function SortDropdown({
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', onEscape)
     }
-  }, [isOpen, currentGenderOption, currentSortOption])
+  }, [isOpen, currentGenderOption, currentSortOption, currentAmenityIds])
 
   const selectedGenderOption =
     groupedOptions.gender.find((option) => option.value === tempSelectedGender) ??
@@ -312,9 +419,20 @@ export default function SortDropdown({
       (option) => option.value === tempSelectedSortOption
     ) ?? null
 
+  const handleToggleAmenity = (amenityId: string) => {
+    setTempSelectedAmenityIds((currentIds) => {
+      if (currentIds.includes(amenityId)) {
+        return currentIds.filter((id) => id !== amenityId)
+      }
+
+      return [...currentIds, amenityId]
+    })
+  }
+
   const handleClearAll = () => {
     setTempSelectedGender(null)
     setTempSelectedSortOption(null)
+    setTempSelectedAmenityIds([])
   }
 
   const handleShowResults = () => {
@@ -322,6 +440,12 @@ export default function SortDropdown({
 
     applyOptionParams(nextParams, selectedGenderOption, genderParamKeys)
     applyOptionParams(nextParams, selectedSortOption, sortParamKeys)
+
+    if (tempSelectedAmenityIds.length > 0) {
+      nextParams.set('amenity_ids', tempSelectedAmenityIds.join(','))
+    } else {
+      nextParams.delete('amenity_ids')
+    }
 
     nextParams.delete('page')
 
@@ -338,7 +462,7 @@ export default function SortDropdown({
         type="button"
         onClick={() => setIsOpen(true)}
         dir={isArabic ? 'rtl' : 'ltr'}
-        className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white p-0 text-[#222222] transition hover:shadow-sm md:h-[48px] md:w-auto md:gap-2 md:px-5"
+        className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white p-0 text-[#222222] transition hover:shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:hover:bg-[#111827] md:h-[48px] md:w-auto md:gap-2 md:px-5"
         aria-label={labels.sortBy}
       >
         <FilterIcon />
@@ -347,7 +471,7 @@ export default function SortDropdown({
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-[300] bg-black/35"
+          className="fixed inset-0 z-[300] bg-black/35 dark:bg-black/60"
           onClick={() => setIsOpen(false)}
         >
           <div
@@ -355,19 +479,19 @@ export default function SortDropdown({
             onClick={(e) => e.stopPropagation()}
             className="
               absolute left-0 right-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] top-auto flex max-h-[calc(100dvh-96px)] flex-col overflow-hidden
-              rounded-t-[28px] bg-white shadow-[0_-12px_50px_rgba(0,0,0,0.20)]
+              rounded-t-[28px] bg-white shadow-[0_-12px_50px_rgba(0,0,0,0.20)] dark:border dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_-16px_60px_rgba(0,0,0,0.48)]
               sm:left-1/2 sm:right-auto sm:top-8 sm:bottom-auto sm:h-[min(760px,calc(100vh-64px))] sm:max-h-none sm:w-[min(92vw,620px)] sm:-translate-x-1/2 sm:rounded-[28px]
             "
           >
-            <div className="relative flex h-[72px] shrink-0 items-center justify-center border-b border-[#ebebeb] px-5 sm:h-[76px] sm:px-6">
-              <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222]">
+            <div className="relative flex h-[72px] shrink-0 items-center justify-center border-b border-[#ebebeb] px-5 dark:border-white/10 sm:h-[76px] sm:px-6">
+              <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222] dark:text-slate-100">
                 {labels.sortBy}
               </h3>
 
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className={`absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-[#222222] transition hover:bg-[#f7f7f7] ${
+                className={`absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-[#222222] transition hover:bg-[#f7f7f7] dark:text-slate-100 dark:hover:bg-white/10 ${
                   isArabic ? 'left-5 sm:left-6' : 'right-5 sm:right-6'
                 }`}
                 aria-label={labels.close}
@@ -377,12 +501,12 @@ export default function SortDropdown({
             </div>
 
             <div className="overflow-y-auto px-5 py-6 sm:flex-1 sm:px-7 sm:py-7">
-              <section className="border-b border-[#ebebeb] pb-7">
-                <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
+              <section className="border-b border-[#ebebeb] pb-7 dark:border-white/10">
+                <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222] dark:text-slate-100">
                   {labels.gender}
                 </h4>
 
-                <div className="grid grid-cols-2 gap-4 sm:max-w-[360px]">
+                <div className="grid grid-cols-2 gap-4">
                   {groupedOptions.gender.map((option) => (
                     <GenderCard
                       key={option.value}
@@ -396,12 +520,38 @@ export default function SortDropdown({
                 </div>
               </section>
 
+              {visibleAmenities.length > 0 && (
+                <section className="border-b border-[#ebebeb] py-7 dark:border-white/10">
+                  <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222] dark:text-slate-100">
+                    {labels.amenities}
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-4 sm:gap-x-4 sm:gap-y-6">
+                    {visibleAmenities.map((amenity) => {
+                      const label = isArabic
+                        ? amenity.name_ar || amenity.name_en
+                        : amenity.name_en
+
+                      return (
+                        <AmenityCard
+                          key={amenity.id}
+                          amenity={amenity}
+                          label={label}
+                          isActive={tempSelectedAmenityIds.includes(amenity.id)}
+                          onToggle={() => handleToggleAmenity(amenity.id)}
+                        />
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+
               <section className="pt-7">
-                <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222]">
+                <h4 className="mb-5 text-[18px] font-semibold tracking-[-0.02em] text-[#222222] dark:text-slate-100">
                   {labels.sortBy}
                 </h4>
 
-                <div className="rounded-[22px] border border-[#dddddd] bg-white p-[6px]">
+                <div className="rounded-[22px] border border-[#dddddd] bg-white p-[6px] dark:border-white/10 dark:bg-[#111827]">
                   <div className="grid grid-cols-3 gap-[6px]">
                     {groupedOptions.sortBy.map((option) => {
                       const isActive = option.value === tempSelectedSortOption
@@ -415,8 +565,8 @@ export default function SortDropdown({
                           }
                           className={`flex min-h-[54px] items-center justify-center rounded-[18px] border-2 px-2 text-center text-[13px] font-medium leading-snug transition sm:h-[54px] sm:px-3 sm:text-[14px] ${
                             isActive
-                              ? 'border-[#222222] bg-white text-[#222222]'
-                              : 'border-transparent bg-white text-[#222222] hover:bg-[#f7f7f7]'
+                              ? 'border-[#0A46FF] bg-white text-[#222222] dark:border-[#60a5fa] dark:bg-[#0b1220] dark:text-slate-100'
+                              : 'border-transparent bg-white text-[#222222] hover:bg-[#f7f7f7] dark:bg-transparent dark:text-slate-200 dark:hover:bg-white/10'
                           }`}
                         >
                           {option.label}
@@ -428,12 +578,12 @@ export default function SortDropdown({
               </section>
             </div>
 
-            <div className="shrink-0 border-t border-[#ececec] bg-[#fbfbfb] px-5 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] sm:mt-auto sm:px-7 sm:py-5">
+            <div className="shrink-0 border-t border-[#ececec] bg-[#fbfbfb] px-5 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-[#0f172a] dark:shadow-[0_-10px_28px_rgba(0,0,0,0.28)] sm:mt-auto sm:px-7 sm:py-5">
               <div className="flex items-center justify-between gap-3 sm:gap-4">
                 <button
                   type="button"
                   onClick={handleClearAll}
-                  className="text-[14px] font-semibold text-[#8d8d8d] transition hover:text-[#0A46FF] sm:text-[15px]"
+                  className="text-[14px] font-semibold text-[#8d8d8d] transition hover:text-[#0A46FF] dark:text-slate-400 dark:hover:text-[#60a5fa] sm:text-[15px]"
                 >
                   {labels.clearAll}
                 </button>
@@ -441,7 +591,7 @@ export default function SortDropdown({
                 <button
                   type="button"
                   onClick={handleShowResults}
-                  className="inline-flex h-[54px] min-w-[170px] items-center justify-center rounded-[16px] bg-[#0A46FF] px-5 text-[14px] font-semibold text-white transition hover:bg-[#0838cc] sm:h-[56px] sm:min-w-[210px] sm:px-6 sm:text-[15px]"
+                  className="inline-flex h-[54px] min-w-[170px] items-center justify-center rounded-[16px] bg-[#0A46FF] px-5 text-[14px] font-semibold text-white transition hover:bg-[#0838cc] dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8] sm:h-[56px] sm:min-w-[210px] sm:px-6 sm:text-[15px]"
                 >
                   {labels.showResults}
                 </button>
