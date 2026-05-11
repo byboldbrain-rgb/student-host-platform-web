@@ -885,7 +885,14 @@ export default async function CommunityPage({
           }
 
           .mobile-bottom-nav__icon--image {
-            filter: grayscale(1) brightness(0.85);
+            filter: brightness(0) invert(1);
+            opacity: 0.72;
+          }
+
+          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image,
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) invert(1);
+            opacity: 1;
           }
 
           [data-community-feed] {
