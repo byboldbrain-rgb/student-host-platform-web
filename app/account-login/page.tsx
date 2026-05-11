@@ -388,7 +388,7 @@ export default async function AccountLoginPage({
               aria-label="Navienty home"
             >
               <img
-                src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Navienty"
                 className="account-login-logo"
               />

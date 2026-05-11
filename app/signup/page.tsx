@@ -70,10 +70,10 @@ export default function SignupPage() {
               className="flex h-full items-center justify-center overflow-hidden"
             >
               <img
-                src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Logo"
                 style={{
-                  height: '180%',
+                  height: '90%',
                   width: 'auto',
                   objectFit: 'contain',
                   transform: 'scale(1)',
@@ -218,45 +218,7 @@ export default function SignupPage() {
         </div>
       </section>
 
-      <footer className="footer-esaf">
-        <div className="footer-esaf-container">
-          <div className="footer-esaf-top">
-            <div className="footer-esaf-top-left">
-              <h2 className={`${squadaOne.className} footer-esaf-title`}>
-                Find your way to better student living
-              </h2>
-            </div>
-
-            <div>
-              <h3 className="footer-esaf-heading">Quick Links</h3>
-              <div className="footer-esaf-links">
-                {footerQuickLinks.map((item) => (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="footer-esaf-link"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="footer-esaf-heading">Contact Us</h3>
-              <a href="mailto:info@navienty.com" className="footer-esaf-email">
-                info@navienty.com
-              </a>
-            </div>
-          </div>
-
-          <div className="footer-esaf-bottom">
-            <p className="footer-esaf-copyright">
-              © {new Date().getFullYear()} Navienty | All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
+      
 
       <style jsx>{`
         .form {
@@ -301,6 +263,7 @@ export default function SignupPage() {
           position: absolute;
           z-index: 2;
           margin: 0;
+          transition: color 0.25s ease;
         }
 
         #signup-area #behind {
@@ -309,6 +272,7 @@ export default function SignupPage() {
           font-weight: bold;
           position: absolute;
           z-index: 1;
+          transition: color 0.25s ease;
         }
 
         #behind {
@@ -641,7 +605,22 @@ export default function SignupPage() {
               -10px 7px 18px rgba(0, 0, 0, 0.38);
           }
 
+          #signup-area p {
+            color: #ffffff;
+          }
+
+          #signup-area #behind,
           #behind {
+            color: #2563eb;
+          }
+
+          .form:has(.input-area:hover) #signup-area p:first-child,
+          .form:has(#footer-area:hover) #signup-area p:first-child {
+            color: #0b1220;
+          }
+
+          .form:has(.input-area:hover) #signup-area #behind,
+          .form:has(#footer-area:hover) #signup-area #behind {
             color: #93c5fd;
           }
 
@@ -813,6 +792,16 @@ export default function SignupPage() {
             box-shadow:
               -8px 0px 0px #1d4ed8,
               -8px 6px 16px rgba(0, 0, 0, 0.36);
+          }
+
+          .form:has(.input-area:hover) #signup-area p:first-child,
+          .form:has(#footer-area:hover) #signup-area p:first-child {
+            color: #0b1220;
+          }
+
+          .form:has(.input-area:hover) #signup-area #behind,
+          .form:has(#footer-area:hover) #signup-area #behind {
+            color: #93c5fd;
           }
         }
       `}</style>

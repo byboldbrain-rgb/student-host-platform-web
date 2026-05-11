@@ -142,7 +142,6 @@ type Property = {
   bedrooms_count?: number | null
   bathrooms_count?: number | null
   beds_count?: number | null
-  guests_count?: number | null
   property_images?: PropertyImage[]
 }
 
@@ -261,9 +260,6 @@ const TRANSLATIONS = {
     bedroomsCount: 'Bedrooms',
     bathroomsCount: 'Bathrooms',
     bedsCount: 'Beds',
-    guestsCount: 'Guests',
-    guest: 'guest',
-    guests: 'guests',
     bedroom: 'bedroom',
     bedrooms: 'bedrooms',
     bed: 'bed',
@@ -371,9 +367,6 @@ const TRANSLATIONS = {
     bedroomsCount: 'عدد الغرف',
     bathroomsCount: 'عدد الحمامات',
     bedsCount: 'عدد السراير',
-    guestsCount: 'عدد الأفراد',
-    guest: 'ضيف',
-    guests: 'ضيوف',
     bedroom: 'غرفة نوم',
     bedrooms: 'غرف نوم',
     bed: 'سرير',
@@ -984,7 +977,6 @@ export default async function PropertyPage({
       bedrooms_count,
       bathrooms_count,
       beds_count,
-      guests_count,
       property_images (
         image_url,
         is_cover,
@@ -1527,7 +1519,6 @@ export default async function PropertyPage({
   const brokerEmail = broker?.email || ''
   const brokerCompany = broker?.company_name || ''
 
-  const guestsCount = getCountValue(typedProperty.guests_count)
   const bedroomsCount = getCountValue(typedProperty.bedrooms_count)
   const bedsCount = getCountValue(typedProperty.beds_count)
   const bathroomsCount = getCountValue(typedProperty.bathrooms_count)
@@ -1538,11 +1529,6 @@ export default async function PropertyPage({
       value: floorNumber,
       language: selectedLanguage,
       t,
-    }),
-    formatCountLabel({
-      value: guestsCount,
-      singular: t.guest,
-      plural: t.guests,
     }),
     formatCountLabel({
       value: bedroomsCount,
@@ -1736,6 +1722,44 @@ export default async function PropertyPage({
           .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
             filter: brightness(0) invert(1);
             opacity: 1;
+          }
+
+
+
+          .mobile-rooms-sheet__backdrop {
+            background: rgba(0, 0, 0, 0.62);
+          }
+
+          .mobile-rooms-sheet__panel {
+            background: #050816;
+            color: #f8fafc;
+            border-top: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.52);
+          }
+
+          .mobile-rooms-sheet__handle {
+            background: rgba(255, 255, 255, 0.18);
+          }
+
+          .mobile-rooms-sheet__header {
+            border-bottom-color: rgba(255, 255, 255, 0.10);
+          }
+
+          .mobile-rooms-sheet__title {
+            color: #f8fafc;
+          }
+
+          .mobile-rooms-sheet__close {
+            background: #111827;
+            color: #f8fafc;
+          }
+
+          .mobile-rooms-sheet__close:hover {
+            background: #1f2937;
+          }
+
+          .mobile-rooms-sheet__body {
+            background: #050816;
           }
 
           .footer-esaf {
@@ -2357,7 +2381,7 @@ export default async function PropertyPage({
                   return (
                     <div
                       key={option.code}
-                      className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]"
+                      className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_42px_rgba(0,0,0,0.34)]"
                     >
                       <div className="p-5">
                         <div className="flex items-start justify-between gap-4">
@@ -2374,7 +2398,7 @@ export default async function PropertyPage({
                               <p className="text-[28px] font-bold leading-none text-[#054aff]">
                                 {formattedPrice}
                               </p>
-                              <p className="mt-1 text-[14px] text-slate-600">
+                              <p className="mt-1 text-[14px] text-slate-600 dark:text-slate-400">
                                 {typedProperty.rental_duration === 'daily'
                                   ? t.perDay
                                   : t.perMonth}
@@ -2399,7 +2423,7 @@ export default async function PropertyPage({
                           <button
                             type="button"
                             disabled
-                            className="inline-flex min-h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-5 text-[16px] font-semibold text-slate-500"
+                            className="inline-flex min-h-[50px] w-full cursor-not-allowed items-center justify-center rounded-full bg-slate-200 px-5 text-[16px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-500"
                           >
                             {t.booked}
                           </button>
@@ -2409,7 +2433,7 @@ export default async function PropertyPage({
                   )
                 })
               ) : (
-                <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-5 text-center text-[15px] font-medium text-slate-600">
+                <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-5 text-center text-[15px] font-medium text-slate-600 dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-400">
                   {t.noRooms}
                 </div>
               )}

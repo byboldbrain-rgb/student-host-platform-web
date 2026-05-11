@@ -26,12 +26,12 @@ type Props = {
 }
 
 const KNOWN_PROVIDER_LOGOS: Record<string, string> = {
-  vodafone_cash: 'https://i.ibb.co/B5B9FZwL/Vodafone-cambia-ecco-nuovo-logo-e-claim-jpg.webp',
-  orange_cash: 'https://i.ibb.co/27fg29QT/Navienty-18.png',
-  etisalat_cash: 'https://i.ibb.co/Fk4035wS/channels4-profile.jpg',
-  instapay: 'https://i.ibb.co/0pGB01br/images-3.png',
-  bank_transfer: 'https://i.ibb.co/DffZ4Sfs/Navienty-19.png',
-  bank: 'https://i.ibb.co/DffZ4Sfs/Navienty-19.png',
+  vodafone_cash: 'https://i.ibb.co/MxkypmVS/Untitled-12.png',
+  orange_cash: 'https://i.ibb.co/CspyYtBx/Untitled-11.png',
+  etisalat_cash: 'https://i.ibb.co/ZzXTx1PQ/Untitled-10.png',
+  instapay: 'https://i.ibb.co/RGqS84yt/Untitled-9.png',
+  bank_transfer: 'https://i.ibb.co/XkNhKs6c/Untitled-8.png',
+  bank: 'https://i.ibb.co/XkNhKs6c/Untitled-8.png',
 }
 
 function normalizeText(value: string) {
@@ -46,23 +46,23 @@ function resolveProviderLogoPath(method: PaymentMethodItem) {
   if (KNOWN_PROVIDER_LOGOS[code]) return KNOWN_PROVIDER_LOGOS[code]
 
   if (arName.includes('فودافون') || enName.includes('vodafone')) {
-    return 'https://i.ibb.co/B5B9FZwL/Vodafone-cambia-ecco-nuovo-logo-e-claim-jpg.webp'
+    return 'https://i.ibb.co/GQ3TMnms/Untitled-1.png'
   }
 
   if (arName.includes('أورنج') || arName.includes('اورنج') || enName.includes('orange')) {
-    return 'https://i.ibb.co/zh6M9VZH/Navienty-17.png'
+    return 'https://i.ibb.co/Kx9JVzdY/Untitled-2.png'
   }
 
   if (arName.includes('اتصالات') || enName.includes('etisalat')) {
-    return 'https://i.ibb.co/Fk4035wS/channels4-profile.jpg'
+    return 'https://i.ibb.co/sdCbdzMk/Untitled-3.png'
   }
 
   if (arName.includes('انستا') || enName.includes('instapay')) {
-    return 'https://i.ibb.co/0pGB01br/images-3.png'
+    return 'https://i.ibb.co/zTS1bKRZ/Untitled-4.png'
   }
 
   if (arName.includes('بنك') || enName.includes('bank') || enName.includes('transfer')) {
-    return 'https://i.ibb.co/27NQL9XL/WE.jpg'
+    return 'https://i.ibb.co/39RxP3Qm/Untitled-7.png'
   }
 
   return ''

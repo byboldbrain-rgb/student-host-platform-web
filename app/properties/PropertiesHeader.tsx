@@ -250,7 +250,7 @@ export default function PropertiesHeader({
               aria-label="Navienty home"
             >
               <img
-                src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Navienty icon"
               />
             </Link>
@@ -422,13 +422,13 @@ export default function PropertiesHeader({
                       aria-label="Navienty home"
                     >
                       <img
-                        src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+                        src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                         alt="Navienty icon"
                         className="navienty-logo-icon"
                       />
                       <span className="navienty-logo-text-wrap">
                         <img
-                          src="https://i.ibb.co/vxPhSfkG/Navienty-15.png"
+                          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
                           alt="Navienty"
                           className="navienty-logo-text"
                         />

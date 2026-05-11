@@ -51,7 +51,7 @@ export default function LoginPage() {
   ]
 
   return (
-    <main className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0">
+    <main className="relative h-screen overflow-hidden bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0">
       <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:static md:shadow-none">
         <div className="mx-auto h-full max-w-[1920px] px-4">
           <div className="flex h-full items-center justify-center">
@@ -60,10 +60,10 @@ export default function LoginPage() {
               className="flex h-full items-center justify-center overflow-hidden"
             >
               <img
-                src="https://i.ibb.co/QFk5dY1G/Navienty-1.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Logo"
                 style={{
-                  height: '180%',
+                  height: '90%',
                   width: 'auto',
                   objectFit: 'contain',
                   transform: 'scale(1)',
@@ -75,7 +75,7 @@ export default function LoginPage() {
         </div>
       </header>
 
-      <section className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-[#fcfcfd] px-6 py-10 dark:bg-[#050816] md:min-h-[calc(100vh-120px)]">
+      <section className="flex h-[calc(100dvh-80px)] items-center justify-center overflow-hidden bg-[#fcfcfd] px-6 py-6 dark:bg-[#050816]">
         <div className="flex w-full justify-center">
           <form onSubmit={handleSubmit} className="form">
             <div id="login-area">
@@ -186,7 +186,7 @@ export default function LoginPage() {
         </div>
       </section>
 
-      <footer className="footer-esaf hidden md:block">
+      <footer className="footer-esaf hidden">
         <div className="footer-esaf-container">
           <div className="footer-esaf-top">
             <div className="footer-esaf-top-left">
@@ -279,6 +279,7 @@ export default function LoginPage() {
           position: absolute;
           z-index: 2;
           margin: 0;
+          transition: color 0.25s ease;
         }
 
         #login-area #behind {
@@ -287,6 +288,7 @@ export default function LoginPage() {
           font-weight: bold;
           position: absolute;
           z-index: 1;
+          transition: color 0.25s ease;
         }
 
         #behind {
@@ -314,6 +316,7 @@ export default function LoginPage() {
           border-radius: 0.65em;
           height: 3em;
           padding-left: 1em;
+          padding-right: 1em;
           font-size: 0.95rem;
           font-weight: 100;
           transition: all 0.5s ease;
@@ -343,6 +346,7 @@ export default function LoginPage() {
           border-radius: 0.65em;
           height: 3em;
           padding-left: 1em;
+          padding-right: 1em;
           transition: all 0.25s ease;
           outline: none;
           box-shadow: 0px 5px 5px -3px rgb(0, 0, 0, 0.2);
@@ -653,7 +657,24 @@ export default function LoginPage() {
               -10px 7px 18px rgba(0, 0, 0, 0.38);
           }
 
+          #login-area p {
+            color: #ffffff;
+          }
+
+          #login-area #behind,
           #behind {
+            color: #2563eb;
+          }
+
+          .form:has(#email-area:hover) #login-area p:first-child,
+          .form:has(#password-area:hover) #login-area p:first-child,
+          .form:has(#footer-area:hover) #login-area p:first-child {
+            color: #0b1220;
+          }
+
+          .form:has(#email-area:hover) #login-area #behind,
+          .form:has(#password-area:hover) #login-area #behind,
+          .form:has(#footer-area:hover) #login-area #behind {
             color: #93c5fd;
           }
 
@@ -814,6 +835,18 @@ export default function LoginPage() {
             box-shadow:
               -8px 0px 0px #1d4ed8,
               -8px 6px 16px rgba(0, 0, 0, 0.36);
+          }
+
+          .form:has(#email-area:hover) #login-area p:first-child,
+          .form:has(#password-area:hover) #login-area p:first-child,
+          .form:has(#footer-area:hover) #login-area p:first-child {
+            color: #0b1220;
+          }
+
+          .form:has(#email-area:hover) #login-area #behind,
+          .form:has(#password-area:hover) #login-area #behind,
+          .form:has(#footer-area:hover) #login-area #behind {
+            color: #93c5fd;
           }
         }
       `}</style>

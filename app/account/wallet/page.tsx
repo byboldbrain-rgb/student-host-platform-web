@@ -809,7 +809,7 @@ export default async function AccountWalletPage() {
               aria-label="Navienty home"
             >
               <img
-                src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Navienty icon"
                 className="navienty-logo-icon"
               />

@@ -20,6 +20,7 @@ type SearchParams = {
   currency?: string
   page?: string
   sort?: string
+  gender?: string
   amenity_ids?: string
 }
 
@@ -74,6 +75,8 @@ type PropertyAmenityLink = {
 
 type PropertyImage = {
   image_url?: string | null
+  is_cover?: boolean | null
+  sort_order?: number | null
 }
 
 type PropertySellableOption = {
@@ -313,9 +316,25 @@ function normalizeCurrency(value?: string): SupportedCurrency {
 function normalizeSort(value?: string): SupportedSort {
   if (value === 'lowest_price') return 'lowest_price'
   if (value === 'highest_price') return 'highest_price'
-  if (value === 'boys') return 'boys'
-  if (value === 'girls') return 'girls'
   return 'newly_listed'
+}
+
+function normalizeSelectedGender(
+  genderValue?: string | null,
+  legacySortValue?: string | null
+): NormalizedGender {
+  const normalizedGender = genderValue?.toLowerCase().trim()
+
+  if (normalizedGender === 'boys') return 'boys'
+  if (normalizedGender === 'girls') return 'girls'
+
+  // Backward compatibility for old URLs that used sort=boys or sort=girls.
+  const normalizedLegacySort = legacySortValue?.toLowerCase().trim()
+
+  if (normalizedLegacySort === 'boys') return 'boys'
+  if (normalizedLegacySort === 'girls') return 'girls'
+
+  return null
 }
 
 function normalizeGender(value?: string | null): NormalizedGender {
@@ -562,6 +581,7 @@ export default async function SearchResultsPage({
   const selectedLanguage = normalizeLanguage(params.lang)
   const selectedCurrency = normalizeCurrency(params.currency)
   const selectedSort = normalizeSort(params.sort)
+  const selectedGender = normalizeSelectedGender(params.gender, params.sort)
   const selectedAmenityIds = normalizeAmenityIds(params.amenity_ids)
   const t = TRANSLATIONS[selectedLanguage]
   const isArabic = selectedLanguage === 'ar'
@@ -659,7 +679,11 @@ export default async function SearchResultsPage({
       property_universities!inner(
         university_id
       ),
-      property_images(image_url),
+      property_images(
+        image_url,
+        is_cover,
+        sort_order
+      ),
       property_sellable_options(
         code,
         option_code,
@@ -694,8 +718,8 @@ export default async function SearchResultsPage({
     query = query.eq('rental_duration', params.rental_duration)
   }
 
-  if (selectedSort === 'boys' || selectedSort === 'girls') {
-    query = query.eq('gender', selectedSort)
+  if (selectedGender) {
+    query = query.eq('gender', selectedGender)
   }
 
   if (matchingPropertyIdsByAmenities) {
@@ -762,12 +786,19 @@ export default async function SearchResultsPage({
     const p = new URLSearchParams()
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'page') p.set(key, value)
+      if (value && key !== 'page' && key !== 'sort' && key !== 'gender') {
+        p.set(key, value)
+      }
     })
 
     p.set('lang', selectedLanguage)
     p.set('currency', selectedCurrency)
     p.set('sort', selectedSort)
+
+    if (selectedGender) {
+      p.set('gender', selectedGender)
+    }
+
     p.set('page', pageNumber.toString())
 
     return `/properties/search?${p.toString()}`
@@ -777,12 +808,24 @@ export default async function SearchResultsPage({
     const p = new URLSearchParams()
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'page' && key !== 'sort') p.set(key, value)
+      if (value && key !== 'page' && key !== 'sort' && key !== 'gender') {
+        p.set(key, value)
+      }
     })
 
     p.set('lang', selectedLanguage)
     p.set('currency', selectedCurrency)
-    p.set('sort', sortValue)
+
+    if (sortValue === 'boys' || sortValue === 'girls') {
+      p.set('gender', sortValue)
+      p.set('sort', selectedSort)
+    } else {
+      p.set('sort', sortValue)
+
+      if (selectedGender) {
+        p.set('gender', selectedGender)
+      }
+    }
 
     return `/properties/search?${p.toString()}`
   }
@@ -923,13 +966,33 @@ export default async function SearchResultsPage({
   const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
 
   const getPropertyImages = (property: Property) => {
-    if (!property.property_images || property.property_images.length === 0) {
+    const validImages =
+      property.property_images
+        ?.map((item, index) => ({
+          imageUrl: item?.image_url?.trim() ?? '',
+          isCover: item?.is_cover === true,
+          sortOrder:
+            typeof item?.sort_order === 'number'
+              ? item.sort_order
+              : Number.POSITIVE_INFINITY,
+          originalIndex: index,
+        }))
+        .filter((item) => Boolean(item.imageUrl)) ?? []
+
+    if (validImages.length === 0) {
       return []
     }
 
-    return property.property_images
-      .map((item) => item?.image_url?.trim())
-      .filter((url): url is string => Boolean(url))
+    return validImages
+      .sort((a, b) => {
+        if (a.isCover !== b.isCover) return a.isCover ? -1 : 1
+
+        const sortOrderDiff = a.sortOrder - b.sortOrder
+        if (sortOrderDiff !== 0) return sortOrderDiff
+
+        return a.originalIndex - b.originalIndex
+      })
+      .map((item) => item.imageUrl)
       .slice(0, MAX_CARD_IMAGES)
   }
 

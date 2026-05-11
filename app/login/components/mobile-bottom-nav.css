@@ -50,9 +50,14 @@
 }
 
 .mobile-bottom-nav__icon--image {
-  object-fit: contain;
-  filter: grayscale(1) brightness(0.55);
-  transition: filter 0.2s ease;
+  filter: brightness(0) invert(1);
+  opacity: 0.72;
+}
+
+.mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image,
+.mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+  filter: brightness(0) invert(1);
+  opacity: 1;
 }
 
 .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {

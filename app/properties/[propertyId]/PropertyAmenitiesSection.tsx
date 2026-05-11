@@ -491,32 +491,41 @@ function AmenityRow({
   isAvailable?: boolean
   isSidebar?: boolean
 }) {
-  const iconSizeClass = isSidebar ? 'h-8 w-8 object-contain' : 'h-10 w-10 object-contain'
+  const iconWrapperClass = isSidebar ? 'h-12 w-12' : 'h-16 w-16'
+
+  const iconSizeClass = isSidebar
+    ? 'h-11 w-11 object-contain'
+    : 'h-14 w-14 object-contain'
+
   const textClass = isSidebar ? 'text-[16px] leading-6' : 'text-[18px] leading-7'
 
   return (
     <div
       className={`${
-        isSidebar ? 'flex items-center gap-3.5' : 'flex items-center gap-4.5'
+        isSidebar ? 'flex items-center gap-4' : 'flex items-center gap-5'
       } ${
         isAvailable
           ? 'text-slate-900 dark:text-slate-100'
           : 'text-slate-500 dark:text-slate-500'
       }`}
     >
-      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+      <div
+        className={`relative flex ${iconWrapperClass} shrink-0 items-center justify-center`}
+      >
         <AmenityIcon
           iconKey={iconKey}
           iconUrl={iconUrl}
           className={iconSizeClass}
         />
+
         {!isAvailable && (
-          <span className="pointer-events-none absolute left-[-4px] top-1/2 h-[2px] w-[calc(100%+8px)] -translate-y-1/2 rotate-[-18deg] bg-black dark:bg-slate-400" />
+          <span className="pointer-events-none absolute left-[-5px] top-1/2 h-[2px] w-[calc(100%+10px)] -translate-y-1/2 rotate-[-18deg] bg-black dark:bg-slate-400" />
         )}
       </div>
 
       <div className="relative inline-block min-w-0">
         <span className={textClass}>{label}</span>
+
         {!isAvailable && (
           <span className="pointer-events-none absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-black dark:bg-slate-400" />
         )}

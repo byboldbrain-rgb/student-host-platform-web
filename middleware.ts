@@ -1,6 +1,74 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+type SupportedLanguage = 'en' | 'ar'
+
+const SUPPORTED_LANGUAGES: SupportedLanguage[] = ['en', 'ar']
+const DEFAULT_LANGUAGE: SupportedLanguage = 'en'
+const DEFAULT_CURRENCY = 'EGP'
+const LANGUAGE_COOKIE_NAME = 'navienty-language'
+
+function isSupportedLanguage(value: string | null): value is SupportedLanguage {
+  return value === 'en' || value === 'ar'
+}
+
+function getPreferredLanguage(request: NextRequest): SupportedLanguage {
+  const cookieLanguage = request.cookies.get(LANGUAGE_COOKIE_NAME)?.value
+
+  if (isSupportedLanguage(cookieLanguage || null)) {
+    return cookieLanguage as SupportedLanguage
+  }
+
+  const acceptLanguage = request.headers.get('accept-language') || ''
+  const languages = acceptLanguage
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+
+  const prefersArabic = languages.some(
+    (language) => language === 'ar' || language.startsWith('ar-')
+  )
+
+  if (prefersArabic) {
+    return 'ar'
+  }
+
+  const prefersEnglish = languages.some(
+    (language) => language === 'en' || language.startsWith('en-')
+  )
+
+  if (prefersEnglish) {
+    return 'en'
+  }
+
+  return DEFAULT_LANGUAGE
+}
+
+function shouldSkipLanguageDetection(pathname: string) {
+  return (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/icon') ||
+    pathname.startsWith('/apple-touch-icon') ||
+    pathname.startsWith('/manifest') ||
+    pathname.startsWith('/sw.js') ||
+    pathname.includes('.')
+  )
+}
+
+function setLanguageCookie(
+  response: NextResponse,
+  language: SupportedLanguage
+) {
+  response.cookies.set(LANGUAGE_COOKIE_NAME, language, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: 'lax',
+  })
+}
+
 async function getFoodEditorAllowedPath(
   supabase: ReturnType<typeof createServerClient>,
   adminUserId: string
@@ -335,9 +403,41 @@ async function getDefaultAdminRoute(
 }
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  const shouldDetectLanguage = !shouldSkipLanguageDetection(pathname)
+
+  if (shouldDetectLanguage) {
+    const currentLang = request.nextUrl.searchParams.get('lang')
+    const currentCurrency = request.nextUrl.searchParams.get('currency')
+
+    if (!isSupportedLanguage(currentLang)) {
+      const preferredLanguage = getPreferredLanguage(request)
+      const url = request.nextUrl.clone()
+
+      url.searchParams.set('lang', preferredLanguage)
+
+      if (!currentCurrency) {
+        url.searchParams.set('currency', DEFAULT_CURRENCY)
+      }
+
+      const redirectResponse = NextResponse.redirect(url)
+      setLanguageCookie(redirectResponse, preferredLanguage)
+
+      return redirectResponse
+    }
+  }
+
   let response = NextResponse.next({
     request,
   })
+
+  if (shouldDetectLanguage) {
+    const currentLang = request.nextUrl.searchParams.get('lang')
+
+    if (isSupportedLanguage(currentLang)) {
+      setLanguageCookie(response, currentLang)
+    }
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -360,8 +460,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const pathname = request.nextUrl.pathname
 
   const isAdminRoute = pathname.startsWith('/admin')
   const isAdminLoginRoute = pathname === '/admin/login'
@@ -670,5 +768,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/account', '/login', '/signup'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 }

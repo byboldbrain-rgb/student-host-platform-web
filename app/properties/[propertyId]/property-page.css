@@ -129,6 +129,16 @@
   text-align: right;
 }
 
+/* Property Address text black in Dark Mode only */
+@media (prefers-color-scheme: dark) {
+  .property-address,
+  .property-address__text,
+  .property-address--compact .property-address__text,
+  .property-address--mobile .property-address__text {
+    color: #000000 !important;
+  }
+}
+
 .property-meta-gender {
   display: inline-flex;
   min-width: 0;
@@ -1168,10 +1178,6 @@
     font-size: 13px;
   }
 }
-
-
-
-
 
 .pwa-install-banner {
   position: sticky;

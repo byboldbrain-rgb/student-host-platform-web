@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { Languages } from 'lucide-react'
 import { Suspense, useEffect, useMemo, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import { createClient } from '@/src/lib/supabase/client'
 import { signOutUser } from '@/src/lib/supabase/user-auth'
@@ -39,6 +40,8 @@ const TRANSLATIONS = {
     addBalance: 'Add Balance',
     reservations: 'Reservations',
     language: 'Language',
+    languageValue: 'العربية',
+    languageText: 'Change language',
     english: 'English',
     arabic: 'العربية',
     currentLanguage: 'Current language',
@@ -74,6 +77,8 @@ const TRANSLATIONS = {
     addBalance: 'إضافة رصيد',
     reservations: 'الحجوزات',
     language: 'اللغة',
+    languageValue: 'English',
+    languageText: 'تغيير اللغة',
     english: 'English',
     arabic: 'العربية',
     currentLanguage: 'اللغة الحالية',
@@ -109,7 +114,6 @@ function normalizeLanguage(value?: string | null): SupportedLanguage {
 
 function AccountPageContent() {
   const router = useRouter()
-  const pathname = usePathname()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
   const currentYear = new Date().getFullYear()
@@ -137,6 +141,10 @@ function AccountPageContent() {
     document.documentElement.lang = nextLang
     document.documentElement.dir = nextLang === 'ar' ? 'rtl' : 'ltr'
     document.cookie = `navienty_lang=${nextLang}; path=/; max-age=31536000; SameSite=Lax`
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('navienty_lang', nextLang)
+    }
   }, [searchParams])
 
   const buildLocalizedHref = (
@@ -160,6 +168,9 @@ function AccountPageContent() {
   const communityHref = buildLocalizedHref('/community')
   const accountHref = buildLocalizedHref('/account')
   const loginHref = buildLocalizedHref('/login')
+  const languageHref = buildLocalizedHref('/account', {
+    lang: language === 'ar' ? 'en' : 'ar',
+  })
 
   const socialMenuLinks = [
     { label: t.facebook, href: 'https://www.facebook.com/' },
@@ -243,22 +254,6 @@ function AccountPageContent() {
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
   }, [])
-
-  function handleLanguageChange(nextLanguage: SupportedLanguage) {
-    setLanguage(nextLanguage)
-
-    window.localStorage.setItem('navienty_lang', nextLanguage)
-    document.cookie = `navienty_lang=${nextLanguage}; path=/; max-age=31536000; SameSite=Lax`
-    document.documentElement.lang = nextLanguage
-    document.documentElement.dir = nextLanguage === 'ar' ? 'rtl' : 'ltr'
-
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('lang', nextLanguage)
-    params.set('currency', params.get('currency') || defaultCurrency)
-
-    router.replace(`${pathname}?${params.toString()}`)
-    router.refresh()
-  }
 
   async function handleLogout() {
     try {
@@ -1017,37 +1012,64 @@ function AccountPageContent() {
           display: block;
         }
 
-        .language-pill {
-          border: 1px solid rgba(5, 74, 255, 0.16);
-          background: #f7f9ff;
-          color: #111827;
-          border-radius: 999px;
-          padding: 8px 12px;
-          font-size: 13px;
-          font-weight: 800;
-          transition:
-            background 0.2s ease,
-            color 0.2s ease,
-            border-color 0.2s ease,
-            transform 0.2s ease;
+        .account-login-language-section {
+          margin-top: 20px;
+          background: #ffffff;
+          border-top: 1px solid #e6e6e6;
+          border-bottom: 1px solid #e6e6e6;
         }
 
-        .language-pill:hover {
-          transform: translateY(-1px);
-          border-color: rgba(5, 74, 255, 0.28);
-          background: #eef3ff;
+        .account-login-language-row {
+          direction: ltr;
+          display: flex;
+          min-height: 60px;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          padding: 9px 0;
+          color: #111111;
+          text-decoration: none;
+          background: #ffffff;
+          transition: background 0.16s ease;
         }
 
-        .language-pill.is-active {
-          background: #054aff;
-          color: #ffffff;
-          border-color: #054aff;
+        .account-login-language-row:hover {
+          background: #fafafa;
+        }
+
+        .account-login-language-copy {
+          min-width: 0;
+          text-align: right;
+        }
+
+        .account-login-language-value {
+          margin: 0;
+          color: #111111;
+          font-size: 14px;
+          line-height: 1.25;
+          font-weight: 500;
+          letter-spacing: -0.01em;
+        }
+
+        .account-login-language-text {
+          margin: 3px 0 0;
+          color: #111111;
+          font-size: 11px;
+          line-height: 1.25;
+          font-weight: 500;
+        }
+
+        .account-login-language-icon {
+          width: 20px;
+          height: 20px;
+          color: #111111;
+          flex-shrink: 0;
+          stroke-width: 1.8;
         }
 
         [dir='rtl'] .wallet-card-number-wrapper {
           text-align: left;
         }
-
 
         @media (prefers-color-scheme: dark) {
           :root {
@@ -1117,21 +1139,29 @@ function AccountPageContent() {
             opacity: 1;
           }
 
-          .language-pill {
-            border-color: rgba(96, 165, 250, 0.18);
+          .account-login-language-section {
             background: #0b1220;
-            color: #e2e8f0;
+            border-top-color: rgba(255, 255, 255, 0.1);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
           }
 
-          .language-pill:hover {
-            border-color: rgba(96, 165, 250, 0.34);
+          .account-login-language-row {
+            background: #0b1220;
+            color: #f8fafc;
+          }
+
+          .account-login-language-row:hover {
             background: #111827;
           }
 
-          .language-pill.is-active {
-            background: #2563eb;
-            color: #ffffff;
-            border-color: #2563eb;
+          .account-login-language-value,
+          .account-login-language-text,
+          .account-login-language-icon {
+            color: #f8fafc;
+          }
+
+          .account-login-language-text {
+            color: #94a3b8;
           }
 
           .wallet-back {
@@ -1378,7 +1408,7 @@ function AccountPageContent() {
               onClick={() => setMenuOpen(false)}
             >
               <img
-                src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Navienty icon"
                 className="navienty-logo-icon"
               />
@@ -1821,39 +1851,16 @@ function AccountPageContent() {
                         </div>
                       </div>
 
-                      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">
-                            {t.language}
-                          </h3>
-                          <p className="mt-1 text-sm font-medium text-gray-500 dark:text-slate-400">
-                            {t.currentLanguage}:{' '}
-                            {language === 'ar' ? t.arabic : t.english}
-                          </p>
-                        </div>
+                      <section className="account-login-language-section">
+                        <Link href={languageHref} className="account-login-language-row">
+                          <div className="account-login-language-copy">
+                            <p className="account-login-language-value">{t.languageValue}</p>
+                            <p className="account-login-language-text">{t.languageText}</p>
+                          </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleLanguageChange('en')}
-                            className={`language-pill ${
-                              language === 'en' ? 'is-active' : ''
-                            }`}
-                          >
-                            {t.english}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleLanguageChange('ar')}
-                            className={`language-pill ${
-                              language === 'ar' ? 'is-active' : ''
-                            }`}
-                          >
-                            {t.arabic}
-                          </button>
-                        </div>
-                      </div>
+                          <Languages className="account-login-language-icon" />
+                        </Link>
+                      </section>
                     </div>
                   </div>
                 </section>

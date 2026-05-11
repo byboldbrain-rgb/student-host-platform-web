@@ -124,6 +124,23 @@ function normalizeSelectedAmenityIds(value: string | null) {
   )
 }
 
+function normalizeGenderParam(value: string | null): GenderValue | null {
+  if (value === 'boys' || value === 'girls') return value
+  return null
+}
+
+function normalizeSortParam(value: string | null): SortValue | null {
+  if (
+    value === 'newly_listed' ||
+    value === 'highest_price' ||
+    value === 'lowest_price'
+  ) {
+    return value
+  }
+
+  return null
+}
+
 function GenderImage({
   value,
   label,
@@ -133,14 +150,14 @@ function GenderImage({
 }) {
   const iconSrc =
     value === 'boys'
-      ? 'https://i.ibb.co/Pzg14kFJ/Navienty-22.png'
-      : 'https://i.ibb.co/whT5VJDn/Navienty-21.png'
+      ? 'https://i.ibb.co/3mXtzm39/Untitled-19.png'
+      : 'https://i.ibb.co/zWbxD8GR/Untitled-14.png'
 
   return (
     <img
       src={iconSrc}
       alt={label}
-      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]"
+      className="h-full w-full object-cover"
       loading="lazy"
       draggable={false}
     />
@@ -162,7 +179,7 @@ function GenderCard({
       onClick={onSelect}
       aria-label={option.label}
       aria-pressed={isActive}
-      className="group block min-w-0 overflow-hidden rounded-[24px] outline-none transition duration-300 hover:-translate-y-0.5"
+      className="block min-w-0 overflow-hidden rounded-[24px] outline-none transition duration-300"
     >
       <div
         className={`aspect-[1.45/1] overflow-hidden rounded-[24px] border bg-white transition duration-300 dark:bg-[#0b1220] ${
@@ -194,11 +211,11 @@ function AmenityCard({
       onClick={onToggle}
       aria-label={label}
       aria-pressed={isActive}
-      className="group block min-w-0 rounded-[18px] outline-none"
+      className="block min-w-0 rounded-[18px] outline-none"
       title={label}
     >
       <div
-        className={`flex h-[106px] items-center justify-center overflow-hidden rounded-[16px] border bg-white px-4 py-3 transition duration-300 dark:bg-[#0b1220] sm:h-[112px] ${
+        className={`flex h-[106px] items-center justify-center overflow-hidden rounded-[16px] border bg-white p-1 transition duration-300 dark:bg-[#0b1220] sm:h-[112px] sm:p-1 ${
           isActive
             ? 'border-[#0A46FF] shadow-[0_10px_24px_rgba(10,70,255,0.14)] ring-4 ring-[#0A46FF]/10 dark:border-[#60a5fa] dark:shadow-[0_14px_30px_rgba(96,165,250,0.14)] dark:ring-[#60a5fa]/10'
             : 'border-[#dddddd] shadow-none hover:border-[#bdbdbd] dark:border-white/10 dark:hover:border-white/20'
@@ -208,12 +225,12 @@ function AmenityCard({
           <img
             src={amenity.icon_url}
             alt={label}
-            className="h-[62px] w-[62px] object-contain transition duration-300 group-hover:scale-[1.04] sm:h-[68px] sm:w-[68px]"
+            className="max-h-full max-w-full object-contain"
             loading="lazy"
             draggable={false}
           />
         ) : (
-          <div className="flex h-[62px] w-[62px] items-center justify-center rounded-full bg-[#f8fafc] px-2 text-center text-[10px] font-semibold text-[#64748b] dark:bg-[#111827] dark:text-slate-300 sm:h-[68px] sm:w-[68px]">
+          <div className="flex h-full w-full items-center justify-center rounded-[12px] bg-[#f8fafc] px-3 text-center text-[11px] font-semibold text-[#64748b] dark:bg-[#111827] dark:text-slate-300">
             {label}
           </div>
         )}
@@ -224,65 +241,6 @@ function AmenityCard({
       </div>
     </button>
   )
-}
-
-function getSearchParamsFromHref(href: string) {
-  const url = new URL(href, 'https://dummy.local')
-  return url.searchParams
-}
-
-function matchesCurrentParams(href: string, currentParams: URLSearchParams) {
-  const optionParams = getSearchParamsFromHref(href)
-
-  if ([...optionParams.keys()].length === 0) {
-    return false
-  }
-
-  for (const [key, value] of optionParams.entries()) {
-    if (currentParams.get(key) !== value) {
-      return false
-    }
-  }
-
-  return true
-}
-
-function getOptionByCurrentParams(
-  options: SortOption[],
-  currentParams: URLSearchParams
-) {
-  return (
-    options.find((option) => matchesCurrentParams(option.href, currentParams)) ??
-    null
-  )
-}
-
-function getParamKeys(options: SortOption[]) {
-  const keys = new Set<string>()
-
-  options.forEach((option) => {
-    const params = getSearchParamsFromHref(option.href)
-    params.forEach((_, key) => {
-      keys.add(key)
-    })
-  })
-
-  return [...keys]
-}
-
-function applyOptionParams(
-  params: URLSearchParams,
-  option: SortOption | null,
-  keysToReset: string[]
-) {
-  keysToReset.forEach((key) => params.delete(key))
-
-  if (!option) return
-
-  const optionParams = getSearchParamsFromHref(option.href)
-  optionParams.forEach((value, key) => {
-    params.set(key, value)
-  })
 }
 
 export default function SortDropdown({
@@ -328,43 +286,42 @@ export default function SortDropdown({
     close: closeLabel ?? (isArabic ? 'إغلاق' : 'Close'),
   }
 
-  const genderParamKeys = useMemo(
-    () => getParamKeys(groupedOptions.gender),
-    [groupedOptions.gender]
-  )
+  const currentGender = useMemo(() => {
+    const genderFromParam = normalizeGenderParam(searchParams.get('gender'))
 
-  const sortParamKeys = useMemo(
-    () => getParamKeys(groupedOptions.sortBy),
-    [groupedOptions.sortBy]
-  )
+    if (genderFromParam) return genderFromParam
 
-  const currentGenderOption = useMemo(() => {
-    const fromParams = getOptionByCurrentParams(
-      groupedOptions.gender,
-      new URLSearchParams(searchParams.toString())
-    )
+    /*
+      Backward compatibility:
+      لو عندك روابط قديمة فيها sort=boys أو sort=girls
+      هنقرأها كـ gender، لكن عند Show Results هتتحول تلقائيًا لـ gender.
+    */
+    const oldGenderFromSort = normalizeGenderParam(searchParams.get('sort'))
 
-    if (fromParams) return fromParams
+    if (oldGenderFromSort) return oldGenderFromSort
 
-    return selectedSort === 'boys' || selectedSort === 'girls'
-      ? groupedOptions.gender.find((option) => option.value === selectedSort) ??
-          null
-      : null
-  }, [groupedOptions.gender, searchParams, selectedSort])
+    if (selectedSort === 'boys' || selectedSort === 'girls') {
+      return selectedSort
+    }
 
-  const currentSortOption = useMemo(() => {
-    const fromParams = getOptionByCurrentParams(
-      groupedOptions.sortBy,
-      new URLSearchParams(searchParams.toString())
-    )
+    return null
+  }, [searchParams, selectedSort])
 
-    if (fromParams) return fromParams
+  const currentSort = useMemo(() => {
+    const sortFromParam = normalizeSortParam(searchParams.get('sort'))
 
-    return selectedSort !== 'boys' && selectedSort !== 'girls'
-      ? groupedOptions.sortBy.find((option) => option.value === selectedSort) ??
-          null
-      : null
-  }, [groupedOptions.sortBy, searchParams, selectedSort])
+    if (sortFromParam) return sortFromParam
+
+    if (
+      selectedSort === 'newly_listed' ||
+      selectedSort === 'highest_price' ||
+      selectedSort === 'lowest_price'
+    ) {
+      return selectedSort
+    }
+
+    return null
+  }, [searchParams, selectedSort])
 
   const currentAmenityIds = useMemo(
     () => normalizeSelectedAmenityIds(searchParams.get('amenity_ids')),
@@ -372,14 +329,10 @@ export default function SortDropdown({
   )
 
   const [tempSelectedGender, setTempSelectedGender] =
-    useState<GenderValue | null>(
-      (currentGenderOption?.value as GenderValue | null) ?? null
-    )
+    useState<GenderValue | null>(currentGender)
 
   const [tempSelectedSortOption, setTempSelectedSortOption] =
-    useState<SortValue | null>(
-      (currentSortOption?.value as SortValue | null) ?? null
-    )
+    useState<SortValue | null>(currentSort)
 
   const [tempSelectedAmenityIds, setTempSelectedAmenityIds] =
     useState<string[]>(currentAmenityIds)
@@ -387,12 +340,8 @@ export default function SortDropdown({
   useEffect(() => {
     if (!isOpen) return
 
-    setTempSelectedGender(
-      (currentGenderOption?.value as GenderValue | null) ?? null
-    )
-    setTempSelectedSortOption(
-      (currentSortOption?.value as SortValue | null) ?? null
-    )
+    setTempSelectedGender(currentGender)
+    setTempSelectedSortOption(currentSort)
     setTempSelectedAmenityIds(currentAmenityIds)
 
     const previousOverflow = document.body.style.overflow
@@ -408,16 +357,13 @@ export default function SortDropdown({
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', onEscape)
     }
-  }, [isOpen, currentGenderOption, currentSortOption, currentAmenityIds])
+  }, [isOpen, currentGender, currentSort, currentAmenityIds])
 
-  const selectedGenderOption =
-    groupedOptions.gender.find((option) => option.value === tempSelectedGender) ??
-    null
-
-  const selectedSortOption =
-    groupedOptions.sortBy.find(
-      (option) => option.value === tempSelectedSortOption
-    ) ?? null
+  const handleToggleGender = (gender: GenderValue) => {
+    setTempSelectedGender((currentGenderValue) =>
+      currentGenderValue === gender ? null : gender
+    )
+  }
 
   const handleToggleAmenity = (amenityId: string) => {
     setTempSelectedAmenityIds((currentIds) => {
@@ -438,16 +384,32 @@ export default function SortDropdown({
   const handleShowResults = () => {
     const nextParams = new URLSearchParams(searchParams.toString())
 
-    applyOptionParams(nextParams, selectedGenderOption, genderParamKeys)
-    applyOptionParams(nextParams, selectedSortOption, sortParamKeys)
+    /*
+      مهم:
+      بنمسح بس فلاتر الـ Drawer.
+      لكن بنسيب city_id / university_id / area_id / rental_duration / lang / currency زي ما هم.
+    */
+    nextParams.delete('gender')
+    nextParams.delete('sort')
+    nextParams.delete('amenity_ids')
+    nextParams.delete('page')
+
+    /*
+      Backward compatibility:
+      لو الرابط القديم كان فيه sort=boys أو sort=girls،
+      خلاص مش هنستخدمها تاني كـ sort.
+    */
+    if (tempSelectedGender) {
+      nextParams.set('gender', tempSelectedGender)
+    }
+
+    if (tempSelectedSortOption) {
+      nextParams.set('sort', tempSelectedSortOption)
+    }
 
     if (tempSelectedAmenityIds.length > 0) {
       nextParams.set('amenity_ids', tempSelectedAmenityIds.join(','))
-    } else {
-      nextParams.delete('amenity_ids')
     }
-
-    nextParams.delete('page')
 
     const nextQuery = nextParams.toString()
     const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname
@@ -513,7 +475,7 @@ export default function SortDropdown({
                       option={option}
                       isActive={option.value === tempSelectedGender}
                       onSelect={() =>
-                        setTempSelectedGender(option.value as GenderValue)
+                        handleToggleGender(option.value as GenderValue)
                       }
                     />
                   ))}
@@ -561,7 +523,11 @@ export default function SortDropdown({
                           key={option.value}
                           type="button"
                           onClick={() =>
-                            setTempSelectedSortOption(option.value as SortValue)
+                            setTempSelectedSortOption((currentSortValue) =>
+                              currentSortValue === option.value
+                                ? null
+                                : (option.value as SortValue)
+                            )
                           }
                           className={`flex min-h-[54px] items-center justify-center rounded-[18px] border-2 px-2 text-center text-[13px] font-medium leading-snug transition sm:h-[54px] sm:px-3 sm:text-[14px] ${
                             isActive

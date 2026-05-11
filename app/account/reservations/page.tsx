@@ -868,7 +868,7 @@ export default function AccountReservationsPage() {
               onClick={() => setMenuOpen(false)}
             >
               <img
-                src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+                src="https://i.ibb.co/FLsWDBr6/Untitled.png"
                 alt="Navienty icon"
                 className="navienty-logo-icon"
               />

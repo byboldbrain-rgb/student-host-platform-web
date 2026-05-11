@@ -1422,14 +1422,7 @@ function CommunityJoinPageContent() {
           }
 
           .mobile-bottom-nav__icon--image {
-            filter: brightness(0) invert(1);
-            opacity: 0.72;
-          }
-
-          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image,
-          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
-            filter: brightness(0) invert(1);
-            opacity: 1;
+            filter: grayscale(1) brightness(0.85);
           }
         }
 
@@ -1594,7 +1587,7 @@ function CommunityJoinPageContent() {
             aria-label="Navienty home"
           >
             <img
-              src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+              src="https://i.ibb.co/FLsWDBr6/Untitled.png"
               alt="Navienty icon"
               className="navienty-logo-icon"
             />

@@ -175,7 +175,7 @@ function normalizePosts(
         id: `author-${post.id}`,
         name: post.author_name || t.navientyTeam,
         handle: "navienty",
-        avatarUrl: "https://i.ibb.co/p6CBgjz0/Navienty-13.png",
+        avatarUrl: "https://i.ibb.co/FLsWDBr6/Untitled.png",
         verified: true,
       },
       createdAt: post.published_at || post.created_at,
@@ -885,18 +885,47 @@ export default async function CommunityPage({
           }
 
           .mobile-bottom-nav__icon--image {
-            filter: brightness(0) invert(1);
-            opacity: 0.72;
-          }
-
-          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image,
-          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
-            filter: brightness(0) invert(1);
-            opacity: 1;
+            filter: grayscale(1) brightness(0.85);
           }
 
           [data-community-feed] {
             color-scheme: dark;
+          }
+
+          [data-community-feed] button[aria-label*='Previous'],
+          [data-community-feed] button[aria-label*='Next'],
+          [data-community-feed] button[aria-label*='previous'],
+          [data-community-feed] button[aria-label*='next'],
+          [data-community-feed] button[aria-label*='السابق'],
+          [data-community-feed] button[aria-label*='التالي'],
+          [data-community-feed] button[class*='absolute'][class*='rounded-full'] {
+            background: rgba(255, 255, 255, 0.96) !important;
+            color: #0f172a !important;
+            border-color: rgba(15, 23, 42, 0.08) !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22) !important;
+          }
+
+          [data-community-feed] button[aria-label*='Previous'] svg,
+          [data-community-feed] button[aria-label*='Next'] svg,
+          [data-community-feed] button[aria-label*='previous'] svg,
+          [data-community-feed] button[aria-label*='next'] svg,
+          [data-community-feed] button[aria-label*='السابق'] svg,
+          [data-community-feed] button[aria-label*='التالي'] svg,
+          [data-community-feed] button[class*='absolute'][class*='rounded-full'] svg {
+            color: #0f172a !important;
+            stroke: #0f172a !important;
+            fill: none !important;
+          }
+
+          [data-community-feed] button[aria-label*='Previous']:hover,
+          [data-community-feed] button[aria-label*='Next']:hover,
+          [data-community-feed] button[aria-label*='previous']:hover,
+          [data-community-feed] button[aria-label*='next']:hover,
+          [data-community-feed] button[aria-label*='السابق']:hover,
+          [data-community-feed] button[aria-label*='التالي']:hover,
+          [data-community-feed] button[class*='absolute'][class*='rounded-full']:hover {
+            background: #ffffff !important;
+            color: #020617 !important;
           }
         }
 
@@ -1027,7 +1056,7 @@ export default async function CommunityPage({
             aria-label="Navienty home"
           >
             <img
-              src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+              src="https://i.ibb.co/FLsWDBr6/Untitled.png"
               alt="Navienty icon"
               className="navienty-logo-icon"
             />
