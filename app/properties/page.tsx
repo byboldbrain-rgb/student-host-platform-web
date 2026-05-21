@@ -1,6 +1,12 @@
 import Link from 'next/link'
 import Script from 'next/script'
+import type { Metadata } from 'next'
 import { createClient } from '../../src/lib/supabase/server'
+import {
+  getCachedPropertiesPageData,
+  getCachedSakanSeoPages,
+  type SakanSeoPage,
+} from './data'
 import PropertiesSearchBar from './PropertiesSearchBar'
 import PropertiesHeader from './PropertiesHeader'
 import { Squada_One } from 'next/font/google'
@@ -11,6 +17,45 @@ const squadaOne = Squada_One({
 })
 
 const APP_LOGO_URL = 'https://i.ibb.co/sn0xS95/Navienty-2.jpg'
+
+const SITE_URL = 'https://www.navienty.com'
+
+export const metadata: Metadata = {
+  title: 'سكن الطلاب | Navienty',
+  description:
+    'اكتشف وقارن أماكن سكن الطلاب على Navienty حسب المدينة أو الجامعة أو المنطقة، وتواصل مع المضيفين بسهولة بدون أي عمولة على الطالب.',
+  alternates: {
+    canonical: `${SITE_URL}/properties`,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    title: 'سكن الطلاب | Navienty',
+    description:
+      'قارن بين أماكن السكن الطلابي وتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.',
+    url: `${SITE_URL}/properties`,
+    siteName: 'Navienty',
+    locale: 'ar_EG',
+    type: 'website',
+    images: [
+      {
+        url: APP_LOGO_URL,
+        width: 1200,
+        height: 630,
+        alt: 'Navienty',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'سكن الطلاب | Navienty',
+    description:
+      'اكتشف وقارن أماكن سكن الطلاب بدون أي عمولة على الطالب.',
+    images: [APP_LOGO_URL],
+  },
+}
 
 type SearchParams = {
   rental_duration?: string
@@ -420,11 +465,14 @@ async function getCurrencyRate(currency: SupportedCurrency) {
   if (!accessKey) return 1
 
   try {
-    const cacheBust = Date.now().toString()
-
     const response = await fetch(
-      `https://api.exchangerate.host/live?access_key=${accessKey}&currencies=EGP,${currency}&v=${cacheBust}`,
-      { cache: 'no-store' }
+      `https://api.exchangerate.host/live?access_key=${accessKey}&currencies=EGP,${currency}`,
+      {
+        next: {
+          revalidate: 60 * 60 * 6,
+          tags: [`navienty:currency-rate:${currency}`],
+        },
+      }
     )
 
     const data = await response.json()
@@ -505,69 +553,45 @@ export default async function PropertiesPage({
 
   const isLoggedIn = !!user
 
-  const { data: cities } = await supabase
-    .from('cities')
-    .select('id, name_en, name_ar')
-    .order('name_en', { ascending: true })
+  const {
+    cities,
+    universities,
+    areas,
+    universityAreas,
+    allPopularSource,
+  } = await getCachedPropertiesPageData()
 
-  const { data: universities } = await supabase
-    .from('universities')
-    .select('id, name_en, name_ar, city_id')
-    .order('name_en', { ascending: true })
+  const sakanSeoPages = await getCachedSakanSeoPages()
 
-  const { data: areas } = await supabase
-    .from('property_areas')
-    .select('id, city_id, name_en, name_ar, is_active')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name_en', { ascending: true })
+  const sakanPathByAreaId = new Map(
+    (sakanSeoPages as SakanSeoPage[])
+      .filter((page) => page.page_type === 'area' && page.area_id && page.path)
+      .map((page) => [String(page.area_id), page.path])
+  )
 
-  const { data: universityAreas } = await supabase
-    .from('university_property_areas')
-    .select('id, university_id, area_id')
-
-  const { data: allPopularSource } = await supabase
-    .from('properties')
-    .select(`
-      id,
-      property_id,
-      title_en,
-      title_ar,
-      price_egp,
-      rental_duration,
-      availability_status,
-      gender,
-      city_id,
-      university_id,
-      area_id,
-      property_universities(
-        university_id
-      ),
-      property_images(
-        image_url,
-        is_cover,
-        sort_order
-      ),
-      property_sellable_options(
-        code,
-        option_code,
-        price_egp,
-        is_active,
-        deleted_at
-      ),
-      property_rooms(
-        property_room_sellable_options(
-          code,
-          price_egp,
-          is_active,
-          deleted_at
-        )
+  const sakanPathByUniversityId = new Map(
+    (sakanSeoPages as SakanSeoPage[])
+      .filter(
+        (page) =>
+          page.page_type === 'university' && page.university_id && page.path
       )
-    `)
-    .eq('admin_status', 'published')
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(200)
+      .map((page) => [String(page.university_id), page.path])
+  )
+
+  const seoNavigationLinks = (sakanSeoPages as SakanSeoPage[])
+    .filter(
+      (page) =>
+        page.is_indexable &&
+        page.published_properties_count >= 3 &&
+        Boolean(page.path) &&
+        Boolean(page.seo_h1_ar || page.entity_name_ar)
+    )
+    .slice(0, 12)
+    .map((page) => ({
+      href: page.path,
+      label: page.seo_h1_ar || page.entity_name_ar,
+      count: page.published_properties_count,
+    }))
 
   const buildPageLink = (updates: Partial<SearchParams> = {}) => {
     const params = new URLSearchParams()
@@ -756,6 +780,18 @@ export default async function PropertiesPage({
     areaId?: string
     universityId?: string
   }) => {
+    if (areaId) {
+      const seoPath = sakanPathByAreaId.get(String(areaId))
+
+      if (seoPath) return seoPath
+    }
+
+    if (universityId) {
+      const seoPath = sakanPathByUniversityId.get(String(universityId))
+
+      if (seoPath) return seoPath
+    }
+
     const params = new URLSearchParams()
 
     if (areaId) params.set('area_id', areaId)
@@ -2362,6 +2398,47 @@ export default async function PropertiesPage({
                 </div>
               </div>
             ))}
+          </section>
+        )}
+
+        {seoNavigationLinks.length > 0 && (
+          <section
+            className="mb-10 rounded-[28px] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-[#0b1220] md:mb-14 md:p-7"
+            aria-labelledby="student-housing-seo-links"
+          >
+            <div className="max-w-3xl">
+              <p className="mb-2 text-sm font-bold text-[#054aff] dark:text-blue-300">
+                بدون أي عمولة على الطالب
+              </p>
+
+              <h2
+                id="student-housing-seo-links"
+                className="text-[22px] font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[28px]"
+              >
+                تصفح سكن الطلاب حسب الجامعة والمنطقة
+              </h2>
+
+              <p className="mt-3 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+                Navienty يساعد الطلاب على اكتشاف ومقارنة أماكن السكن الطلابي
+                والتواصل مع المضيفين بسهولة. اختار الجامعة أو المنطقة المناسبة
+                وشوف السكن المتاح بصفحات مخصصة وسهلة التصفح.
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2.5">
+              {seoNavigationLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-[#054aff] hover:text-[#054aff] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100 dark:hover:border-blue-300 dark:hover:text-blue-300"
+                >
+                  <span>{item.label}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-white/10 dark:text-slate-300">
+                    {item.count}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </section>
         )}
       </div>

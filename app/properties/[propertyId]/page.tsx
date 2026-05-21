@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Squada_One } from 'next/font/google'
 import { createClient } from '../../../src/lib/supabase/server'
@@ -7,6 +8,7 @@ import DesktopPropertyGallery from './DesktopPropertyGallery'
 import MobilePropertySlider from './MobilePropertySlider'
 import PropertyAmenitiesSection from './PropertyAmenitiesSection'
 import PropertyEnquireButton from './PropertyEnquireButton'
+import SwipeableSheetWrapper from './SwipeableSheetWrapper'
 import './property-page.css'
 import PwaInstallBanner from '../../components/PwaInstallBanner'
 
@@ -23,6 +25,9 @@ const BROKER_CARD_FRONT_IMAGE =
 
 const BROKER_CARD_BACK_IMAGE =
   'https://i.ibb.co/hJgSfrJC/Avery-Davis.png'
+
+const SITE_URL = 'https://www.navienty.com'
+const DEFAULT_OG_IMAGE = '/icon.png'
 
 type SearchParams = {
   rental_duration?: string
@@ -159,6 +164,8 @@ type SimilarProperty = {
   rental_duration?: 'daily' | 'monthly' | null
   gender?: 'boys' | 'girls' | string | null
   property_images?: PropertyImage[]
+  property_rooms?: any[]
+  property_sellable_options?: any[]
 }
 
 type PropertyOfferItem = {
@@ -508,6 +515,221 @@ function formatConvertedPrice({
   } catch {
     return `${Math.round(convertedPrice).toLocaleString(locale)} ${currency}`
   }
+}
+
+function getAbsoluteUrl(url?: string | null) {
+  const value = url?.trim()
+
+  if (!value) return `${SITE_URL}${DEFAULT_OG_IMAGE}`
+  if (value.startsWith('http://') || value.startsWith('https://')) return value
+  if (value.startsWith('/')) return `${SITE_URL}${value}`
+
+  return value
+}
+
+function getSortedSeoImages(images?: Array<Partial<PropertyImage>> | null) {
+  const validImages =
+    images
+      ?.map((image, index) => ({
+        imageUrl: image?.image_url?.trim() ?? '',
+        isCover: image?.is_cover === true,
+        sortOrder:
+          typeof image?.sort_order === 'number'
+            ? image.sort_order
+            : Number.POSITIVE_INFINITY,
+        originalIndex: index,
+      }))
+      .filter((image) => Boolean(image.imageUrl)) ?? []
+
+  return validImages
+    .sort((a, b) => {
+      if (a.isCover !== b.isCover) return a.isCover ? -1 : 1
+
+      const sortOrderDiff = a.sortOrder - b.sortOrder
+      if (sortOrderDiff !== 0) return sortOrderDiff
+
+      return a.originalIndex - b.originalIndex
+    })
+    .map((image) => getAbsoluteUrl(image.imageUrl))
+}
+
+function getSeoCoverImage(property: any) {
+  return getSortedSeoImages(property?.property_images)[0] || `${SITE_URL}${DEFAULT_OG_IMAGE}`
+}
+
+function getCanonicalPropertyUrl(propertyId: string) {
+  return `${SITE_URL}/properties/${propertyId}`
+}
+
+function getPropertySeoTitle(property: any) {
+  const title = property?.title_ar || property?.title_en || 'سكن طلاب'
+
+  return `${title} | Navienty`
+}
+
+function getPropertySeoDescription(property: any) {
+  const title = property?.title_ar || property?.title_en || 'سكن طلاب'
+  const address = property?.address_ar || property?.address_en
+  const minPrice = getPropertyMinPrice(property)
+  const priceText = minPrice
+    ? ` ابتداءً من ${new Intl.NumberFormat('ar-EG', {
+        style: 'currency',
+        currency: 'EGP',
+        maximumFractionDigits: 0,
+      }).format(minPrice)}${property?.rental_duration === 'daily' ? ' يوميًا' : ' شهريًا'}.`
+    : ''
+  const locationText = address ? ` في ${address}.` : '.'
+
+  return `${title}${locationText}${priceText} قارن تفاصيل السكن والصور وتواصل مع المضيف عبر Navienty، بدون أي عمولة على الطالب.`
+}
+
+async function getPublishedPropertyForSeo(propertyId: string) {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('properties')
+    .select(`
+      id,
+      property_id,
+      title_en,
+      title_ar,
+      address_en,
+      address_ar,
+      price_egp,
+      rental_duration,
+      availability_status,
+      gender,
+      bedrooms_count,
+      bathrooms_count,
+      beds_count,
+      property_images (
+        image_url,
+        is_cover,
+        sort_order
+      ),
+      property_rooms (
+        status,
+        is_active,
+        property_room_sellable_options (
+          price_egp,
+          is_active
+        )
+      ),
+      property_sellable_options (
+        price_egp,
+        is_active
+      )
+    `)
+    .eq('property_id', propertyId)
+    .eq('admin_status', 'published')
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Property metadata query failed: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ propertyId: string }>
+}): Promise<Metadata> {
+  const { propertyId } = await params
+  const property = await getPublishedPropertyForSeo(propertyId)
+
+  if (!property) {
+    return {
+      title: 'سكن غير متاح | Navienty',
+      description: 'هذا السكن غير متاح حاليًا على Navienty.',
+      robots: {
+        index: false,
+        follow: true,
+      },
+    }
+  }
+
+  const canonicalUrl = getCanonicalPropertyUrl(property.property_id)
+  const title = getPropertySeoTitle(property)
+  const description = getPropertySeoDescription(property)
+  const image = getSeoCoverImage(property)
+  const shouldIndex = property.availability_status !== 'inactive'
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    robots: {
+      index: shouldIndex,
+      follow: true,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      siteName: 'Navienty',
+      locale: 'ar_EG',
+      type: 'website',
+      images: [
+        {
+          url: image,
+          width: 1200,
+          height: 630,
+          alt: property.title_ar || property.title_en || 'Navienty',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [image],
+    },
+  }
+}
+
+
+// دالة جديدة لاستخراج أقل سعر من العقار (من الغرف أو خيارات السكن)
+function getPropertyMinPrice(property: any): number | null {
+  const prices: number[] = []
+
+  if (Array.isArray(property.property_rooms)) {
+    property.property_rooms.forEach((room: any) => {
+      if (
+        room.is_active !== false &&
+        room.status !== 'inactive' &&
+        room.status !== 'fully_reserved'
+      ) {
+        if (Array.isArray(room.property_room_sellable_options)) {
+          room.property_room_sellable_options.forEach((opt: any) => {
+            if (opt.is_active !== false && opt.price_egp != null) {
+              const p = toNumber(opt.price_egp)
+              if (p !== null && p > 0) prices.push(p)
+            }
+          })
+        }
+      }
+    })
+  }
+
+  if (Array.isArray(property.property_sellable_options)) {
+    property.property_sellable_options.forEach((opt: any) => {
+      if (opt.is_active !== false && opt.price_egp != null) {
+        const p = toNumber(opt.price_egp)
+        if (p !== null && p > 0) prices.push(p)
+      }
+    })
+  }
+
+  if (prices.length > 0) {
+    return Math.min(...prices)
+  }
+
+  return toNumber(property.price_egp)
 }
 
 function formatCountLabel({
@@ -1330,6 +1552,7 @@ export default async function PropertyPage({
   let similarProperties: SimilarProperty[] = []
 
   if (typedProperty.university_id) {
+    // تم تعديل هذا الاستعلام لجلب أسعار الغرف بدلاً من سعر العقار بالكامل
     const { data: similarData, error: similarError } = await supabase
       .from('properties')
       .select(`
@@ -1349,6 +1572,18 @@ export default async function PropertyPage({
           image_url,
           is_cover,
           sort_order
+        ),
+        property_rooms (
+          status,
+          is_active,
+          property_room_sellable_options (
+            price_egp,
+            is_active
+          )
+        ),
+        property_sellable_options (
+          price_egp,
+          is_active
         )
       `)
       .eq('university_id', typedProperty.university_id)
@@ -1642,11 +1877,130 @@ export default async function PropertyPage({
     },
   ]
 
+  const canonicalUrl = getCanonicalPropertyUrl(typedProperty.property_id)
+  const structuredImages = desktopGalleryImages
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((imageUrl) => getAbsoluteUrl(imageUrl))
+
+  const seoPriceCandidates = optionCards
+    .map((option) => option.price)
+    .filter((price): price is number => typeof price === 'number' && price > 0)
+
+  const seoPriceEgp =
+    seoPriceCandidates.length > 0
+      ? Math.min(...seoPriceCandidates)
+      : toNumber(typedProperty.price_egp)
+
+  const propertyAvailability =
+    typedProperty.availability_status === 'fully_reserved'
+      ? 'https://schema.org/SoldOut'
+      : typedProperty.availability_status === 'partially_reserved'
+        ? 'https://schema.org/LimitedAvailability'
+        : typedProperty.availability_status === 'inactive'
+          ? 'https://schema.org/OutOfStock'
+          : 'https://schema.org/InStock'
+
+  const propertyDescription = getPropertySeoDescription({
+    ...typedProperty,
+    property_rooms: rooms.map((room) => ({
+      ...room,
+      property_room_sellable_options: room.room_sellable_options,
+    })),
+    property_sellable_options: propertySellableOptions,
+  })
+
+  const propertyJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: propertyTitle,
+    image: structuredImages.length > 0 ? structuredImages : [getAbsoluteUrl(coverImage)],
+    description: propertyDescription,
+    brand: {
+      '@type': 'Brand',
+      name: 'Navienty',
+    },
+    audience: {
+      '@type': 'Audience',
+      audienceType: 'University students',
+    },
+    category: 'Student accommodation',
+    offers: seoPriceEgp
+      ? {
+          '@type': 'Offer',
+          url: canonicalUrl,
+          priceCurrency: 'EGP',
+          price: seoPriceEgp,
+          availability: propertyAvailability,
+        }
+      : undefined,
+    additionalProperty: [
+      {
+        '@type': 'PropertyValue',
+        name: 'بدون عمولة على الطالب',
+        value: 'نعم',
+      },
+      typedProperty.gender
+        ? {
+            '@type': 'PropertyValue',
+            name: 'مناسب لـ',
+            value: normalizeGender(typedProperty.gender) === 'girls' ? 'طالبات' : 'طلاب',
+          }
+        : undefined,
+      typedProperty.rental_duration
+        ? {
+            '@type': 'PropertyValue',
+            name: 'مدة السكن',
+            value: typedProperty.rental_duration === 'daily' ? 'يومي' : 'شهري',
+          }
+        : undefined,
+    ].filter(Boolean),
+  }
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'الرئيسية',
+        item: SITE_URL,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'سكن الطلاب',
+        item: `${SITE_URL}/properties`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: propertyTitle,
+        item: canonicalUrl,
+      },
+    ],
+  }
+
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(propertyJsonLd),
+        }}
+      />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd),
+        }}
+      />
+
       <PwaInstallBanner />
       <input
         id="nav-menu-toggle"
@@ -1662,8 +2016,12 @@ export default async function PropertyPage({
         aria-hidden="true"
       />
 
-
       <style>{`
+        /* لمنع تمرير الخلفية عند فتح القائمة */
+        body:has(#mobile-rooms-toggle:checked) {
+          overflow: hidden;
+        }
+
         @media (prefers-color-scheme: dark) {
           .property-address {
             color: #cbd5e1;
@@ -1723,8 +2081,6 @@ export default async function PropertyPage({
             filter: brightness(0) invert(1);
             opacity: 1;
           }
-
-
 
           .mobile-rooms-sheet__backdrop {
             background: rgba(0, 0, 0, 0.62);
@@ -1967,8 +2323,11 @@ export default async function PropertyPage({
                         ? item.address_ar || item.address_en || ''
                         : item.address_en || item.address_ar || ''
 
+                      // التعديل: هنا سيتم حساب أقل سعر للغرف بدلاً من عرض سعر الشقة بالكامل
+                      const displayPriceEgp = getPropertyMinPrice(item)
+
                       const formattedPrice = formatConvertedPrice({
-                        priceEgp: item.price_egp,
+                        priceEgp: displayPriceEgp,
                         currency: selectedCurrency,
                         exchangeRateFromEgp,
                         locale,
@@ -2234,8 +2593,11 @@ export default async function PropertyPage({
                     ? item.address_ar || item.address_en || ''
                     : item.address_en || item.address_ar || ''
 
+                  // التعديل هنا أيضاً ليطابق نسخة الموبايل (أقل سعر للسرير)
+                  const displayPriceEgp = getPropertyMinPrice(item)
+
                   const formattedPrice = formatConvertedPrice({
-                    priceEgp: item.price_egp,
+                    priceEgp: displayPriceEgp,
                     currency: selectedCurrency,
                     exchangeRateFromEgp,
                     locale,
@@ -2352,7 +2714,7 @@ export default async function PropertyPage({
           className="mobile-rooms-sheet__backdrop"
         />
 
-        <div className="mobile-rooms-sheet__panel">
+        <SwipeableSheetWrapper>
           <div className="mobile-rooms-sheet__handle" />
 
           <div className="mobile-rooms-sheet__header">
@@ -2367,8 +2729,8 @@ export default async function PropertyPage({
             </label>
           </div>
 
-          <div className="mobile-rooms-sheet__body">
-            <div className="space-y-4 pb-4">
+          <div className="mobile-rooms-sheet__body overflow-y-auto max-h-[75vh] scroll-smooth overscroll-contain">
+            <div className="space-y-4 pb-24">
               {optionCards.length > 0 ? (
                 optionCards.map((option) => {
                   const formattedPrice = formatConvertedPrice({
@@ -2439,7 +2801,7 @@ export default async function PropertyPage({
               )}
             </div>
           </div>
-        </div>
+        </SwipeableSheetWrapper>
       </div>
 
       <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">

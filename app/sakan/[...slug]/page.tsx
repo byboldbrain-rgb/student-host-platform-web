@@ -1,23 +1,18 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { createClient } from '../../../src/lib/supabase/server'
-import PropertiesHeader from '../PropertiesHeader'
-import SortDropdown from './SortDropdown'
-import PropertyImageSlider from './PropertyImageSlider'
+import PropertiesHeader from '../../properties/PropertiesHeader'
+import SortDropdown from '../../properties/search/SortDropdown'
+import PropertyImageSlider from '../../properties/search/PropertyImageSlider'
 import { Squada_One } from 'next/font/google'
+import {
+  getCachedSakanPageData,
+  getCachedSakanSeoPages,
+} from '../../properties/data'
 
-export const metadata: Metadata = {
-  title: 'بحث سكن الطلاب | Navienty',
-  description:
-    'ابحث وقارن بين أماكن سكن الطلاب على Navienty حسب المدينة أو الجامعة أو المنطقة.',
-  robots: {
-    index: false,
-    follow: true,
-  },
-  alternates: {
-    canonical: 'https://www.navienty.com/properties/search',
-  },
-}
+const SITE_URL = 'https://www.navienty.com'
+const MIN_INDEXABLE_RESULTS = 3
 
 const squadaOne = Squada_One({
   subsets: ['latin'],
@@ -36,6 +31,84 @@ type SearchParams = {
   sort?: string
   gender?: string
   amenity_ids?: string
+}
+
+type PageProps = {
+  params: Promise<{
+    slug: string[]
+  }>
+  searchParams: Promise<SearchParams>
+}
+
+function buildPath(slug: string[]) {
+  return `/sakan/${slug.map((item) => item.trim()).filter(Boolean).join('/')}`
+}
+
+export async function generateStaticParams() {
+  const seoPages = await getCachedSakanSeoPages()
+
+  return seoPages
+    .filter(
+      (page) =>
+        page.is_indexable &&
+        page.published_properties_count >= MIN_INDEXABLE_RESULTS
+    )
+    .map((page) => ({
+      slug: page.path.replace(/^\/sakan\//, '').split('/'),
+    }))
+}
+
+export async function generateMetadata({
+  params,
+}: Pick<PageProps, 'params'>): Promise<Metadata> {
+  const { slug } = await params
+  const path = buildPath(slug)
+  const { seoPage } = await getCachedSakanPageData(path)
+
+  if (!seoPage) {
+    return {
+      title: 'سكن الطلاب | Navienty',
+      robots: {
+        index: false,
+        follow: true,
+      },
+    }
+  }
+
+  const shouldIndex =
+    seoPage.is_indexable &&
+    seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS
+
+  const title = seoPage.seo_title_ar || `${seoPage.seo_h1_ar} | Navienty`
+  const description =
+    seoPage.seo_description_ar ||
+    'اكتشف سكن طلاب مناسب على Navienty وقارن بين أماكن الإقامة الطلابية بدون أي عمولة على الطالب.'
+  const canonicalUrl = `${SITE_URL}${seoPage.path}`
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    robots: {
+      index: shouldIndex,
+      follow: true,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      siteName: 'Navienty',
+      locale: 'ar_EG',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
+  }
 }
 
 type City = {
@@ -586,12 +659,97 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
   return pages
 }
 
-export default async function SearchResultsPage({
+export default async function SakanSeoPage({
+  params: routeParams,
   searchParams,
-}: {
-  searchParams: Promise<SearchParams>
-}) {
-  const params = await searchParams
+}: PageProps) {
+  const { slug } = await routeParams
+  const path = buildPath(slug)
+  const { seoPage } = await getCachedSakanPageData(path)
+
+  if (!seoPage) {
+    notFound()
+  }
+
+  const incomingParams = await searchParams
+  const paramsForSearch: SearchParams = {
+    ...incomingParams,
+    lang: incomingParams.lang ?? 'ar',
+    currency: incomingParams.currency ?? 'EGP',
+    city_id: seoPage.city_id,
+    university_id: seoPage.university_id ?? incomingParams.university_id,
+    area_id: seoPage.area_id ?? incomingParams.area_id,
+  }
+
+  const shouldIndex =
+    seoPage.is_indexable &&
+    seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS
+
+  const seoH1 = seoPage.seo_h1_ar || seoPage.entity_name_ar
+  const seoIntro =
+    seoPage.seo_intro_ar ||
+    'Navienty يساعدك على اكتشاف ومقارنة أماكن السكن الطلابي والتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.'
+  const seoFaqItems = Array.isArray(seoPage.seo_faq_ar)
+    ? seoPage.seo_faq_ar.filter((item) => item?.q && item?.a)
+    : []
+
+  const collectionJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: seoH1,
+    description:
+      seoPage.seo_description_ar ||
+      'صفحة تجمع أماكن سكن طلابية مناسبة على Navienty.',
+    url: `${SITE_URL}${seoPage.path}`,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'Navienty',
+      url: SITE_URL,
+    },
+  }
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'الرئيسية',
+        item: SITE_URL,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'سكن الطلاب',
+        item: `${SITE_URL}/sakan/asyut`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: seoH1,
+        item: `${SITE_URL}${seoPage.path}`,
+      },
+    ],
+  }
+
+  const faqJsonLd =
+    seoFaqItems.length > 0
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: seoFaqItems.map((item) => ({
+            '@type': 'Question',
+            name: item.q,
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: item.a,
+            },
+          })),
+        }
+      : null
+
+  const params = paramsForSearch
   const selectedLanguage = normalizeLanguage(params.lang)
   const selectedCurrency = normalizeCurrency(params.currency)
   const selectedSort = normalizeSort(params.sort)
@@ -815,7 +973,7 @@ export default async function SearchResultsPage({
 
     p.set('page', pageNumber.toString())
 
-    return `/properties/search?${p.toString()}`
+    return `${seoPage.path}?${p.toString()}`
   }
 
   const buildSortLink = (sortValue: SupportedSort) => {
@@ -841,7 +999,7 @@ export default async function SearchResultsPage({
       }
     }
 
-    return `/properties/search?${p.toString()}`
+    return `${seoPage.path}?${p.toString()}`
   }
 
   const sortOptions = [
@@ -1112,6 +1270,47 @@ export default async function SearchResultsPage({
         className="peer sr-only"
         aria-hidden="true"
       />
+
+      {!shouldIndex && <meta name="robots" content="noindex,follow" />}
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(collectionJsonLd),
+        }}
+      />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd),
+        }}
+      />
+
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(faqJsonLd),
+          }}
+        />
+      )}
+
+      <section className="sr-only" aria-label={seoH1}>
+        <h1>{seoH1}</h1>
+        <p>{seoIntro}</p>
+        <p>بدون أي عمولة على الطالب.</p>
+        {seoFaqItems.length > 0 && (
+          <div>
+            {seoFaqItems.map((item) => (
+              <div key={item.q}>
+                <h2>{item.q}</h2>
+                <p>{item.a}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <style>{`
         :root {

@@ -73,7 +73,8 @@ export default function PropertyEnquireButton({
   }
 
   return (
-    <div className="w-full">
+    // تم إضافة shrink-0 لمنع انضغاط العنصر داخل القوائم القابلة للتمرير
+    <div className="w-full shrink-0">
       <button
         type="button"
         onClick={handleClick}
