@@ -44,31 +44,19 @@ type SortValue = 'newly_listed' | 'lowest_price' | 'highest_price'
 function FilterIcon() {
   return (
     <svg
-      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
       fill="none"
-      className="h-[15px] w-[15px] md:h-[18px] md:w-[18px]"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      className="h-[22px] w-[22px] md:h-6 md:w-6"
       aria-hidden="true"
     >
       <path
-        d="M4 7h8"
-        stroke="currentColor"
-        strokeWidth="1.9"
         strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
       />
-      <path
-        d="M4 12h16"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
-      <path
-        d="M4 17h10"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-      />
-      <circle cx="15.5" cy="7" r="1.55" fill="currentColor" />
-      <circle cx="17.5" cy="17" r="1.55" fill="currentColor" />
     </svg>
   )
 }

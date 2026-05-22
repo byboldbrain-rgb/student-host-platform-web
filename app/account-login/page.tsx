@@ -70,7 +70,7 @@ export default async function AccountLoginPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="min-h-screen bg-[#f7f7f7] pb-24 text-[#222222] dark:bg-[#050816] dark:text-slate-100"
+      className="min-h-screen bg-[#f7f7f7] pb-32 text-[#222222] dark:bg-[#050816] dark:text-slate-100"
     >
       <style>{`
         .account-login-shell {
@@ -205,27 +205,38 @@ export default async function AccountLoginPage({
 
         .mobile-bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          left: 50%;
+          right: auto;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
           z-index: 120;
           display: block;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+          width: min(calc(100% - 28px), 420px);
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.62);
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.78),
+              rgba(255, 255, 255, 0.56)
+            );
+          backdrop-filter: blur(22px) saturate(180%);
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          padding: 0;
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
+          transform: translateX(-50%);
         }
 
         .mobile-bottom-nav__inner {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           align-items: center;
-          height: 64px;
+          height: 68px;
           padding: 0 8px;
-          max-width: 520px;
-          margin: 0 auto;
+          max-width: none;
+          margin: 0;
         }
 
         .mobile-bottom-nav__item {
@@ -237,13 +248,16 @@ export default async function AccountLoginPage({
           text-decoration: none;
           color: #6b7280;
           min-height: 100%;
+          border-radius: 999px;
           transition:
             color 0.2s ease,
-            transform 0.2s ease;
+            transform 0.2s ease,
+            background 0.2s ease;
         }
 
         .mobile-bottom-nav__item:hover {
           color: #111827;
+          background: rgba(255, 255, 255, 0.34);
         }
 
         .mobile-bottom-nav__item--active {
@@ -319,9 +333,16 @@ export default async function AccountLoginPage({
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 255, 255, 0.12);
+            background:
+              linear-gradient(
+                180deg,
+                rgba(15, 23, 42, 0.82),
+                rgba(15, 23, 42, 0.58)
+              );
+            box-shadow:
+              0 18px 48px rgba(0, 0, 0, 0.42),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
           }
 
           .mobile-bottom-nav__item {
@@ -330,6 +351,7 @@ export default async function AccountLoginPage({
 
           .mobile-bottom-nav__item:hover {
             color: #f8fafc;
+            background: rgba(255, 255, 255, 0.08);
           }
 
           .mobile-bottom-nav__item--active {
@@ -365,6 +387,11 @@ export default async function AccountLoginPage({
 
           .account-login-center {
             transform: translateY(-22px);
+          }
+
+          .mobile-bottom-nav {
+            width: calc(100% - 24px);
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
           }
         }
 

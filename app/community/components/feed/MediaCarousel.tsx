@@ -155,6 +155,7 @@ export default function MediaCarousel({
       if (animationFrameRef.current) {
         window.cancelAnimationFrame(animationFrameRef.current);
       }
+
       if (scrollEndTimeoutRef.current) {
         window.clearTimeout(scrollEndTimeoutRef.current);
       }

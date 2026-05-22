@@ -3,13 +3,7 @@
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Squada_One } from 'next/font/google'
 import { signUpUserAction } from './actions'
-
-const squadaOne = Squada_One({
-  subsets: ['latin'],
-  weight: '400',
-})
 
 export default function SignupPage() {
   const router = useRouter()
@@ -54,14 +48,8 @@ export default function SignupPage() {
     }
   }
 
-  const footerQuickLinks = [
-    { label: 'About us', href: '/about' },
-    { label: 'Board', href: '/board' },
-    { label: 'Contact', href: '/contact' },
-  ]
-
   return (
-    <main className="relative min-h-screen bg-white text-gray-700 dark:bg-[#050816] dark:text-slate-100">
+    <main className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0">
       <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:static md:shadow-none">
         <div className="mx-auto h-full max-w-[1920px] px-4">
           <div className="flex h-full items-center justify-center">
@@ -218,7 +206,70 @@ export default function SignupPage() {
         </div>
       </section>
 
-      
+      <nav
+        className="mobile-bottom-nav"
+        aria-label="Mobile bottom navigation"
+        dir="ltr"
+      >
+        <div className="mobile-bottom-nav__inner">
+          <Link
+            href="/properties"
+            className="mobile-bottom-nav__item mobile-bottom-nav__item--search"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.9}
+              stroke="currentColor"
+              className="mobile-bottom-nav__icon"
+            >
+              <circle cx="11" cy="11" r="6.5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 16l4 4" />
+            </svg>
+            <span className="mobile-bottom-nav__label">Search</span>
+          </Link>
+
+          <Link
+            href="/community"
+            className="mobile-bottom-nav__item mobile-bottom-nav__item--community"
+          >
+            <img
+              src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
+              alt="Community"
+              className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+              draggable={false}
+            />
+            <span className="mobile-bottom-nav__label">Community</span>
+          </Link>
+
+          <Link
+            href="/signup"
+            className="mobile-bottom-nav__item mobile-bottom-nav__item--account mobile-bottom-nav__item--active"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.9}
+              stroke="currentColor"
+              className="mobile-bottom-nav__icon"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4.5 19.125a7.5 7.5 0 0 1 15 0"
+              />
+            </svg>
+            <span className="mobile-bottom-nav__label">Sign up</span>
+          </Link>
+        </div>
+      </nav>
 
       <style jsx>{`
         .form {
@@ -503,97 +554,121 @@ export default function SignupPage() {
           box-sizing: border-box;
         }
 
-        .footer-esaf {
-          background: #054aff;
-          color: #ffffff;
-          margin-top: 56px;
+        .mobile-bottom-nav {
+          position: fixed;
+          left: 50%;
+          right: auto;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+          z-index: 120;
+          display: none;
+          width: min(calc(100vw - 28px), 420px);
+          max-width: 420px;
+          overflow: hidden;
+          direction: ltr;
+          border: 1px solid rgba(255, 255, 255, 0.62);
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.78),
+              rgba(255, 255, 255, 0.56)
+            );
+          backdrop-filter: blur(22px) saturate(180%);
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          padding: 0;
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
+          transform: translateX(-50%);
         }
 
-        .footer-esaf-container {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 72px 48px 34px;
-        }
-
-        .footer-esaf-top {
+        .mobile-bottom-nav__inner {
           display: grid;
-          grid-template-columns: minmax(0, 1.5fr) 320px 280px;
-          gap: 72px;
-          align-items: start;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          align-items: center;
+          width: 100%;
+          height: 68px;
+          padding: 0 8px;
+          direction: ltr;
         }
 
-        .footer-esaf-title {
-          margin: 0;
-          color: #ffffff;
-          font-size: clamp(42px, 5vw, 64px);
-          line-height: 0.98;
-          letter-spacing: -0.06em;
-          font-weight: 500;
-          text-transform: uppercase;
-        }
-
-        .footer-esaf-heading {
-          margin: 0 0 18px;
-          color: #ffffff;
-          font-size: 24px;
-          line-height: 1.2;
-          font-weight: 700;
-          letter-spacing: -0.03em;
-        }
-
-        .footer-esaf-links {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .footer-esaf-link {
-          display: inline-block;
-          width: fit-content;
-          color: #ffffff;
-          text-decoration: underline;
-          text-decoration-thickness: 1px;
-          text-underline-offset: 8px;
-          font-size: 18px;
-          line-height: 1.45;
-          font-weight: 500;
-          transition: opacity 0.2s ease;
-        }
-
-        .footer-esaf-link:hover {
-          opacity: 0.78;
-        }
-
-        .footer-esaf-email {
-          display: inline-block;
-          color: #ffffff;
-          text-decoration: none;
-          font-size: 18px;
-          line-height: 1.45;
-          font-weight: 500;
-          transition: opacity 0.2s ease;
-        }
-
-        .footer-esaf-email:hover {
-          opacity: 0.78;
-        }
-
-        .footer-esaf-bottom {
+        .mobile-bottom-nav__item {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 34px;
-          padding-top: 92px;
+          min-width: 0;
+          min-height: 100%;
+          gap: 4px;
+          border-radius: 999px;
+          text-decoration: none;
+          color: #6b7280;
+          box-sizing: border-box;
+          text-align: center;
+          transition:
+            color 0.2s ease,
+            background 0.2s ease,
+            transform 0.2s ease;
         }
 
-        .footer-esaf-copyright {
+        .mobile-bottom-nav__item--search {
+          order: 1;
+        }
+
+        .mobile-bottom-nav__item--community {
+          order: 2;
+        }
+
+        .mobile-bottom-nav__item--account {
+          order: 3;
+        }
+
+        .mobile-bottom-nav__item--active {
+          color: #054aff;
+        }
+
+        .mobile-bottom-nav__icon {
+          width: 22px;
+          height: 22px;
+          display: block;
+          flex-shrink: 0;
+        }
+
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.45);
+          opacity: 1;
+          transition: filter 0.2s ease;
+        }
+
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
+        }
+
+        .mobile-bottom-nav__label {
+          display: block;
+          width: 100%;
           margin: 0;
-          color: #ffffff;
+          padding: 0;
+          font-size: 11px;
+          line-height: 1;
+          font-weight: 500;
+          letter-spacing: 0.01em;
           text-align: center;
-          font-size: 16px;
-          line-height: 1.5;
-          letter-spacing: -0.02em;
+          white-space: nowrap;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+          .mobile-bottom-nav__item:hover {
+            color: #111827;
+            background: rgba(255, 255, 255, 0.34);
+          }
+
+          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image {
+            filter: grayscale(1) brightness(0.2);
+            opacity: 1;
+          }
         }
 
         @media (prefers-color-scheme: dark) {
@@ -685,53 +760,51 @@ export default function SignupPage() {
             border-color: rgba(187, 247, 208, 0.28);
           }
 
-          .footer-esaf {
-            background: #054aff;
+          .mobile-bottom-nav {
+            border-color: rgba(255, 255, 255, 0.12);
+            background:
+              linear-gradient(
+                180deg,
+                rgba(15, 23, 42, 0.82),
+                rgba(15, 23, 42, 0.58)
+              );
+            box-shadow:
+              0 18px 48px rgba(0, 0, 0, 0.42),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
           }
-        }
 
-        @media (max-width: 1100px) {
-          .footer-esaf-top {
-            grid-template-columns: 1fr 1fr;
-            gap: 48px 36px;
+          .mobile-bottom-nav__item {
+            color: #94a3b8;
           }
 
-          .footer-esaf-top-left {
-            grid-column: 1 / -1;
+          .mobile-bottom-nav__item:hover {
+            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.08);
+          }
+
+          .mobile-bottom-nav__item--active {
+            color: #60a5fa;
+          }
+
+          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
+              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
+          }
+
+          .mobile-bottom-nav__icon--image {
+            filter: brightness(0) invert(1);
+            opacity: 0.72;
+          }
+
+          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image {
+            filter: brightness(0) invert(1);
+            opacity: 1;
           }
         }
 
         @media (max-width: 768px) {
-          .footer-esaf-container {
-            padding: 48px 22px 28px;
-          }
-
-          .footer-esaf-top {
-            grid-template-columns: 1fr;
-            gap: 34px;
-          }
-
-          .footer-esaf-title {
-            font-size: 36px;
-          }
-
-          .footer-esaf-heading {
-            font-size: 22px;
-            margin-bottom: 14px;
-          }
-
-          .footer-esaf-link,
-          .footer-esaf-email {
-            font-size: 17px;
-          }
-
-          .footer-esaf-bottom {
-            padding-top: 56px;
-            gap: 26px;
-          }
-
-          .footer-esaf-copyright {
-            font-size: 14px;
+          .mobile-bottom-nav {
+            display: block;
           }
         }
 
@@ -784,6 +857,13 @@ export default function SignupPage() {
 
           #text-inside {
             font-size: 0.82em;
+          }
+        }
+
+        @media (max-width: 420px) {
+          .mobile-bottom-nav {
+            width: calc(100vw - 24px);
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
           }
         }
 

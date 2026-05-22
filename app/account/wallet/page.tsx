@@ -472,25 +472,39 @@ export default async function AccountWalletPage() {
 
         .mobile-bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          left: 50%;
+          right: auto;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
           z-index: 120;
           display: none;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+          width: min(calc(100vw - 28px), 420px);
+          max-width: 420px;
+          overflow: hidden;
+          direction: ltr;
+          border: 1px solid rgba(255, 255, 255, 0.62);
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.78),
+              rgba(255, 255, 255, 0.56)
+            );
+          backdrop-filter: blur(22px) saturate(180%);
+          -webkit-backdrop-filter: blur(22px) saturate(180%);
+          padding: 0;
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
+          transform: translateX(-50%);
         }
 
         .mobile-bottom-nav__inner {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           align-items: center;
-          height: 64px;
+          height: 68px;
           padding: 0 8px;
+          direction: ltr;
         }
 
         .mobile-bottom-nav__item {
@@ -499,16 +513,19 @@ export default async function AccountWalletPage() {
           align-items: center;
           justify-content: center;
           gap: 4px;
+          border-radius: 999px;
           text-decoration: none;
           color: #6b7280;
           min-height: 100%;
           transition:
             color 0.2s ease,
+            background 0.2s ease,
             transform 0.2s ease;
         }
 
         .mobile-bottom-nav__item:hover {
           color: #111827;
+          background: rgba(255, 255, 255, 0.34);
         }
 
         .mobile-bottom-nav__item--active {
@@ -528,7 +545,8 @@ export default async function AccountWalletPage() {
 
         .mobile-bottom-nav__icon--image {
           object-fit: contain;
-          filter: grayscale(1) brightness(0.55);
+          filter: grayscale(1) brightness(0.45);
+          opacity: 1;
           transition: filter 0.2s ease;
         }
 
@@ -575,9 +593,16 @@ export default async function AccountWalletPage() {
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 255, 255, 0.12);
+            background:
+              linear-gradient(
+                180deg,
+                rgba(15, 23, 42, 0.82),
+                rgba(15, 23, 42, 0.58)
+              );
+            box-shadow:
+              0 18px 48px rgba(0, 0, 0, 0.42),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
           }
 
           .mobile-bottom-nav__item {
@@ -796,9 +821,16 @@ export default async function AccountWalletPage() {
             font-size: 14px;
           }
         }
+
+        @media (max-width: 420px) {
+          .mobile-bottom-nav {
+            width: calc(100vw - 24px);
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+          }
+        }
       `}</style>
 
-      <div className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0">
+      <div className="relative min-h-screen bg-[#f7f7f8] pb-32 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0">
         <input id="nav-menu-toggle" type="checkbox" className="sr-only" aria-hidden="true" />
 
         <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
@@ -1038,7 +1070,7 @@ export default async function AccountWalletPage() {
           </div>
         </footer>
 
-        <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+        <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation" dir="ltr">
           <div className="mobile-bottom-nav__inner">
             <Link href={propertiesHref} className="mobile-bottom-nav__item">
               <svg

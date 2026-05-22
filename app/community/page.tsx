@@ -312,7 +312,7 @@ export default async function CommunityPage({
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="relative min-h-screen bg-[#f7f7f8] pb-32 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <div className="pwa-install-banner" id="pwa-install-banner">
         <button
@@ -734,25 +734,55 @@ export default async function CommunityPage({
 
         .mobile-bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          left: max(14px, env(safe-area-inset-left, 0px));
+          right: max(14px, env(safe-area-inset-right, 0px));
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
           z-index: 120;
           display: none;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              135deg,
+              rgba(255, 255, 255, 0.82),
+              rgba(255, 255, 255, 0.58)
+            );
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            0 6px 18px rgba(15, 23, 42, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.85),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.45);
+          backdrop-filter: blur(22px) saturate(1.45);
+          -webkit-backdrop-filter: blur(22px) saturate(1.45);
+        }
+
+        .mobile-bottom-nav::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(
+              circle at 18% 0%,
+              rgba(255, 255, 255, 0.78),
+              transparent 34%
+            ),
+            linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.34),
+              rgba(255, 255, 255, 0.08)
+            );
         }
 
         .mobile-bottom-nav__inner {
+          position: relative;
+          z-index: 1;
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           align-items: center;
-          height: 64px;
-          padding: 0 8px;
+          height: 70px;
+          padding: 0 14px;
         }
 
         .mobile-bottom-nav__item {
@@ -858,9 +888,18 @@ export default async function CommunityPage({
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 255, 255, 0.16);
+            background:
+              linear-gradient(
+                135deg,
+                rgba(15, 23, 42, 0.78),
+                rgba(15, 23, 42, 0.52)
+              );
+            box-shadow:
+              0 18px 45px rgba(0, 0, 0, 0.36),
+              0 6px 18px rgba(0, 0, 0, 0.24),
+              inset 0 1px 0 rgba(255, 255, 255, 0.14),
+              inset 0 -1px 0 rgba(255, 255, 255, 0.08);
           }
 
           .mobile-bottom-nav__item {

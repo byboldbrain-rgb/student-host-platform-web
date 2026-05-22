@@ -761,7 +761,6 @@ export default async function SakanSeoPage({
 
   // أقل عدد كروت على الصفحة = Scroll أخف على الموبايل
   const PAGE_SIZE = 8
-  const MAX_CARD_IMAGES = 3
 
   const currentPage = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
   const from = (currentPage - 1) * PAGE_SIZE
@@ -1102,18 +1101,15 @@ export default async function SakanSeoPage({
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
-          strokeWidth={2.2}
+          strokeWidth={1.5}
           stroke="currentColor"
-          className="h-5 w-5"
+          className={`h-6 w-6 ${isArabic ? 'rotate-180' : ''}`}
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d={
-              isArabic
-                ? 'm8.25 4.5 7.5 7.5-7.5 7.5'
-                : 'M15.75 19.5 8.25 12l7.5-7.5'
-            }
+            d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
           />
         </svg>
       </Link>
@@ -1165,7 +1161,6 @@ export default async function SakanSeoPage({
         return a.originalIndex - b.originalIndex
       })
       .map((item) => item.imageUrl)
-      .slice(0, MAX_CARD_IMAGES)
   }
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
@@ -1262,7 +1257,7 @@ export default async function SakanSeoPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <input
         id="nav-menu-toggle"
@@ -1639,14 +1634,21 @@ export default async function SakanSeoPage({
           height: 100%;
           overflow-x: auto;
           overflow-y: hidden;
+          direction: ltr;
           scroll-snap-type: x mandatory;
+          scroll-behavior: smooth;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
           -ms-overflow-style: none;
-          touch-action: pan-x;
+          touch-action: pan-x pan-y;
           overscroll-behavior-x: contain;
           overscroll-behavior-y: auto;
           contain: layout paint;
+          cursor: grab;
+        }
+
+        .property-media-slider:active {
+          cursor: grabbing;
         }
 
         .property-media-slider::-webkit-scrollbar {
@@ -1657,6 +1659,7 @@ export default async function SakanSeoPage({
           display: flex;
           width: 100%;
           height: 100%;
+          direction: ltr;
           contain: layout paint;
         }
 
@@ -1665,8 +1668,9 @@ export default async function SakanSeoPage({
           flex: 0 0 100%;
           width: 100%;
           height: 100%;
+          direction: ltr;
           scroll-snap-align: start;
-          scroll-snap-stop: normal;
+          scroll-snap-stop: always;
           user-select: none;
           -webkit-user-drag: none;
           contain: layout paint;
@@ -1864,25 +1868,55 @@ export default async function SakanSeoPage({
 
         .mobile-bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          left: max(14px, env(safe-area-inset-left, 0px));
+          right: max(14px, env(safe-area-inset-right, 0px));
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
           z-index: 120;
           display: none;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              135deg,
+              rgba(255, 255, 255, 0.82),
+              rgba(255, 255, 255, 0.58)
+            );
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            0 6px 18px rgba(15, 23, 42, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.85),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.45);
+          backdrop-filter: blur(22px) saturate(1.45);
+          -webkit-backdrop-filter: blur(22px) saturate(1.45);
+        }
+
+        .mobile-bottom-nav::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(
+              circle at 18% 0%,
+              rgba(255, 255, 255, 0.78),
+              transparent 34%
+            ),
+            linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.34),
+              rgba(255, 255, 255, 0.08)
+            );
         }
 
         .mobile-bottom-nav__inner {
+          position: relative;
+          z-index: 1;
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           align-items: center;
-          height: 64px;
-          padding: 0 8px;
+          height: 70px;
+          padding: 0 14px;
         }
 
         .mobile-bottom-nav__item {
@@ -2157,8 +2191,6 @@ export default async function SakanSeoPage({
 
           .mobile-bottom-nav {
             display: block;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
           }
 
           .mega-menu-overlay {
@@ -2298,9 +2330,18 @@ export default async function SakanSeoPage({
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.10);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 255, 255, 0.16);
+            background:
+              linear-gradient(
+                135deg,
+                rgba(15, 23, 42, 0.78),
+                rgba(15, 23, 42, 0.52)
+              );
+            box-shadow:
+              0 18px 45px rgba(0, 0, 0, 0.36),
+              0 6px 18px rgba(0, 0, 0, 0.24),
+              inset 0 1px 0 rgba(255, 255, 255, 0.14),
+              inset 0 -1px 0 rgba(255, 255, 255, 0.08);
           }
 
           .mobile-bottom-nav__item {

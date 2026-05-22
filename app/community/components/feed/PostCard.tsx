@@ -219,7 +219,7 @@ export default function PostCard({
     >
       <div
         className={cx(
-          "mx-auto w-full max-w-[300px]",
+          "mx-auto w-full max-w-[370px]",
           showDivider && "border-b border-black/10 pb-4 dark:border-white/10"
         )}
       >
@@ -234,7 +234,7 @@ export default function PostCard({
           media={post.media}
           altFallback={`${post.author.name} post media`}
           priority={priority}
-          aspectRatio="instagram"
+          aspectRatio="auto"
           className={cx("mx-auto w-full", hasVideo && "max-w-[420px]")}
           onOpenMedia={handleOpenMedia}
         />

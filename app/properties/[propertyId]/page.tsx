@@ -8,6 +8,7 @@ import DesktopPropertyGallery from './DesktopPropertyGallery'
 import MobilePropertySlider from './MobilePropertySlider'
 import PropertyAmenitiesSection from './PropertyAmenitiesSection'
 import PropertyEnquireButton from './PropertyEnquireButton'
+import PropertyShareButton from './PropertyShareButton'
 import SwipeableSheetWrapper from './SwipeableSheetWrapper'
 import './property-page.css'
 import PwaInstallBanner from '../../components/PwaInstallBanner'
@@ -337,6 +338,10 @@ const TRANSLATIONS = {
     account: 'Account',
     mobileLogin: 'Log in',
     selectYourRoom: 'Select Your Room',
+    share: 'Share',
+    shareProperty: 'Share property',
+    shareText: 'Check this property on Navienty',
+    copied: 'Copied',
     copyright: `© ${new Date().getFullYear()} Navienty | All rights reserved.`,
   },
   ar: {
@@ -446,6 +451,10 @@ const TRANSLATIONS = {
     account: 'الحساب',
     mobileLogin: 'تسجيل الدخول',
     selectYourRoom: 'اختر غرفتك',
+    share: 'مشاركة',
+    shareProperty: 'مشاركة السكن',
+    shareText: 'شوف السكن ده على Navienty',
+    copied: 'تم النسخ',
     copyright: `© ${new Date().getFullYear()} نافينتي | جميع الحقوق محفوظة.`,
   },
 } as const
@@ -1985,7 +1994,7 @@ export default async function PropertyPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="relative min-h-screen bg-white pb-40 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <script
         type="application/ld+json"
@@ -2022,6 +2031,106 @@ export default async function PropertyPage({
           overflow: hidden;
         }
 
+        .mobile-bottom-nav {
+          position: fixed;
+          left: 50%;
+          right: auto;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+          z-index: 120;
+          display: none;
+          width: calc(100% - 28px);
+          max-width: 430px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.72);
+          box-shadow:
+            0 18px 44px rgba(15, 23, 42, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.78);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          transform: translateX(-50%);
+        }
+
+        .mobile-bottom-nav__inner {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          align-items: center;
+          height: 70px;
+          padding: 0 12px;
+        }
+
+        .mobile-bottom-nav__item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          min-height: 70px;
+          color: #6b7280;
+          text-decoration: none;
+          transition:
+            color 0.2s ease,
+            transform 0.2s ease;
+        }
+
+        .mobile-bottom-nav__item:hover {
+          color: #111827;
+        }
+
+        .mobile-bottom-nav__item--active {
+          color: #054aff;
+        }
+
+        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
+          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
+            hue-rotate(223deg) brightness(104%) contrast(106%);
+        }
+
+        .mobile-bottom-nav__icon {
+          width: 22px;
+          height: 22px;
+          display: block;
+        }
+
+        .mobile-bottom-nav__icon--image {
+          object-fit: contain;
+          filter: grayscale(1) brightness(0.55);
+          transition: filter 0.2s ease;
+        }
+
+        .mobile-bottom-nav__label {
+          font-size: 11px;
+          line-height: 1;
+          font-weight: 500;
+          letter-spacing: 0.01em;
+        }
+
+        .mobile-rooms-cta {
+          position: fixed;
+          left: 50%;
+          right: auto;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
+          z-index: 125;
+          width: calc(100% - 28px);
+          max-width: 430px;
+          transform: translateX(-50%);
+        }
+
+        .mobile-rooms-cta__button {
+          width: 100%;
+          min-height: 52px;
+          border-radius: 999px;
+          box-shadow: 0 12px 30px rgba(5, 74, 255, 0.25);
+        }
+
+        @media (max-width: 768px) {
+          .mobile-bottom-nav {
+            display: block;
+          }
+        }
+
+
         @media (prefers-color-scheme: dark) {
           .property-address {
             color: #cbd5e1;
@@ -2049,9 +2158,11 @@ export default async function PropertyPage({
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.10);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 255, 255, 0.16);
+            background: rgba(11, 18, 32, 0.68);
+            box-shadow:
+              0 18px 44px rgba(0, 0, 0, 0.36),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
           }
 
           .mobile-bottom-nav__item {
@@ -2220,6 +2331,23 @@ export default async function PropertyPage({
             title={propertyTitle}
             isArabic={isArabic}
           />
+
+          <div
+            className={`absolute top-4 z-30 ${isArabic ? 'left-4' : 'right-4'}`}
+          >
+            <PropertyShareButton
+              url={canonicalUrl}
+              title={propertyTitle}
+              text={`${t.shareText}: ${propertyTitle}`}
+              isArabic={isArabic}
+              labels={{
+                share: t.share,
+                shareProperty: t.shareProperty,
+                copied: t.copied,
+              }}
+              compact
+            />
+          </div>
 
           <div className="relative -mt-7 rounded-t-[28px] bg-white px-5 pb-8 pt-5 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] dark:bg-[#050816] dark:shadow-[0_-10px_28px_rgba(0,0,0,0.35)]">
             <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-200 dark:bg-white/15" />
@@ -2399,16 +2527,30 @@ export default async function PropertyPage({
       <div className="hidden md:block">
         <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3">
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[22px] lg:text-[26px]">
-                {propertyTitle}
-              </h1>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[22px] lg:text-[26px]">
+                  {propertyTitle}
+                </h1>
 
-              {addressText && (
-                <div className="mt-3">
-                  <PropertyAddress address={addressText} isArabic={isArabic} />
-                </div>
-              )}
+                {addressText && (
+                  <div className="mt-3">
+                    <PropertyAddress address={addressText} isArabic={isArabic} />
+                  </div>
+                )}
+              </div>
+
+              <PropertyShareButton
+                url={canonicalUrl}
+                title={propertyTitle}
+                text={`${t.shareText}: ${propertyTitle}`}
+                isArabic={isArabic}
+                labels={{
+                  share: t.share,
+                  shareProperty: t.shareProperty,
+                  copied: t.copied,
+                }}
+              />
             </div>
           </div>
 

@@ -51,7 +51,7 @@ export default function LoginPage() {
   ]
 
   return (
-    <main className="relative h-screen overflow-hidden bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0">
+    <main className="relative h-screen overflow-hidden bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0">
       <header className="sticky top-0 z-40 h-20 border-b border-gray-200 bg-[#f7f7f7] shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:static md:shadow-none">
         <div className="mx-auto h-full max-w-[1920px] px-4">
           <div className="flex h-full items-center justify-center">
@@ -234,6 +234,60 @@ export default function LoginPage() {
         accountHref="/login"
         accountLabel="Log in"
       />
+
+      <style jsx global>{`
+        .mobile-bottom-nav {
+          position: fixed !important;
+          left: 14px !important;
+          right: 14px !important;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+          z-index: 120 !important;
+          display: none;
+          width: auto !important;
+          max-width: 430px;
+          margin: 0 auto;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.72) !important;
+          border-radius: 999px !important;
+          background: rgba(255, 255, 255, 0.72) !important;
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.82) !important;
+          backdrop-filter: blur(22px) saturate(180%) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+          padding: 0 !important;
+        }
+
+        .mobile-bottom-nav__inner {
+          height: 64px !important;
+          display: grid !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          align-items: center !important;
+          padding: 0 10px !important;
+          border-radius: inherit;
+        }
+
+        .mobile-bottom-nav__item {
+          min-height: 100% !important;
+          border-radius: 999px;
+        }
+
+        @media (max-width: 768px) {
+          .mobile-bottom-nav {
+            display: block !important;
+          }
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .mobile-bottom-nav {
+            border-color: rgba(255, 255, 255, 0.14) !important;
+            background: rgba(11, 18, 32, 0.72) !important;
+            box-shadow:
+              0 18px 45px rgba(0, 0, 0, 0.34),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+          }
+        }
+      `}</style>
 
       <style jsx>{`
         .form {

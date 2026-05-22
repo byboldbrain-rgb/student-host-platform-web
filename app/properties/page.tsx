@@ -593,6 +593,21 @@ export default async function PropertiesPage({
       count: page.published_properties_count,
     }))
 
+  const seoItemListJsonLd =
+    seoNavigationLinks.length > 0
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'ItemList',
+          name: 'Navienty student housing pages',
+          itemListElement: seoNavigationLinks.map((item, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            name: item.label,
+            url: `${SITE_URL}${item.href}`,
+          })),
+        }
+      : null
+
   const buildPageLink = (updates: Partial<SearchParams> = {}) => {
     const params = new URLSearchParams()
 
@@ -1056,7 +1071,7 @@ export default async function PropertiesPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <div className="pwa-install-banner" id="pwa-install-banner">
         <button
@@ -1184,6 +1199,17 @@ export default async function PropertiesPage({
           `,
         }}
       />
+
+      {seoItemListJsonLd && (
+        <Script
+          id="properties-sakan-seo-item-list"
+          type="application/ld+json"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(seoItemListJsonLd).replace(/</g, '\\u003c'),
+          }}
+        />
+      )}
 
       <input
         id="nav-menu-toggle"
@@ -1750,25 +1776,55 @@ export default async function PropertiesPage({
 
         .mobile-bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          left: max(14px, env(safe-area-inset-left, 0px));
+          right: max(14px, env(safe-area-inset-right, 0px));
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
           z-index: 120;
           display: none;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              135deg,
+              rgba(255, 255, 255, 0.82),
+              rgba(255, 255, 255, 0.58)
+            );
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.18),
+            0 6px 18px rgba(15, 23, 42, 0.08),
+            inset 0 1px 0 rgba(255, 255, 255, 0.85),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.45);
+          backdrop-filter: blur(22px) saturate(1.45);
+          -webkit-backdrop-filter: blur(22px) saturate(1.45);
+        }
+
+        .mobile-bottom-nav::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(
+              circle at 18% 0%,
+              rgba(255, 255, 255, 0.78),
+              transparent 34%
+            ),
+            linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.34),
+              rgba(255, 255, 255, 0.08)
+            );
         }
 
         .mobile-bottom-nav__inner {
+          position: relative;
+          z-index: 1;
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           align-items: center;
-          height: 64px;
-          padding: 0 8px;
+          height: 70px;
+          padding: 0 14px;
         }
 
         .mobile-bottom-nav__item {
@@ -2209,9 +2265,18 @@ export default async function PropertiesPage({
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 255, 255, 0.16);
+            background:
+              linear-gradient(
+                135deg,
+                rgba(15, 23, 42, 0.78),
+                rgba(15, 23, 42, 0.52)
+              );
+            box-shadow:
+              0 18px 45px rgba(0, 0, 0, 0.36),
+              0 6px 18px rgba(0, 0, 0, 0.24),
+              inset 0 1px 0 rgba(255, 255, 255, 0.14),
+              inset 0 -1px 0 rgba(255, 255, 255, 0.08);
           }
 
           .mobile-bottom-nav__item {
@@ -2401,46 +2466,6 @@ export default async function PropertiesPage({
           </section>
         )}
 
-        {seoNavigationLinks.length > 0 && (
-          <section
-            className="mb-10 rounded-[28px] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-[#0b1220] md:mb-14 md:p-7"
-            aria-labelledby="student-housing-seo-links"
-          >
-            <div className="max-w-3xl">
-              <p className="mb-2 text-sm font-bold text-[#054aff] dark:text-blue-300">
-                بدون أي عمولة على الطالب
-              </p>
-
-              <h2
-                id="student-housing-seo-links"
-                className="text-[22px] font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[28px]"
-              >
-                تصفح سكن الطلاب حسب الجامعة والمنطقة
-              </h2>
-
-              <p className="mt-3 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-                Navienty يساعد الطلاب على اكتشاف ومقارنة أماكن السكن الطلابي
-                والتواصل مع المضيفين بسهولة. اختار الجامعة أو المنطقة المناسبة
-                وشوف السكن المتاح بصفحات مخصصة وسهلة التصفح.
-              </p>
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-2.5">
-              {seoNavigationLinks.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-[#054aff] hover:text-[#054aff] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100 dark:hover:border-blue-300 dark:hover:text-blue-300"
-                >
-                  <span>{item.label}</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500 dark:bg-white/10 dark:text-slate-300">
-                    {item.count}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
 
       <footer className="footer-esaf hidden md:block">

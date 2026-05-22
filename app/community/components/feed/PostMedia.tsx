@@ -17,6 +17,11 @@ type PostMediaProps = {
   onOpenMedia?: (index: number) => void;
 };
 
+type ImageSize = {
+  width: number;
+  height: number;
+};
+
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
@@ -26,46 +31,49 @@ function clampIndex(index: number, length: number) {
   return Math.min(Math.max(index, 0), length - 1);
 }
 
-function resolveInstagramImageAspectClass(activeItem?: FeedMediaItem) {
-  if (!activeItem?.width || !activeItem?.height) {
-    return "aspect-[4/5]";
-  }
+function getKnownImageSize(item?: FeedMediaItem): ImageSize | null {
+  if (!item || item.type !== "image") return null;
+  if (!item.width || !item.height) return null;
 
-  const ratio = activeItem.width / activeItem.height;
-
-  // Instagram landscape post = 1.91:1
-  if (ratio >= 1.2) return "aspect-[1.91]";
-  // Instagram square post = 1:1
-  if (ratio >= 0.95 && ratio <= 1.05) return "aspect-square";
-  // Instagram portrait post = 4:5
-  return "aspect-[4/5]";
+  return {
+    width: item.width,
+    height: item.height,
+  };
 }
 
-function resolveAspectClass(
+function getSafeAspectRatio(size: ImageSize | null) {
+  if (!size?.width || !size?.height) return null;
+
+  const ratio = size.width / size.height;
+
+  if (!Number.isFinite(ratio) || ratio <= 0) return null;
+
+  return ratio;
+}
+
+function resolveFallbackAspectRatio(
   aspectRatio: PostMediaProps["aspectRatio"],
   activeItem?: FeedMediaItem
 ) {
-  if (aspectRatio === "square") return "aspect-square";
-  if (aspectRatio === "portrait") return "aspect-[4/5]";
+  if (activeItem?.type === "video") return 9 / 16;
+
+  if (aspectRatio === "square") return 1;
+  if (aspectRatio === "portrait") return 4 / 5;
 
   if (aspectRatio === "instagram") {
-    if (activeItem?.type === "video") {
-      return "aspect-[9/16]";
+    const knownSize = getKnownImageSize(activeItem);
+    const knownRatio = getSafeAspectRatio(knownSize);
+
+    if (knownRatio) {
+      if (knownRatio >= 1.2) return 1.91;
+      if (knownRatio >= 0.95 && knownRatio <= 1.05) return 1;
+      return 4 / 5;
     }
 
-    return resolveInstagramImageAspectClass(activeItem);
+    return 4 / 5;
   }
 
-  if (!activeItem?.width || !activeItem?.height) {
-    return "aspect-[4/5]";
-  }
-
-  const ratio = activeItem.width / activeItem.height;
-
-  if (activeItem.type === "video") return "aspect-[9/16]";
-  if (ratio >= 1.2) return "aspect-[1.91]";
-  if (ratio <= 0.85) return "aspect-[4/5]";
-  return "aspect-square";
+  return 4 / 5;
 }
 
 export default function PostMedia({
@@ -73,22 +81,46 @@ export default function PostMedia({
   altFallback = "Post media",
   priority = false,
   initialIndex = 0,
-  aspectRatio = "instagram",
+  aspectRatio = "auto",
   className,
   onOpenMedia,
 }: PostMediaProps) {
   const safeInitialIndex = clampIndex(initialIndex, media.length);
   const [activeIndex, setActiveIndex] = useState(safeInitialIndex);
+  const [loadedImageSizes, setLoadedImageSizes] = useState<Record<string, ImageSize>>({});
 
   const activeItem = media[activeIndex];
   const hasMultipleMedia = media.length > 1;
   const canGoPrev = activeIndex > 0;
   const canGoNext = activeIndex < media.length - 1;
 
-  const aspectClass = useMemo(
-    () => resolveAspectClass(aspectRatio, activeItem),
-    [aspectRatio, activeItem]
-  );
+  const activeImageSize = useMemo(() => {
+    if (!activeItem || activeItem.type !== "image") return null;
+
+    const knownSize = getKnownImageSize(activeItem);
+
+    if (knownSize) return knownSize;
+
+    return loadedImageSizes[String(activeItem.id)] ?? null;
+  }, [activeItem, loadedImageSizes]);
+
+  const activeAspectRatio = useMemo(() => {
+    if (!activeItem) return 4 / 5;
+
+    if (activeItem.type === "video") return 9 / 16;
+
+    const imageRatio = getSafeAspectRatio(activeImageSize);
+
+    if (aspectRatio === "auto" && imageRatio) {
+      return imageRatio;
+    }
+
+    if (aspectRatio === "auto") {
+      return resolveFallbackAspectRatio("instagram", activeItem);
+    }
+
+    return resolveFallbackAspectRatio(aspectRatio, activeItem);
+  }, [activeImageSize, activeItem, aspectRatio]);
 
   const goPrev = (event?: React.MouseEvent<HTMLButtonElement>) => {
     event?.stopPropagation();
@@ -100,6 +132,34 @@ export default function PostMedia({
     event?.stopPropagation();
     if (!canGoNext) return;
     setActiveIndex((prev) => prev + 1);
+  };
+
+  const handleImageLoad = (
+    item: FeedMediaItem,
+    event: React.SyntheticEvent<HTMLImageElement>
+  ) => {
+    const image = event.currentTarget;
+    const width = image.naturalWidth;
+    const height = image.naturalHeight;
+
+    if (!width || !height) return;
+
+    setLoadedImageSizes((prev) => {
+      const key = String(item.id);
+      const existing = prev[key];
+
+      if (existing?.width === width && existing?.height === height) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [key]: {
+          width,
+          height,
+        },
+      };
+    });
   };
 
   if (!media.length) {
@@ -121,8 +181,13 @@ export default function PostMedia({
 
   return (
     <div className={cx("relative", className)}>
-      <div className="relative overflow-hidden rounded-[24px] bg-black">
-        <div className={cx("relative w-full", aspectClass)}>
+      <div className="relative overflow-hidden rounded-[24px] bg-neutral-100 dark:bg-neutral-900">
+        <div
+          className="relative w-full transition-[aspect-ratio] duration-200"
+          style={{
+            aspectRatio: activeAspectRatio,
+          }}
+        >
           <MediaCarousel
             items={media}
             activeIndex={activeIndex}
@@ -138,7 +203,7 @@ export default function PostMedia({
                   <div
                     role="button"
                     tabIndex={0}
-                    className="relative h-full w-full cursor-pointer"
+                    className="relative h-full w-full cursor-pointer bg-black"
                     onClick={handleClick}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
@@ -176,8 +241,9 @@ export default function PostMedia({
                     alt={item.alt ?? altFallback}
                     fill
                     priority={priority && index === 0}
-                    sizes="(max-width: 768px) 100vw, 640px"
-                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 420px"
+                    className="object-contain"
+                    onLoad={(event) => handleImageLoad(item, event)}
                   />
                 </div>
               );
@@ -185,67 +251,46 @@ export default function PostMedia({
           />
 
           {hasMultipleMedia && canGoPrev ? (
-  <button
-    type="button"
-    onClick={goPrev}
-    aria-label="Previous media"
-    className={cx(
-      "absolute left-2.5 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center md:flex",
-      "h-8 w-8 rounded-full",
-      "bg-white/88 text-neutral-600",
-      "border border-black/5",
-      "shadow-[0_1px_2px_rgba(0,0,0,0.18),0_4px_12px_rgba(0,0,0,0.14)]",
-      "backdrop-blur-[2px]",
-      "transition-opacity duration-150",
-      "hover:bg-white/92",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/20"
-    )}
-  >
-    <ChevronLeft className="h-4 w-4 stroke-[2.75]" />
-  </button>
-) : null}
-
-{hasMultipleMedia && canGoNext ? (
-  <button
-    type="button"
-    onClick={goNext}
-    aria-label="Next media"
-    className={cx(
-      "absolute right-2.5 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center md:flex",
-      "h-8 w-8 rounded-full",
-      "bg-white/88 text-neutral-600",
-      "border border-black/5",
-      "shadow-[0_1px_2px_rgba(0,0,0,0.18),0_4px_12px_rgba(0,0,0,0.14)]",
-      "backdrop-blur-[2px]",
-      "transition-opacity duration-150",
-      "hover:bg-white/92",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/20"
-    )}
-  >
-    <ChevronRight className="h-4 w-4 stroke-[2.75]" />
-  </button>
-) : null}
+            <button
+              type="button"
+              onClick={goPrev}
+              aria-label="Previous media"
+              className={cx(
+                "absolute left-2.5 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center md:flex",
+                "h-8 w-8 rounded-full",
+                "bg-white/88 text-neutral-600",
+                "border border-black/5",
+                "shadow-[0_1px_2px_rgba(0,0,0,0.18),0_4px_12px_rgba(0,0,0,0.14)]",
+                "backdrop-blur-[2px]",
+                "transition-opacity duration-150",
+                "hover:bg-white/92",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/20"
+              )}
+            >
+              <ChevronLeft className="h-4 w-4 stroke-[2.75]" />
+            </button>
+          ) : null}
 
           {hasMultipleMedia && canGoNext ? (
-  <button
-    type="button"
-    onClick={goNext}
-    aria-label="Next media"
-    className={cx(
-      "absolute right-2.5 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center md:flex",
-      "h-8 w-8 rounded-full",
-      "bg-white/88 text-neutral-600",
-      "border border-black/5",
-      "shadow-[0_1px_2px_rgba(0,0,0,0.18),0_4px_12px_rgba(0,0,0,0.14)]",
-      "backdrop-blur-[2px]",
-      "transition-opacity duration-150",
-      "hover:bg-white/92",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/20"
-    )}
-  >
-    <ChevronRight className="h-4 w-4 stroke-[2.75]" />
-  </button>
-) : null}
+            <button
+              type="button"
+              onClick={goNext}
+              aria-label="Next media"
+              className={cx(
+                "absolute right-2.5 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center md:flex",
+                "h-8 w-8 rounded-full",
+                "bg-white/88 text-neutral-600",
+                "border border-black/5",
+                "shadow-[0_1px_2px_rgba(0,0,0,0.18),0_4px_12px_rgba(0,0,0,0.14)]",
+                "backdrop-blur-[2px]",
+                "transition-opacity duration-150",
+                "hover:bg-white/92",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/20"
+              )}
+            >
+              <ChevronRight className="h-4 w-4 stroke-[2.75]" />
+            </button>
+          ) : null}
 
           {hasMultipleMedia ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-1.5 px-16">

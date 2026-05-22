@@ -280,18 +280,17 @@ export default function PropertiesHeader({
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
-                      strokeWidth={1.9}
+                      strokeWidth={1.5}
                       stroke="currentColor"
-                      className="h-[15px] w-[15px]"
+                      className={`h-6 w-6 ${
+                        mobileSortProps.isArabic ? 'rotate-180' : ''
+                      }`}
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d={
-                          mobileSortProps.isArabic
-                            ? 'm10 6 6 6-6 6'
-                            : 'm14 6-6 6 6 6'
-                        }
+                        d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
                       />
                     </svg>
                   </Link>

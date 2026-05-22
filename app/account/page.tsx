@@ -669,17 +669,21 @@ function AccountPageContent() {
 
         .mobile-bottom-nav {
           position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          left: 12px;
+          right: 12px;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
           z-index: 120;
           display: none;
-          background: rgba(255, 255, 255, 0.96);
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-          box-shadow: 0 -8px 30px rgba(15, 23, 42, 0.08);
+          overflow: hidden;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          backdrop-filter: blur(22px) saturate(1.35);
+          -webkit-backdrop-filter: blur(22px) saturate(1.35);
+          padding: 0;
+          box-shadow:
+            0 12px 34px rgba(15, 23, 42, 0.16),
+            inset 0 1px 0 rgba(255, 255, 255, 0.68);
         }
 
         .mobile-bottom-nav__inner {
@@ -1106,9 +1110,11 @@ function AccountPageContent() {
           }
 
           .mobile-bottom-nav {
-            background: rgba(11, 18, 32, 0.96);
-            border-top-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+            background: rgba(11, 18, 32, 0.66);
+            border-color: rgba(255, 255, 255, 0.16);
+            box-shadow:
+              0 14px 36px rgba(0, 0, 0, 0.36),
+              inset 0 1px 0 rgba(255, 255, 255, 0.10);
           }
 
           .mobile-bottom-nav__item {
@@ -1397,7 +1403,7 @@ function AccountPageContent() {
 
       <div
         dir={isArabic ? 'rtl' : 'ltr'}
-        className="relative min-h-screen bg-[#f7f7f8] pb-24 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+        className="relative min-h-screen bg-[#f7f7f8] pb-32 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
       >
         <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">

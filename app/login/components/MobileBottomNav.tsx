@@ -14,11 +14,15 @@ export default function MobileBottomNav({
   accountLabel = 'Log in',
 }: MobileBottomNavProps) {
   return (
-    <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+    <nav
+      className="mobile-bottom-nav"
+      aria-label="Mobile bottom navigation"
+      dir="ltr"
+    >
       <div className="mobile-bottom-nav__inner">
         <Link
           href="/properties"
-          className={`mobile-bottom-nav__item ${
+          className={`mobile-bottom-nav__item mobile-bottom-nav__item--search ${
             active === 'search' ? 'mobile-bottom-nav__item--active' : ''
           }`}
         >
@@ -42,7 +46,7 @@ export default function MobileBottomNav({
 
         <Link
           href="/community"
-          className={`mobile-bottom-nav__item ${
+          className={`mobile-bottom-nav__item mobile-bottom-nav__item--community ${
             active === 'community' ? 'mobile-bottom-nav__item--active' : ''
           }`}
         >
@@ -50,13 +54,14 @@ export default function MobileBottomNav({
             src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
             alt="Community"
             className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
+            draggable={false}
           />
           <span className="mobile-bottom-nav__label">Community</span>
         </Link>
 
         <Link
           href={accountHref}
-          className={`mobile-bottom-nav__item ${
+          className={`mobile-bottom-nav__item mobile-bottom-nav__item--account ${
             active === 'login' || active === 'account'
               ? 'mobile-bottom-nav__item--active'
               : ''
