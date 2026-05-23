@@ -27,8 +27,8 @@ const BROKER_CARD_FRONT_IMAGE =
 const BROKER_CARD_BACK_IMAGE =
   'https://i.ibb.co/hJgSfrJC/Avery-Davis.png'
 
-const SITE_URL = 'https://www.navienty.com'
-const DEFAULT_OG_IMAGE = '/icon.png'
+const SITE_URL = 'https://navienty.com'
+const DEFAULT_OG_IMAGE = '/og-image.jpg'
 
 type SearchParams = {
   rental_duration?: string
@@ -573,7 +573,7 @@ function getCanonicalPropertyUrl(propertyId: string) {
 function getPropertySeoTitle(property: any) {
   const title = property?.title_ar || property?.title_en || 'سكن طلاب'
 
-  return `${title} | Navienty`
+  return title
 }
 
 function getPropertySeoDescription(property: any) {
@@ -675,6 +675,13 @@ export async function generateMetadata({
     robots: {
       index: shouldIndex,
       follow: true,
+      googleBot: {
+        index: shouldIndex,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+        'max-video-preview': -1,
+      },
     },
     openGraph: {
       title,
@@ -682,7 +689,7 @@ export async function generateMetadata({
       url: canonicalUrl,
       siteName: 'Navienty',
       locale: 'ar_EG',
-      type: 'website',
+      type: 'article',
       images: [
         {
           url: image,
@@ -1740,12 +1747,6 @@ export default async function PropertyPage({
     { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
   ]
 
-  const mobileAccountHref = isSignedIn
-    ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/account-login')
-
-  const mobileAccountLabel = isSignedIn ? t.account : t.mobileLogin
-
   const addressText = isArabic
     ? typedProperty.address_ar || typedProperty.address_en || ''
     : typedProperty.address_en || typedProperty.address_ar || ''
@@ -1994,19 +1995,19 @@ export default async function PropertyPage({
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
-      className="relative min-h-screen bg-white pb-40 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="relative min-h-screen bg-white pb-24 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(propertyJsonLd),
+          __html: JSON.stringify(propertyJsonLd).replace(/</g, '\\u003c'),
         }}
       />
 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd),
+          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, '\\u003c'),
         }}
       />
 
@@ -2031,86 +2032,12 @@ export default async function PropertyPage({
           overflow: hidden;
         }
 
-        .mobile-bottom-nav {
+        .mobile-rooms-cta {
           position: fixed;
+          display: none;
           left: 50%;
           right: auto;
           bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
-          z-index: 120;
-          display: none;
-          width: calc(100% - 28px);
-          max-width: 430px;
-          overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.72);
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.72);
-          box-shadow:
-            0 18px 44px rgba(15, 23, 42, 0.18),
-            inset 0 1px 0 rgba(255, 255, 255, 0.78);
-          backdrop-filter: blur(24px) saturate(180%);
-          -webkit-backdrop-filter: blur(24px) saturate(180%);
-          transform: translateX(-50%);
-        }
-
-        .mobile-bottom-nav__inner {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          align-items: center;
-          height: 70px;
-          padding: 0 12px;
-        }
-
-        .mobile-bottom-nav__item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          min-height: 70px;
-          color: #6b7280;
-          text-decoration: none;
-          transition:
-            color 0.2s ease,
-            transform 0.2s ease;
-        }
-
-        .mobile-bottom-nav__item:hover {
-          color: #111827;
-        }
-
-        .mobile-bottom-nav__item--active {
-          color: #054aff;
-        }
-
-        .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
-          filter: brightness(0) saturate(100%) invert(18%) sepia(98%) saturate(5178%)
-            hue-rotate(223deg) brightness(104%) contrast(106%);
-        }
-
-        .mobile-bottom-nav__icon {
-          width: 22px;
-          height: 22px;
-          display: block;
-        }
-
-        .mobile-bottom-nav__icon--image {
-          object-fit: contain;
-          filter: grayscale(1) brightness(0.55);
-          transition: filter 0.2s ease;
-        }
-
-        .mobile-bottom-nav__label {
-          font-size: 11px;
-          line-height: 1;
-          font-weight: 500;
-          letter-spacing: 0.01em;
-        }
-
-        .mobile-rooms-cta {
-          position: fixed;
-          left: 50%;
-          right: auto;
-          bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
           z-index: 125;
           width: calc(100% - 28px);
           max-width: 430px;
@@ -2125,7 +2052,7 @@ export default async function PropertyPage({
         }
 
         @media (max-width: 768px) {
-          .mobile-bottom-nav {
+          .mobile-rooms-cta {
             display: block;
           }
         }
@@ -2155,42 +2082,6 @@ export default async function PropertyPage({
 
           .broker-card-name {
             color: #f8fafc;
-          }
-
-          .mobile-bottom-nav {
-            border-color: rgba(255, 255, 255, 0.16);
-            background: rgba(11, 18, 32, 0.68);
-            box-shadow:
-              0 18px 44px rgba(0, 0, 0, 0.36),
-              inset 0 1px 0 rgba(255, 255, 255, 0.12);
-          }
-
-          .mobile-bottom-nav__item {
-            color: #94a3b8;
-          }
-
-          .mobile-bottom-nav__item:hover {
-            color: #f8fafc;
-          }
-
-          .mobile-bottom-nav__item--active {
-            color: #60a5fa;
-          }
-
-          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
-            filter: brightness(0) saturate(100%) invert(63%) sepia(98%)
-              saturate(961%) hue-rotate(181deg) brightness(101%) contrast(96%);
-          }
-
-          .mobile-bottom-nav__icon--image {
-            filter: brightness(0) invert(1);
-            opacity: 0.72;
-          }
-
-          .mobile-bottom-nav__item:hover .mobile-bottom-nav__icon--image,
-          .mobile-bottom-nav__item--active .mobile-bottom-nav__icon--image {
-            filter: brightness(0) invert(1);
-            opacity: 1;
           }
 
           .mobile-rooms-sheet__backdrop {
@@ -2946,68 +2837,6 @@ export default async function PropertyPage({
         </SwipeableSheetWrapper>
       </div>
 
-      <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
-        <div className="mobile-bottom-nav__inner">
-          <Link
-            href={buildPageLink()}
-            className="mobile-bottom-nav__item mobile-bottom-nav__item--active"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.9}
-              stroke="currentColor"
-              className="mobile-bottom-nav__icon"
-            >
-              <circle cx="11" cy="11" r="6.5" />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16 16l4 4"
-              />
-            </svg>
-            <span className="mobile-bottom-nav__label">{t.explore}</span>
-          </Link>
-
-          <Link
-            href={buildSimpleNavLink('/community')}
-            className="mobile-bottom-nav__item"
-          >
-            <img
-              src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
-              alt="Community"
-              className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
-            />
-            <span className="mobile-bottom-nav__label">{t.community}</span>
-          </Link>
-
-          <Link href={mobileAccountHref} className="mobile-bottom-nav__item">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.9}
-              stroke="currentColor"
-              className="mobile-bottom-nav__icon"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4.5 19.125a7.5 7.5 0 0 1 15 0"
-              />
-            </svg>
-            <span className="mobile-bottom-nav__label">
-              {mobileAccountLabel}
-            </span>
-          </Link>
-        </div>
-      </nav>
     </main>
   )
 }

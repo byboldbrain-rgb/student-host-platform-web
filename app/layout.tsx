@@ -2,62 +2,72 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import SplashScreen from '@/components/SplashScreen'
 
-const SITE_URL = 'https://www.navienty.com'
+const SITE_URL = 'https://navienty.com'
+const SITE_NAME = 'Navienty'
+const DEFAULT_OG_IMAGE = '/og-image.jpg'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Navienty | منصة سكن الطلاب',
+    default: 'Navienty - سكن طلاب قريب من جامعتك بدون عمولة',
     template: '%s | Navienty',
   },
   description:
-    'Navienty منصة تساعد الطلاب على اكتشاف ومقارنة أماكن السكن الطلابي والتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.',
-  applicationName: 'Navienty',
+    'اكتشف سكن طلاب قريب من جامعتك، قارن الأسعار والموقع والصور، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.',
+  applicationName: SITE_NAME,
   manifest: '/manifest.webmanifest',
   keywords: [
     'سكن طلاب',
-    'سكن طلاب في أسيوط',
     'سكن طالبات',
-    'سكن طالبات في أسيوط',
-    'سكن قريب من جامعة أسيوط',
-    'غرف طلاب',
-    'غرف طلاب في أسيوط',
     'سكن جامعي خاص',
+    'سكن قريب من الجامعة',
+    'سكن قريب من جامعة أسيوط',
+    'سكن طلاب في أسيوط',
+    'سكن طالبات في أسيوط',
+    'غرف طلاب',
+    'غرف طالبات',
+    'شقق طلاب',
     'سكن طلاب بدون عمولة',
+    'student housing Egypt',
+    'student accommodation Egypt',
     'Navienty',
   ],
-  authors: [{ name: 'Navienty' }],
-  creator: 'Navienty',
-  publisher: 'Navienty',
+  authors: [{ name: SITE_NAME }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: 'Student housing marketplace',
   alternates: {
     canonical: SITE_URL,
   },
   openGraph: {
-    title: 'Navienty | منصة سكن الطلاب',
+    title: 'Navienty - سكن طلاب قريب من جامعتك بدون عمولة',
     description:
-      'اكتشف وقارن أماكن السكن الطلابي وتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.',
+      'قارن أماكن السكن الطلابي حسب الجامعة والمدينة والمنطقة، شاهد الصور والأسعار، وتواصل مع المضيف مباشرة بدون عمولة على الطالب.',
     url: SITE_URL,
-    siteName: 'Navienty',
+    siteName: SITE_NAME,
     locale: 'ar_EG',
     type: 'website',
     images: [
       {
-        url: '/icon.png',
-        width: 512,
-        height: 512,
-        alt: 'Navienty',
+        url: DEFAULT_OG_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: 'Navienty student housing platform',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Navienty | منصة سكن الطلاب',
+    title: 'Navienty - سكن طلاب قريب من جامعتك بدون عمولة',
     description:
-      'منصة تساعد الطلاب على اكتشاف ومقارنة أماكن السكن الطلابي بدون أي عمولة على الطالب.',
-    images: ['/icon.png'],
+      'اكتشف سكن طلاب قريب من جامعتك، قارن الأسعار والصور، وتواصل مباشرة مع المضيف بدون عمولة.',
+    images: [DEFAULT_OG_IMAGE],
   },
   icons: {
-    icon: '/icon.png',
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/icon.png', sizes: '512x512', type: 'image/png' },
+    ],
     apple: [
       {
         url: '/apple-touch-icon.png',
@@ -69,6 +79,13 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
 }
 

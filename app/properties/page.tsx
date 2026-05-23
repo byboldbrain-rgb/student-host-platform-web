@@ -16,25 +16,32 @@ const squadaOne = Squada_One({
   weight: '400',
 })
 
-const APP_LOGO_URL = 'https://i.ibb.co/sn0xS95/Navienty-2.jpg'
+const APP_LOGO_URL = '/og-image.jpg'
 
-const SITE_URL = 'https://www.navienty.com'
+const SITE_URL = 'https://navienty.com'
 
 export const metadata: Metadata = {
-  title: 'سكن الطلاب | Navienty',
+  title: 'سكن طلاب قريب من الجامعة بدون عمولة',
   description:
-    'اكتشف وقارن أماكن سكن الطلاب على Navienty حسب المدينة أو الجامعة أو المنطقة، وتواصل مع المضيفين بسهولة بدون أي عمولة على الطالب.',
+    'اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع حسب المدينة أو الجامعة أو المنطقة، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.',
   alternates: {
     canonical: `${SITE_URL}/properties`,
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
   openGraph: {
-    title: 'سكن الطلاب | Navienty',
+    title: 'Navienty - سكن طلاب قريب من الجامعة بدون عمولة',
     description:
-      'قارن بين أماكن السكن الطلابي وتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.',
+      'قارن أماكن السكن الطلابي حسب الجامعة والمدينة والمنطقة، شاهد الصور والأسعار، وتواصل مباشرة مع المضيف بدون عمولة.',
     url: `${SITE_URL}/properties`,
     siteName: 'Navienty',
     locale: 'ar_EG',
@@ -44,15 +51,15 @@ export const metadata: Metadata = {
         url: APP_LOGO_URL,
         width: 1200,
         height: 630,
-        alt: 'Navienty',
+        alt: 'Navienty student housing search',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'سكن الطلاب | Navienty',
+    title: 'Navienty - سكن طلاب قريب من الجامعة بدون عمولة',
     description:
-      'اكتشف وقارن أماكن سكن الطلاب بدون أي عمولة على الطالب.',
+      'اكتشف وقارن أماكن سكن الطلاب وتواصل مع المضيف مباشرة بدون عمولة.',
     images: [APP_LOGO_URL],
   },
 }
@@ -607,6 +614,26 @@ export default async function PropertiesPage({
           })),
         }
       : null
+
+  const propertiesCollectionJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'سكن طلاب قريب من الجامعة بدون عمولة',
+    description:
+      'صفحة بحث ومقارنة أماكن السكن الطلابي على Navienty حسب المدينة والجامعة والمنطقة والأسعار.',
+    url: `${SITE_URL}/properties`,
+    inLanguage: 'ar-EG',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'Navienty',
+      url: SITE_URL,
+    },
+    about: [
+      { '@type': 'Thing', name: 'سكن طلاب' },
+      { '@type': 'Thing', name: 'سكن طالبات' },
+      { '@type': 'Thing', name: 'Student accommodation' },
+    ],
+  }
 
   const buildPageLink = (updates: Partial<SearchParams> = {}) => {
     const params = new URLSearchParams()
@@ -1197,6 +1224,15 @@ export default async function PropertiesPage({
               }
             })();
           `,
+        }}
+      />
+
+      <Script
+        id="properties-collection-jsonld"
+        type="application/ld+json"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(propertiesCollectionJsonLd).replace(/</g, '\\u003c'),
         }}
       />
 

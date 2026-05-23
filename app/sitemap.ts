@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import { getCachedSakanSeoPages } from './properties/data'
 
-const SITE_URL = 'https://www.navienty.com'
+const SITE_URL = 'https://navienty.com'
 
 function createPublicSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -28,7 +28,6 @@ function createPublicSupabaseClient() {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicSupabaseClient()
-
   const sakanSeoPages = await getCachedSakanSeoPages()
 
   const { data: properties, error } = await supabase
@@ -37,43 +36,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .eq('admin_status', 'published')
     .eq('is_active', true)
     .neq('availability_status', 'unavailable')
-    .order('created_at', { ascending: false })
-    .limit(1000)
+    .neq('availability_status', 'inactive')
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .limit(5000)
 
   if (error) {
     throw new Error(`Failed to load properties sitemap: ${error.message}`)
   }
 
+  const now = new Date()
+
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: SITE_URL,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'daily',
       priority: 1,
     },
     {
       url: `${SITE_URL}/properties`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'daily',
-      priority: 0.9,
+      priority: 0.95,
     },
     {
       url: `${SITE_URL}/about`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
-      priority: 0.5,
+      priority: 0.7,
     },
     {
       url: `${SITE_URL}/contact`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
-      priority: 0.5,
+      priority: 0.65,
     },
     {
-      url: `${SITE_URL}/community`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.5,
+      url: `${SITE_URL}/board`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.55,
     },
   ]
 
@@ -88,7 +90,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${SITE_URL}${page.path}`,
       lastModified: page.seo_updated_at
         ? new Date(page.seo_updated_at)
-        : new Date(),
+        : now,
       changeFrequency: 'daily' as const,
       priority:
         page.page_type === 'city'
@@ -105,9 +107,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ? new Date(property.updated_at)
         : property.created_at
           ? new Date(property.created_at)
-          : new Date(),
+          : now,
       changeFrequency: 'daily' as const,
-      priority: 0.75,
+      priority: 0.8,
     })) ?? []
 
   return [...staticPages, ...sakanPages, ...propertyPages]

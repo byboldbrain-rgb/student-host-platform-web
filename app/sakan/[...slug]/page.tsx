@@ -11,7 +11,7 @@ import {
   getCachedSakanSeoPages,
 } from '../../properties/data'
 
-const SITE_URL = 'https://www.navienty.com'
+const SITE_URL = 'https://navienty.com'
 const MIN_INDEXABLE_RESULTS = 3
 
 const squadaOne = Squada_One({
@@ -79,10 +79,10 @@ export async function generateMetadata({
     seoPage.is_indexable &&
     seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS
 
-  const title = seoPage.seo_title_ar || `${seoPage.seo_h1_ar} | Navienty`
+  const title = seoPage.seo_title_ar || seoPage.seo_h1_ar || `سكن طلاب في ${seoPage.entity_name_ar}`
   const description =
     seoPage.seo_description_ar ||
-    'اكتشف سكن طلاب مناسب على Navienty وقارن بين أماكن الإقامة الطلابية بدون أي عمولة على الطالب.'
+    'اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.'
   const canonicalUrl = `${SITE_URL}${seoPage.path}`
 
   return {
@@ -94,6 +94,13 @@ export async function generateMetadata({
     robots: {
       index: shouldIndex,
       follow: true,
+      googleBot: {
+        index: shouldIndex,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+        'max-video-preview': -1,
+      },
     },
     openGraph: {
       title,
@@ -102,11 +109,20 @@ export async function generateMetadata({
       siteName: 'Navienty',
       locale: 'ar_EG',
       type: 'website',
+      images: [
+        {
+          url: '/og-image.jpg',
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
+      images: ['/og-image.jpg'],
     },
   }
 }
@@ -1271,14 +1287,14 @@ export default async function SakanSeoPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(collectionJsonLd),
+          __html: JSON.stringify(collectionJsonLd).replace(/</g, '\\u003c'),
         }}
       />
 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd),
+          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, '\\u003c'),
         }}
       />
 
@@ -1286,7 +1302,7 @@ export default async function SakanSeoPage({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(faqJsonLd),
+            __html: JSON.stringify(faqJsonLd).replace(/</g, '\\u003c'),
           }}
         />
       )}
