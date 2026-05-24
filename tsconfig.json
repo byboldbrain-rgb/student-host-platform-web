@@ -29,6 +29,6 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
-, "app/admin/properties/review/[propertyId]/PropertyGalleryEditor", "app/properties/ShowcaseSection"  ],
+, "app/admin/properties/review/[propertyId]/PropertyGalleryEditor", "app/properties/ShowcaseSection", "next.config.mjs"  ],
   "exclude": ["node_modules"]
 }
