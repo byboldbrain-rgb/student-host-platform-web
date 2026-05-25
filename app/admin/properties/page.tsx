@@ -151,24 +151,6 @@ function SearchIcon() {
   )
 }
 
-function ClipboardListIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-[20px] w-[20px]"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <rect x="9" y="2" width="6" height="4" rx="1" />
-      <path d="M8 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
-      <path d="M8 11h8" />
-      <path d="M8 15h5" />
-    </svg>
-  )
-}
-
 function BuildingIcon() {
   return (
     <svg
@@ -187,32 +169,6 @@ function BuildingIcon() {
       <path d="M15 14h.01" />
     </svg>
   )
-}
-
-function LockIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-[20px] w-[20px]"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <rect x="5" y="11" width="14" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </svg>
-  )
-}
-
-function MobileNavIcon({
-  src,
-  alt,
-}: {
-  src: string
-  alt: string
-}) {
-  return <img src={src} alt={alt} className="h-[20px] w-[20px] object-contain" />
 }
 
 function NotificationBadge({ count }: { count: number }) {
@@ -377,90 +333,6 @@ function propertyMatchesOwnerSearch(property: Property, ownerSearchTerm: string)
 
     return false
   })
-}
-
-function MobileBottomNav({ newReservationsCount }: { newReservationsCount: number }) {
-  const items = [
-    {
-      href: '/admin/properties/booking-requests',
-      label: 'New Reservations',
-      icon: (
-        <MobileNavIcon
-          src="https://i.ibb.co/hxXpLKv3/add-event-6756388.png"
-          alt="New Reservations"
-        />
-      ),
-      active: false,
-      badgeCount: newReservationsCount,
-    },
-    {
-      href: '/admin/properties',
-      label: 'Properties',
-      icon: (
-        <MobileNavIcon
-          src="https://i.ibb.co/Dfs0dvX3/property-11608478.png"
-          alt="Properties"
-        />
-      ),
-      active: true,
-      badgeCount: 0,
-    },
-    {
-      href: '/admin/properties/reservations',
-      label: 'Manage Reservations',
-      icon: (
-        <MobileNavIcon
-          src="https://i.ibb.co/zTk4mxj1/delete-event-5577905.png"
-          alt="Manage Reservations"
-        />
-      ),
-      active: false,
-      badgeCount: 0,
-    },
-    {
-      href: '/admin/change-password',
-      label: 'Password',
-      icon: <LockIcon />,
-      active: false,
-      badgeCount: 0,
-    },
-  ]
-
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e8e8ee] bg-white md:hidden">
-      <div className="mx-auto flex h-[74px] max-w-md items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
-        {items.map((item) => {
-          const activeClass = item.active ? 'text-[#155dfc]' : 'text-[#6b7280]'
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
-            >
-              <span className={`relative flex items-center justify-center ${activeClass}`}>
-                {item.icon}
-
-                {item.badgeCount > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-[5px] text-[10px] font-bold text-white shadow-md">
-                    {item.badgeCount > 99 ? '99+' : item.badgeCount}
-                  </span>
-                )}
-              </span>
-
-              <span
-                className={`text-[10px] leading-[1.1] ${activeClass} ${
-                  item.active ? 'font-semibold' : 'font-medium'
-                }`}
-              >
-                {item.label}
-              </span>
-            </Link>
-          )
-        })}
-      </div>
-    </nav>
-  )
 }
 
 export default async function AdminPropertiesPage({
@@ -788,7 +660,7 @@ export default async function AdminPropertiesPage({
         }
       `}</style>
 
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef4ff,_#f8fafc_45%,_#f8fafc_100%)] pb-24 text-slate-700 md:pb-8">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#eef4ff,_#f8fafc_45%,_#f8fafc_100%)] pb-8 text-slate-700">
         <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
           <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
             <BrandLogo />
@@ -951,54 +823,6 @@ export default async function AdminPropertiesPage({
             </section>
           )}
         </section>
-
-        {canReceivePropertyBookingRequests(admin) && (
-          <MobileBottomNav newReservationsCount={newReservationsCount} />
-        )}
-
-        {!canReceivePropertyBookingRequests(admin) && (
-          <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e8e8ee] bg-white md:hidden">
-            <div className="mx-auto flex h-[74px] max-w-md items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
-              <Link
-                href="/admin/properties"
-                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
-              >
-                <span className="relative flex items-center justify-center text-[#155dfc]">
-                  <GridIcon />
-                </span>
-                <span className="text-[10px] font-semibold leading-[1.1] text-[#155dfc]">
-                  Properties
-                </span>
-              </Link>
-
-              {isSuperAdmin(admin) && (
-                <Link
-                  href="/admin/properties/review"
-                  className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
-                >
-                  <span className="relative flex items-center justify-center text-[#6b7280]">
-                    <ClipboardListIcon />
-                  </span>
-                  <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
-                    Review
-                  </span>
-                </Link>
-              )}
-
-              <Link
-                href="/admin/change-password"
-                className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
-              >
-                <span className="relative flex items-center justify-center text-[#6b7280]">
-                  <LockIcon />
-                </span>
-                <span className="text-[10px] font-medium leading-[1.1] text-[#6b7280]">
-                  Password
-                </span>
-              </Link>
-            </div>
-          </nav>
-        )}
       </main>
     </>
   )

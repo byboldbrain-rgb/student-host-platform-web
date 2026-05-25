@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import Script from "next/script";
 import { Squada_One } from "next/font/google";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import PostCard from "./components/feed/PostCard";
 import type { FeedPost } from "./components/feed/types";
 import CommunityNotifications from "./CommunityNotifications";
@@ -14,11 +12,10 @@ const squadaOne = Squada_One({
   weight: "400",
 });
 
-const APP_LOGO_URL = "https://i.ibb.co/sn0xS95/Navienty-2.jpg";
 
 const supabase = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type SearchParams = {
@@ -71,12 +68,14 @@ const TRANSLATIONS = {
     contactUs: "Contact Us",
     footerEmail: "info@navienty.com",
     search: "Search",
-    community: "Community",
+    community: "Guide",
     account: "Account",
     login: "Login",
+    language: "Language",
+    english: "English",
+    arabic: "العربية",
     navientyTeam: "Navienty Team",
-    copyright: (year: number) =>
-      `© ${year} Navienty | All rights reserved.`,
+    copyright: (year: number) => `© ${year} Navienty | All rights reserved.`,
   },
   ar: {
     joinUs: "انضم إلينا",
@@ -90,12 +89,14 @@ const TRANSLATIONS = {
     contactUs: "تواصل معنا",
     footerEmail: "info@navienty.com",
     search: "استكشاف",
-    community: "المجتمع",
+    community: "الدليل",
     account: "الحساب",
     login: "تسجيل الدخول",
+    language: "اللغة",
+    english: "English",
+    arabic: "العربية",
     navientyTeam: "فريق نافينتي",
-    copyright: (year: number) =>
-      `© ${year} نافينتي | جميع الحقوق محفوظة.`,
+    copyright: (year: number) => `© ${year} نافينتي | جميع الحقوق محفوظة.`,
   },
 } as const;
 
@@ -107,11 +108,7 @@ function normalizeCurrency(value?: string) {
   return value?.trim().toUpperCase() || "EGP";
 }
 
-function buildUrl(
-  path: string,
-  language: SupportedLanguage,
-  currency: string
-) {
+function buildUrl(path: string, language: SupportedLanguage, currency: string) {
   const params = new URLSearchParams();
   params.set("lang", language);
   params.set("currency", currency);
@@ -119,10 +116,14 @@ function buildUrl(
   return `${path}?${params.toString()}`;
 }
 
+function getOppositeLanguage(language: SupportedLanguage): SupportedLanguage {
+  return language === "ar" ? "en" : "ar";
+}
+
 function normalizePosts(
   posts: CommunityPost[],
   language: SupportedLanguage,
-  t: (typeof TRANSLATIONS)["en"] | (typeof TRANSLATIONS)["ar"]
+  t: (typeof TRANSLATIONS)["en"] | (typeof TRANSLATIONS)["ar"],
 ): FeedPost[] {
   const isArabic = language === "ar";
 
@@ -213,32 +214,10 @@ export default async function CommunityPage({
   const isArabic = selectedLanguage === "ar";
   const t = TRANSLATIONS[selectedLanguage];
 
-  const cookieStore = await cookies();
-
-  const authSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {
-          // No-op in Server Component
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await authSupabase.auth.getUser();
-
-  const isLoggedIn = !!user;
-
   const { data, error } = await supabase
     .from("community_posts")
-    .select(`
+    .select(
+      `
       id,
       title_en,
       title_ar,
@@ -264,7 +243,8 @@ export default async function CommunityPage({
         is_cover,
         is_active
       )
-    `)
+    `,
+    )
     .eq("is_published", true)
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
@@ -273,26 +253,27 @@ export default async function CommunityPage({
   const feedPosts = normalizePosts(posts, selectedLanguage, t);
 
   const homeHref = buildUrl("/properties", selectedLanguage, selectedCurrency);
-  const joinHref = buildUrl(
-    "/community/join",
-    selectedLanguage,
-    selectedCurrency
-  );
   const propertiesHref = buildUrl(
     "/properties",
     selectedLanguage,
-    selectedCurrency
+    selectedCurrency,
   );
   const communityHref = buildUrl(
     "/community",
     selectedLanguage,
-    selectedCurrency
+    selectedCurrency,
   );
-  const accountHref = buildUrl(
-    isLoggedIn ? "/account" : "/account-login",
-    selectedLanguage,
-    selectedCurrency
+  const nextMobileLanguage = getOppositeLanguage(selectedLanguage);
+  const mobileLanguageHref = buildUrl(
+    "/community",
+    nextMobileLanguage,
+    selectedCurrency,
   );
+  const mobileLanguageLabel = selectedLanguage === "ar" ? t.english : t.arabic;
+  const mobileLanguageAriaLabel =
+    selectedLanguage === "ar"
+      ? "Switch language to English"
+      : "تغيير اللغة إلى العربية";
 
   const footerQuickLinks = [
     {
@@ -314,223 +295,55 @@ export default async function CommunityPage({
       dir={isArabic ? "rtl" : "ltr"}
       className="relative min-h-screen bg-[#f7f7f8] pb-32 text-[#20212a] dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
-      <div className="pwa-install-banner" id="pwa-install-banner">
-        <button
-          type="button"
-          className="pwa-install-banner__close"
-          aria-label="Close app install banner"
-          id="pwa-install-banner-close"
-        >
-          ×
-        </button>
-
-        <img
-          src={APP_LOGO_URL}
-          alt="Navienty"
-          className="pwa-install-banner__logo"
-          draggable={false}
-        />
-
-        <div className="pwa-install-banner__content">
-          <p className="pwa-install-banner__title">Continue in the app!</p>
-        </div>
-
-        <button
-          type="button"
-          className="pwa-install-banner__button"
-          id="pwa-install-banner-button"
-        >
-          Get App
-        </button>
-
-        <div className="pwa-install-banner__ios-help" id="pwa-install-banner-ios-help">
-          On iPhone: tap Share, then choose Add to Home Screen.
-        </div>
-      </div>
-
-      <script
+      <Script
+        id="community-auto-device-language-script"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function () {
-              var banner = document.getElementById('pwa-install-banner');
-              var closeButton = document.getElementById('pwa-install-banner-close');
-              var installButton = document.getElementById('pwa-install-banner-button');
-              var iosHelp = document.getElementById('pwa-install-banner-ios-help');
-              var deferredPrompt = null;
+              try {
+                var params = new URLSearchParams(window.location.search);
+                var currentLang = params.get('lang');
+                var currentCurrency = params.get('currency');
 
-              if (!banner) return;
-
-              function isStandalone() {
-                return window.matchMedia('(display-mode: standalone)').matches ||
-                  window.navigator.standalone === true;
-              }
-
-              function isIos() {
-                var ua = window.navigator.userAgent.toLowerCase();
-                var platform = (window.navigator.platform || '').toLowerCase();
-                return /iphone|ipad|ipod/.test(ua) ||
-                  (platform === 'macintel' && window.navigator.maxTouchPoints > 1);
-              }
-
-              function hideBanner() {
-                banner.style.display = 'none';
-              }
-
-              function showBanner() {
-                banner.style.display = 'grid';
-              }
-
-              if (isStandalone()) {
-                hideBanner();
-                return;
-              }
-
-              if (localStorage.getItem('pwa-install-banner-dismissed') === 'true') {
-                hideBanner();
-                return;
-              }
-
-              if (isIos()) {
-                showBanner();
-              }
-
-              window.addEventListener('beforeinstallprompt', function (event) {
-                event.preventDefault();
-                deferredPrompt = event;
-                showBanner();
-              });
-
-              window.addEventListener('appinstalled', function () {
-                localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                hideBanner();
-                deferredPrompt = null;
-              });
-
-              if (closeButton) {
-                closeButton.addEventListener('click', function () {
-                  localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                  hideBanner();
-                });
-              }
-
-              if (installButton) {
-                installButton.addEventListener('click', function () {
-                  if (isIos()) {
-                    if (iosHelp) {
-                      iosHelp.classList.toggle('pwa-install-banner__ios-help--visible');
-                    }
-                    return;
+                function getBrowserLanguage() {
+                  var storedLanguage = localStorage.getItem('navienty-language');
+                  if (storedLanguage === 'ar' || storedLanguage === 'en') {
+                    return storedLanguage;
                   }
 
-                  if (!deferredPrompt) return;
+                  var browserLanguage = (navigator.language || navigator.userLanguage || '').toLowerCase();
+                  return browserLanguage.indexOf('ar') === 0 ? 'ar' : 'en';
+                }
 
-                  deferredPrompt.prompt();
-                  deferredPrompt.userChoice.then(function (choiceResult) {
-                    if (choiceResult && choiceResult.outcome === 'accepted') {
-                      localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                      hideBanner();
-                    }
-                    deferredPrompt = null;
-                  });
-                });
+                if (!currentLang) {
+                  params.set('lang', getBrowserLanguage());
+
+                  if (!currentCurrency) {
+                    params.set('currency', 'EGP');
+                  }
+
+                  var nextUrl = window.location.pathname + '?' + params.toString() + window.location.hash;
+                  window.location.replace(nextUrl);
+                  return;
+                }
+
+                if (currentLang === 'ar' || currentLang === 'en') {
+                  localStorage.setItem('navienty-language', currentLang);
+                }
+              } catch (error) {
+                // Keep page usable if storage is blocked.
               }
             })();
           `,
         }}
       />
 
+
       <CommunityNotifications />
       <CommunityFeedVideoAutoplay />
 
       <style>{`
-        .pwa-install-banner {
-          position: sticky;
-          top: 0;
-          z-index: 160;
-          display: none;
-          grid-template-columns: 26px 46px minmax(0, 1fr) auto;
-          align-items: center;
-          gap: 9px;
-          min-height: 62px;
-          background: #ffffff;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-          padding: 8px 12px;
-        }
-
-        .pwa-install-banner__close {
-          width: 26px;
-          height: 26px;
-          border: 0;
-          background: transparent;
-          color: #111827;
-          font-size: 28px;
-          line-height: 1;
-          cursor: pointer;
-          padding: 0;
-        }
-
-        .pwa-install-banner__logo {
-          width: 46px;
-          height: 46px;
-          border-radius: 12px;
-          object-fit: cover;
-          border: 1px solid #e5e7eb;
-          background: #ffffff;
-          display: block;
-        }
-
-        .pwa-install-banner__content {
-          min-width: 0;
-        }
-
-        .pwa-install-banner__title {
-          margin: 0;
-          color: #111827;
-          font-size: 15px;
-          line-height: 1.15;
-          font-weight: 800;
-          letter-spacing: -0.02em;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .pwa-install-banner__button {
-          min-width: 86px;
-          height: 38px;
-          border: 0;
-          border-radius: 9px;
-          background: #054aff;
-          color: #ffffff;
-          font-size: 13px;
-          font-weight: 800;
-          cursor: pointer;
-          padding: 0 16px;
-        }
-
-        .pwa-install-banner__ios-help {
-          display: none;
-          grid-column: 1 / -1;
-          margin-top: 6px;
-          border-radius: 10px;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #334155;
-          padding: 8px 10px;
-          font-size: 12px;
-          line-height: 1.4;
-        }
-
-        .pwa-install-banner__ios-help--visible {
-          display: block;
-        }
-
-        @media (display-mode: standalone) {
-          .pwa-install-banner {
-            display: none !important;
-          }
-        }
 
         .navienty-logo {
           display: inline-flex;
@@ -539,6 +352,11 @@ export default async function CommunityPage({
           overflow: hidden;
           text-decoration: none;
           transform: translateY(-7px);
+        }
+
+        .navienty-logo--centered {
+          margin-left: auto;
+          margin-right: auto;
         }
 
         .navienty-logo-icon {
@@ -755,6 +573,25 @@ export default async function CommunityPage({
             inset 0 -1px 0 rgba(255, 255, 255, 0.45);
           backdrop-filter: blur(22px) saturate(1.45);
           -webkit-backdrop-filter: blur(22px) saturate(1.45);
+          transform: translate3d(0, 0, 0);
+          opacity: 1;
+          pointer-events: auto;
+          will-change: transform, opacity;
+          transition:
+            transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+            opacity 0.24s ease,
+            border-color 0.2s ease,
+            background 0.2s ease,
+            box-shadow 0.2s ease;
+        }
+
+        .mobile-bottom-nav--hidden,
+        .mobile-bottom-nav.is-hidden-by-scroll,
+        .mobile-bottom-nav[data-scroll-hidden='true'] {
+          transform: translate3d(0, calc(100% + 42px), 0) !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          visibility: hidden !important;
         }
 
         .mobile-bottom-nav::before {
@@ -837,38 +674,12 @@ export default async function CommunityPage({
 
 
         @media (prefers-color-scheme: dark) {
-          .pwa-install-banner {
-            background: rgba(11, 18, 32, 0.98);
-            border-bottom-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
-          }
 
-          .pwa-install-banner__close {
-            color: #f8fafc;
-          }
 
-          .pwa-install-banner__logo {
-            border-color: rgba(255, 255, 255, 0.12);
-            background: #0b1220;
-          }
 
-          .pwa-install-banner__title {
-            color: #f8fafc;
-          }
 
-          .pwa-install-banner__button {
-            background: #2563eb;
-          }
 
-          .pwa-install-banner__button:hover {
-            background: #1d4ed8;
-          }
 
-          .pwa-install-banner__ios-help {
-            background: #111827;
-            border-color: rgba(255, 255, 255, 0.1);
-            color: #cbd5e1;
-          }
 
           .navienty-logo {
             color: #f8fafc;
@@ -1017,7 +828,7 @@ export default async function CommunityPage({
           }
 
           .mobile-header-inner {
-            justify-content: space-between !important;
+            justify-content: center !important;
           }
 
           .header-actions {
@@ -1081,17 +892,14 @@ export default async function CommunityPage({
         }
 
         @media (min-width: 769px) {
-          .pwa-install-banner {
-            display: none !important;
-          }
         }
       `}</style>
 
       <header className="sticky top-0 z-[110] bg-[#f5f7f9] dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
-        <div className="mobile-header-inner flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+        <div className="mobile-header-inner flex h-[72px] w-full items-center justify-center px-4 pt-2 md:px-6 lg:px-8">
           <Link
             href={homeHref}
-            className="navienty-logo mt-2"
+            className="navienty-logo navienty-logo--centered mt-2"
             aria-label="Navienty home"
           >
             <img
@@ -1107,13 +915,6 @@ export default async function CommunityPage({
               />
             </span>
           </Link>
-
-          <div className="header-actions">
-            <Link href={joinHref} className="header-join-btn">
-              <span>{t.joinUs}</span>
-              <ArrowRight className="header-join-btn-icon" />
-            </Link>
-          </div>
         </div>
       </header>
 
@@ -1168,24 +969,23 @@ export default async function CommunityPage({
 
             <div>
               <h3 className="footer-esaf-heading">{t.contactUs}</h3>
-              <a
-                href={`mailto:${t.footerEmail}`}
-                className="footer-esaf-email"
-              >
+              <a href={`mailto:${t.footerEmail}`} className="footer-esaf-email">
                 {t.footerEmail}
               </a>
             </div>
           </div>
 
           <div className="footer-esaf-bottom">
-            <p className="footer-esaf-copyright">
-              {t.copyright(currentYear)}
-            </p>
+            <p className="footer-esaf-copyright">{t.copyright(currentYear)}</p>
           </div>
         </div>
       </footer>
 
-      <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+      <nav
+        id="mobile-bottom-nav"
+        className="mobile-bottom-nav"
+        aria-label="Mobile bottom navigation"
+      >
         <div className="mobile-bottom-nav__inner">
           <Link href={propertiesHref} className="mobile-bottom-nav__item">
             <svg
@@ -1218,7 +1018,11 @@ export default async function CommunityPage({
             <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 
-          <Link href={accountHref} className="mobile-bottom-nav__item">
+          <Link
+            href={mobileLanguageHref}
+            className="mobile-bottom-nav__item"
+            aria-label={mobileLanguageAriaLabel}
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -1230,20 +1034,199 @@ export default async function CommunityPage({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
               />
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M4.5 19.125a7.5 7.5 0 0 1 15 0"
+                d="M3.6 9h16.8M3.6 15h16.8M12 3c2.25 2.3 3.3 5.28 3.3 9s-1.05 6.7-3.3 9M12 3C9.75 5.3 8.7 8.28 8.7 12s1.05 6.7 3.3 9"
               />
             </svg>
             <span className="mobile-bottom-nav__label">
-              {isLoggedIn ? t.account : t.login}
+              {mobileLanguageLabel}
             </span>
           </Link>
         </div>
       </nav>
+
+      <Script
+        id="community-mobile-bottom-nav-scroll-script"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              var nav = null;
+              var lastScrollTop = 0;
+              var lastTouchY = 0;
+              var lastPointerY = 0;
+              var rafId = 0;
+              var minDelta = 2;
+
+              function isMobile() {
+                return window.matchMedia('(max-width: 768px)').matches;
+              }
+
+              function getNav() {
+                if (nav && document.documentElement.contains(nav)) return nav;
+                nav = document.getElementById('mobile-bottom-nav');
+                return nav;
+              }
+
+              function forceBaseStyle(currentNav) {
+                currentNav.style.setProperty('transition', 'transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease, visibility 0.24s ease', 'important');
+                currentNav.style.setProperty('will-change', 'transform, opacity', 'important');
+              }
+
+              function showNav() {
+                var currentNav = getNav();
+                if (!currentNav) return;
+                forceBaseStyle(currentNav);
+                currentNav.classList.remove('mobile-bottom-nav--hidden');
+                currentNav.classList.remove('is-hidden-by-scroll');
+                currentNav.dataset.scrollHidden = 'false';
+                currentNav.style.setProperty('transform', 'translate3d(0, 0, 0)', 'important');
+                currentNav.style.setProperty('opacity', '1', 'important');
+                currentNav.style.setProperty('pointer-events', 'auto', 'important');
+                currentNav.style.setProperty('visibility', 'visible', 'important');
+              }
+
+              function hideNav() {
+                var currentNav = getNav();
+                if (!currentNav || !isMobile()) return;
+                forceBaseStyle(currentNav);
+                currentNav.classList.add('mobile-bottom-nav--hidden');
+                currentNav.classList.add('is-hidden-by-scroll');
+                currentNav.dataset.scrollHidden = 'true';
+                currentNav.style.setProperty('transform', 'translate3d(0, calc(100% + 56px), 0)', 'important');
+                currentNav.style.setProperty('opacity', '0', 'important');
+                currentNav.style.setProperty('pointer-events', 'none', 'important');
+                currentNav.style.setProperty('visibility', 'hidden', 'important');
+              }
+
+              function getWindowScrollTop() {
+                return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+              }
+
+              function getScrollParentTopFromEvent(event) {
+                var target = event && event.target;
+                while (target && target !== document && target !== document.documentElement && target !== document.body) {
+                  if (target.scrollHeight > target.clientHeight) {
+                    return target.scrollTop || 0;
+                  }
+                  target = target.parentNode;
+                }
+                return getWindowScrollTop();
+              }
+
+              function applyDirection(delta, currentTop) {
+                if (!isMobile()) {
+                  showNav();
+                  return;
+                }
+
+                if (currentTop <= 8) {
+                  showNav();
+                  return;
+                }
+
+                if (Math.abs(delta) < minDelta) return;
+
+                if (delta > 0) {
+                  hideNav();
+                } else {
+                  showNav();
+                }
+              }
+
+              function scheduleByScroll(event) {
+                if (rafId) return;
+                rafId = window.requestAnimationFrame(function () {
+                  var currentTop = getScrollParentTopFromEvent(event);
+                  var delta = currentTop - lastScrollTop;
+                  applyDirection(delta, currentTop);
+                  lastScrollTop = Math.max(0, currentTop);
+                  rafId = 0;
+                });
+              }
+
+              function onWheel(event) {
+                applyDirection(event.deltaY || 0, getWindowScrollTop());
+              }
+
+              function onTouchStart(event) {
+                if (!event.touches || !event.touches.length) return;
+                lastTouchY = event.touches[0].clientY;
+              }
+
+              function onTouchMove(event) {
+                if (!event.touches || !event.touches.length) return;
+                var y = event.touches[0].clientY;
+                var delta = lastTouchY - y;
+                applyDirection(delta, getWindowScrollTop() || 20);
+                lastTouchY = y;
+              }
+
+              function onPointerDown(event) {
+                lastPointerY = event.clientY || 0;
+              }
+
+              function onPointerMove(event) {
+                if (!lastPointerY) return;
+                var y = event.clientY || 0;
+                var delta = lastPointerY - y;
+                applyDirection(delta, getWindowScrollTop() || 20);
+                lastPointerY = y;
+              }
+
+              function bindScrollableElements() {
+                var elements = document.querySelectorAll('*');
+                for (var i = 0; i < elements.length; i += 1) {
+                  var element = elements[i];
+                  if (element.__navientyScrollBound) continue;
+                  if (element.scrollHeight > element.clientHeight + 8) {
+                    element.__navientyScrollBound = true;
+                    element.addEventListener('scroll', scheduleByScroll, { passive: true, capture: true });
+                  }
+                }
+              }
+
+              function init() {
+                var currentNav = getNav();
+                if (!currentNav) {
+                  window.setTimeout(init, 80);
+                  return;
+                }
+
+                lastScrollTop = getWindowScrollTop();
+                showNav();
+                bindScrollableElements();
+
+                window.addEventListener('scroll', scheduleByScroll, { passive: true, capture: true });
+                document.addEventListener('scroll', scheduleByScroll, { passive: true, capture: true });
+                document.documentElement.addEventListener('scroll', scheduleByScroll, { passive: true, capture: true });
+                document.body.addEventListener('scroll', scheduleByScroll, { passive: true, capture: true });
+                window.addEventListener('wheel', onWheel, { passive: true, capture: true });
+                document.addEventListener('wheel', onWheel, { passive: true, capture: true });
+                window.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+                window.addEventListener('touchmove', onTouchMove, { passive: true, capture: true });
+                document.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+                document.addEventListener('touchmove', onTouchMove, { passive: true, capture: true });
+                window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
+                window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
+                document.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
+                document.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
+                window.addEventListener('resize', function () {
+                  if (!isMobile()) showNav();
+                  bindScrollableElements();
+                });
+                window.setInterval(bindScrollableElements, 1000);
+              }
+
+              init();
+            })();
+          `,
+        }}
+      />
     </main>
   );
 }

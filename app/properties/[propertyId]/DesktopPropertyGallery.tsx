@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 
 type Props = {
   images: string[]
@@ -91,18 +91,20 @@ export default function DesktopPropertyGallery({
   isArabic = false,
 }: Props) {
   const normalizedImages = useMemo(() => {
+    const validImages = images.filter(Boolean)
+
     const fallback =
-      images[0] || 'https://via.placeholder.com/1400x900?text=No+Image'
-    const firstFive = images.slice(0, 5)
+      validImages[0] || 'https://via.placeholder.com/1400x900?text=No+Image'
+
+    const firstFive = validImages.slice(0, 5)
 
     while (firstFive.length < 5) {
       firstFive.push(fallback)
     }
 
     return {
-      cover: fallback,
       firstFive,
-      all: images.length > 0 ? images : [fallback],
+      all: validImages.length > 0 ? validImages : [fallback],
     }
   }, [images])
 
@@ -138,6 +140,7 @@ export default function DesktopPropertyGallery({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeModal()
+
       if (event.key === 'ArrowLeft') {
         if (isArabic) {
           goNext()
@@ -145,6 +148,7 @@ export default function DesktopPropertyGallery({
           goPrev()
         }
       }
+
       if (event.key === 'ArrowRight') {
         if (isArabic) {
           goPrev()
@@ -155,6 +159,7 @@ export default function DesktopPropertyGallery({
     }
 
     const originalOverflow = document.body.style.overflow
+
     document.body.style.overflow = 'hidden'
     document.body.classList.add('desktop-gallery-open')
     window.addEventListener('keydown', handleKeyDown)
@@ -166,86 +171,209 @@ export default function DesktopPropertyGallery({
     }
   }, [isOpen, isArabic, normalizedImages.all.length])
 
+  const imageStyle: CSSProperties = {
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    transition: 'transform 250ms ease, filter 250ms ease',
+  }
+
+  const buttonBaseStyle: CSSProperties = {
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    border: 0,
+    padding: 0,
+    margin: 0,
+    background: '#f3f4f6',
+    cursor: 'pointer',
+    overflow: 'hidden',
+    position: 'relative',
+    textAlign: 'left',
+  }
+
+  const handleMouseEnter = (
+    event: React.MouseEvent<HTMLButtonElement | HTMLDivElement>
+  ) => {
+    const img = event.currentTarget.querySelector('img')
+
+    if (img) {
+      img.style.transform = 'scale(1.02)'
+      img.style.filter = 'brightness(0.92)'
+    }
+  }
+
+  const handleMouseLeave = (
+    event: React.MouseEvent<HTMLButtonElement | HTMLDivElement>
+  ) => {
+    const img = event.currentTarget.querySelector('img')
+
+    if (img) {
+      img.style.transform = 'scale(1)'
+      img.style.filter = 'brightness(1)'
+    }
+  }
+
   return (
     <>
-      <div className="overflow-hidden rounded-[22px]">
-        <div className="grid h-[448px] grid-cols-12 gap-2">
+      <section
+        className="hidden md:block"
+        style={{
+          width: '100%',
+          direction: 'ltr',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            width: '100%',
+            height: '448px',
+            gridTemplateColumns: '2fr 1fr 1fr',
+            gridTemplateRows: '1fr 1fr',
+            gap: '8px',
+            overflow: 'hidden',
+            borderRadius: '22px',
+            background: '#ffffff',
+          }}
+        >
           <button
             type="button"
             onClick={() => openModal(0)}
-            className="col-span-6 h-full overflow-hidden rounded-l-[22px] text-left"
+            aria-label={`${title} image 1`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              ...buttonBaseStyle,
+              gridColumn: '1 / 2',
+              gridRow: '1 / 3',
+              borderTopLeftRadius: '22px',
+              borderBottomLeftRadius: '22px',
+            }}
           >
             <img
               src={normalizedImages.firstFive[0]}
               alt={`${title} 1`}
-              className="h-full w-full object-cover transition duration-300 hover:brightness-95"
+              style={imageStyle}
             />
           </button>
 
-          <div className="col-span-6 grid h-full grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => openModal(1)}
+            aria-label={`${title} image 2`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              ...buttonBaseStyle,
+              gridColumn: '2 / 3',
+              gridRow: '1 / 2',
+            }}
+          >
+            <img
+              src={normalizedImages.firstFive[1]}
+              alt={`${title} 2`}
+              style={imageStyle}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openModal(2)}
+            aria-label={`${title} image 3`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              ...buttonBaseStyle,
+              gridColumn: '3 / 4',
+              gridRow: '1 / 2',
+              borderTopRightRadius: '22px',
+            }}
+          >
+            <img
+              src={normalizedImages.firstFive[2]}
+              alt={`${title} 3`}
+              style={imageStyle}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openModal(3)}
+            aria-label={`${title} image 4`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              ...buttonBaseStyle,
+              gridColumn: '2 / 3',
+              gridRow: '2 / 3',
+            }}
+          >
+            <img
+              src={normalizedImages.firstFive[3]}
+              alt={`${title} 4`}
+              style={imageStyle}
+            />
+          </button>
+
+          <div
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              position: 'relative',
+              gridColumn: '3 / 4',
+              gridRow: '2 / 3',
+              overflow: 'hidden',
+              borderBottomRightRadius: '22px',
+              background: '#f3f4f6',
+            }}
+          >
             <button
               type="button"
-              onClick={() => openModal(1)}
-              className="overflow-hidden rounded-tr-[22px] text-left"
+              onClick={() => openModal(4)}
+              aria-label={`${title} image 5`}
+              style={buttonBaseStyle}
             >
               <img
-                src={normalizedImages.firstFive[1]}
-                alt={`${title} 2`}
-                className="h-full w-full object-cover transition duration-300 hover:brightness-95"
+                src={normalizedImages.firstFive[4]}
+                alt={`${title} 5`}
+                style={imageStyle}
               />
             </button>
 
             <button
               type="button"
-              onClick={() => openModal(2)}
-              className="overflow-hidden text-left"
+              onClick={() => openModal(0)}
+              style={{
+                position: 'absolute',
+                right: '16px',
+                left: 'auto',
+                bottom: '16px',
+                zIndex: 10,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                minHeight: '44px',
+                border: '1px solid rgba(0,0,0,0.18)',
+                borderRadius: '12px',
+                background: '#ffffff',
+                padding: '0 16px',
+                color: '#222222',
+                fontSize: '15px',
+                fontWeight: 600,
+                lineHeight: 1,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                cursor: 'pointer',
+                direction: isArabic ? 'rtl' : 'ltr',
+              }}
             >
-              <img
-                src={normalizedImages.firstFive[2]}
-                alt={`${title} 3`}
-                className="h-full w-full object-cover transition duration-300 hover:brightness-95"
-              />
+              <GalleryGridIcon className="h-[18px] w-[18px]" />
+              <span>{showAllPhotosLabel}</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => openModal(3)}
-              className="overflow-hidden text-left"
-            >
-              <img
-                src={normalizedImages.firstFive[3]}
-                alt={`${title} 4`}
-                className="h-full w-full object-cover transition duration-300 hover:brightness-95"
-              />
-            </button>
-
-            <div className="relative overflow-hidden rounded-br-[22px]">
-              <button
-                type="button"
-                onClick={() => openModal(4)}
-                className="h-full w-full text-left"
-              >
-                <img
-                  src={normalizedImages.firstFive[4]}
-                  alt={`${title} 5`}
-                  className="h-full w-full object-cover transition duration-300 hover:brightness-95"
-                />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openModal(0)}
-                className={`absolute bottom-4 z-10 inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white/95 px-4 py-3 text-[14px] font-semibold text-slate-900 shadow-sm transition hover:bg-white ${
-                  isArabic ? 'left-4' : 'right-4'
-                }`}
-              >
-                <GalleryGridIcon className="h-4 w-4" />
-                <span>{showAllPhotosLabel}</span>
-              </button>
-            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {isOpen && (
         <div

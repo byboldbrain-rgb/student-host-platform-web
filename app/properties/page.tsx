@@ -233,7 +233,7 @@ const TRANSLATIONS = {
     arabic: 'العربية',
     close: 'Close',
     login: 'Log in or sign up',
-    join: 'Community',
+    join: 'Guide',
     facebook: 'Facebook',
     instagram: 'Instagram',
     linkedIn: 'LinkedIn',
@@ -245,7 +245,7 @@ const TRANSLATIONS = {
     contactUs: 'Contact Us',
     footerEmail: 'info@navienty.com',
     explore: 'Search',
-    community: 'Community',
+    community: 'Guide',
     account: 'Account',
     mobileLogin: 'Log in',
     copyright: `© ${new Date().getFullYear()} Navienty | All rights reserved.`,
@@ -285,7 +285,7 @@ const TRANSLATIONS = {
     pricesIncludeFees: 'الأسعار تشمل جميع الرسوم',
     help: 'مساعدة',
     signUp: 'إنشاء حساب',
-    community: 'المجتمع',
+    community: 'الدليل',
     logIn: 'تسجيل الدخول',
     language: 'اللغة',
     english: 'English',
@@ -293,7 +293,7 @@ const TRANSLATIONS = {
     close: 'إغلاق',
     investors: 'المستثمرون',
     login: 'سجّل الدخول أو أنشئ حسابًا',
-    join: 'انضم إلى مجتمعنا',
+    join: 'الدليل',
     facebook: 'فيسبوك',
     instagram: 'إنستجرام',
     linkedIn: 'لينكدإن',
@@ -1089,139 +1089,66 @@ export default async function PropertiesPage({
     },
   }
 
-  const mobileAccountHref = isLoggedIn
-    ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/account-login')
-
-  const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
+  const nextMobileLanguage: SupportedLanguage = selectedLanguage === 'ar' ? 'en' : 'ar'
+  const mobileLanguageHref = buildPageLink({ lang: nextMobileLanguage })
+  const mobileLanguageLabel = selectedLanguage === 'ar' ? t.english : t.arabic
+  const mobileLanguageAriaLabel =
+    selectedLanguage === 'ar' ? 'Switch language to English' : 'تغيير اللغة إلى العربية'
 
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
       className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
-      <div className="pwa-install-banner" id="pwa-install-banner">
-        <button
-          type="button"
-          className="pwa-install-banner__close"
-          aria-label="Close app install banner"
-          id="pwa-install-banner-close"
-        >
-          ×
-        </button>
-
-        <img
-          src={APP_LOGO_URL}
-          alt="Navienty"
-          className="pwa-install-banner__logo"
-          draggable={false}
-        />
-
-        <div className="pwa-install-banner__content">
-          <p className="pwa-install-banner__title">Continue in the app!</p>
-        </div>
-
-        <button
-          type="button"
-          className="pwa-install-banner__button"
-          id="pwa-install-banner-button"
-        >
-          Get App
-        </button>
-
-        <div className="pwa-install-banner__ios-help" id="pwa-install-banner-ios-help">
-          On iPhone: tap Share, then choose Add to Home Screen.
-        </div>
-      </div>
-
       <Script
-        id="pwa-install-banner-script"
-        strategy="afterInteractive"
+        id="navienty-default-language-script"
+        strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function () {
-              var banner = document.getElementById('pwa-install-banner');
-              var closeButton = document.getElementById('pwa-install-banner-close');
-              var installButton = document.getElementById('pwa-install-banner-button');
-              var iosHelp = document.getElementById('pwa-install-banner-ios-help');
-              var deferredPrompt = null;
+              try {
+                var storageKey = 'navienty-preferred-language';
+                var params = new URLSearchParams(window.location.search);
+                var currentLang = params.get('lang');
+                var supportedLanguages = { ar: true, en: true };
 
-              if (!banner) return;
+                function applyDocumentLanguage(language) {
+                  if (!supportedLanguages[language]) return;
+                  document.documentElement.lang = language;
+                  document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+                }
 
-              function isStandalone() {
-                return window.matchMedia('(display-mode: standalone)').matches ||
-                  window.navigator.standalone === true;
-              }
+                if (supportedLanguages[currentLang]) {
+                  localStorage.setItem(storageKey, currentLang);
+                  applyDocumentLanguage(currentLang);
+                  return;
+                }
 
-              function isIos() {
-                var ua = window.navigator.userAgent.toLowerCase();
-                var platform = (window.navigator.platform || '').toLowerCase();
-                return /iphone|ipad|ipod/.test(ua) ||
-                  (platform === 'macintel' && window.navigator.maxTouchPoints > 1);
-              }
+                var savedLanguage = localStorage.getItem(storageKey);
+                var browserLanguage =
+                  (navigator.languages && navigator.languages.length
+                    ? navigator.languages[0]
+                    : navigator.language || 'en') || 'en';
 
-              function hideBanner() {
-                banner.style.display = 'none';
-              }
+                var detectedLanguage = /^ar(\b|-|_)/i.test(browserLanguage)
+                  ? 'ar'
+                  : 'en';
 
-              function showBanner() {
-                banner.style.display = 'grid';
-              }
+                var nextLanguage = supportedLanguages[savedLanguage]
+                  ? savedLanguage
+                  : detectedLanguage;
 
-              if (isStandalone()) {
-                hideBanner();
-                return;
-              }
+                params.set('lang', nextLanguage);
 
-              if (localStorage.getItem('pwa-install-banner-dismissed') === 'true') {
-                hideBanner();
-                return;
-              }
+                var nextUrl =
+                  window.location.pathname +
+                  '?' +
+                  params.toString() +
+                  window.location.hash;
 
-              if (isIos()) {
-                showBanner();
-              }
-
-              window.addEventListener('beforeinstallprompt', function (event) {
-                event.preventDefault();
-                deferredPrompt = event;
-                showBanner();
-              });
-
-              window.addEventListener('appinstalled', function () {
-                localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                hideBanner();
-                deferredPrompt = null;
-              });
-
-              if (closeButton) {
-                closeButton.addEventListener('click', function () {
-                  localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                  hideBanner();
-                });
-              }
-
-              if (installButton) {
-                installButton.addEventListener('click', function () {
-                  if (isIos()) {
-                    if (iosHelp) {
-                      iosHelp.classList.toggle('pwa-install-banner__ios-help--visible');
-                    }
-                    return;
-                  }
-
-                  if (!deferredPrompt) return;
-
-                  deferredPrompt.prompt();
-                  deferredPrompt.userChoice.then(function (choiceResult) {
-                    if (choiceResult && choiceResult.outcome === 'accepted') {
-                      localStorage.setItem('pwa-install-banner-dismissed', 'true');
-                      hideBanner();
-                    }
-                    deferredPrompt = null;
-                  });
-                });
-              }
+                applyDocumentLanguage(nextLanguage);
+                window.location.replace(nextUrl);
+              } catch (error) {}
             })();
           `,
         }}
@@ -1259,95 +1186,6 @@ export default async function PropertiesPage({
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
-        }
-
-        .pwa-install-banner {
-          position: sticky;
-          top: 0;
-          z-index: 160;
-          display: none;
-          grid-template-columns: 26px 46px minmax(0, 1fr) auto;
-          align-items: center;
-          gap: 9px;
-          min-height: 62px;
-          background: #ffffff;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-          padding: 8px 12px;
-        }
-
-        .pwa-install-banner__close {
-          width: 26px;
-          height: 26px;
-          border: 0;
-          background: transparent;
-          color: #111827;
-          font-size: 28px;
-          line-height: 1;
-          cursor: pointer;
-          padding: 0;
-        }
-
-        .pwa-install-banner__logo {
-          width: 46px;
-          height: 46px;
-          border-radius: 12px;
-          object-fit: cover;
-          border: 1px solid #e5e7eb;
-          background: #ffffff;
-          display: block;
-        }
-
-        .pwa-install-banner__content {
-          min-width: 0;
-        }
-
-        .pwa-install-banner__title {
-          margin: 0;
-          color: #111827;
-          font-size: 15px;
-          line-height: 1.15;
-          font-weight: 800;
-          letter-spacing: -0.02em;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .pwa-install-banner__button {
-          min-width: 86px;
-          height: 38px;
-          border: 0;
-          border-radius: 9px;
-          background: #054aff;
-          color: #ffffff;
-          font-size: 13px;
-          font-weight: 800;
-          cursor: pointer;
-          padding: 0 16px;
-        }
-
-        .pwa-install-banner__ios-help {
-          display: none;
-          grid-column: 1 / -1;
-          margin-top: 6px;
-          border-radius: 10px;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #334155;
-          padding: 8px 10px;
-          font-size: 12px;
-          line-height: 1.4;
-        }
-
-        .pwa-install-banner__ios-help--visible {
-          display: block;
-        }
-
-        @media (display-mode: standalone) {
-          .pwa-install-banner {
-            display: none !important;
-          }
         }
 
         .hide-scrollbar::-webkit-scrollbar {
@@ -1833,6 +1671,26 @@ export default async function PropertiesPage({
             inset 0 -1px 0 rgba(255, 255, 255, 0.45);
           backdrop-filter: blur(22px) saturate(1.45);
           -webkit-backdrop-filter: blur(22px) saturate(1.45);
+          transform: translate3d(0, 0, 0);
+          opacity: 1;
+          pointer-events: auto;
+          transition:
+            transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+            opacity 0.22s ease,
+            box-shadow 0.28s ease;
+          will-change: transform, opacity;
+        }
+
+        .mobile-bottom-nav--hidden {
+          transform: translate3d(0, calc(100% + 64px), 0) !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .mobile-bottom-nav {
+            transition: none;
+          }
         }
 
         .mobile-bottom-nav::before {
@@ -2263,31 +2121,6 @@ export default async function PropertiesPage({
 
 
         @media (prefers-color-scheme: dark) {
-          .pwa-install-banner {
-            background: #0b1220;
-            border-bottom-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-          }
-
-          .pwa-install-banner__close {
-            color: #f8fafc;
-          }
-
-          .pwa-install-banner__logo {
-            border-color: rgba(255, 255, 255, 0.12);
-            background: #111827;
-          }
-
-          .pwa-install-banner__title {
-            color: #f8fafc;
-          }
-
-          .pwa-install-banner__ios-help {
-            background: #111827;
-            border-color: rgba(255, 255, 255, 0.1);
-            color: #cbd5e1;
-          }
-
           .menu-trigger-lines span {
             background: #f8fafc;
           }
@@ -2341,12 +2174,6 @@ export default async function PropertiesPage({
           .popular-desktop-grid > a,
           .hide-scrollbar > a {
             color: #f8fafc;
-          }
-        }
-
-        @media (min-width: 769px) {
-          .pwa-install-banner {
-            display: none !important;
           }
         }
       `}</style>
@@ -2542,7 +2369,301 @@ export default async function PropertiesPage({
         </div>
       </footer>
 
-      <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+      <Script
+        id="navienty-language-switcher-script"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              try {
+                var storageKey = 'navienty-preferred-language';
+                var switchers = document.querySelectorAll('[data-language-switcher="true"]');
+
+                switchers.forEach(function (switcher) {
+                  switcher.addEventListener('click', function () {
+                    var nextLanguage = switcher.getAttribute('data-next-language');
+                    if (nextLanguage === 'ar' || nextLanguage === 'en') {
+                      localStorage.setItem(storageKey, nextLanguage);
+                      document.documentElement.lang = nextLanguage;
+                      document.documentElement.dir = nextLanguage === 'ar' ? 'rtl' : 'ltr';
+                    }
+                  });
+                });
+              } catch (error) {}
+            })();
+          `,
+        }}
+      />
+
+      <Script
+        id="mobile-bottom-nav-scroll-script"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function () {
+              var NAV_ID = 'mobile-bottom-nav';
+              var HIDDEN_CLASS = 'mobile-bottom-nav--hidden';
+              var nav = null;
+              var attached = false;
+              var lastY = 0;
+              var ticking = false;
+              var touchStartY = null;
+              var lastTouchY = null;
+              var lastKnownDirection = 'up';
+              var MIN_DELTA = 6;
+              var HIDE_AFTER = 40;
+              var TOP_REVEAL = 12;
+
+              function isMobileViewport() {
+                return window.matchMedia('(max-width: 768px)').matches;
+              }
+
+              function getWindowScrollY() {
+                return Math.max(
+                  0,
+                  window.scrollY ||
+                    window.pageYOffset ||
+                    document.documentElement.scrollTop ||
+                    document.body.scrollTop ||
+                    0
+                );
+              }
+
+              function getElementScrollTop(element) {
+                if (!element || element === window || element === document) {
+                  return getWindowScrollY();
+                }
+
+                if (element === document.body || element === document.documentElement) {
+                  return getWindowScrollY();
+                }
+
+                return typeof element.scrollTop === 'number'
+                  ? Math.max(0, element.scrollTop)
+                  : getWindowScrollY();
+              }
+
+              function showNav() {
+                if (!nav) return;
+                nav.classList.remove(HIDDEN_CLASS);
+                nav.style.transform = 'translate3d(0, 0, 0)';
+                nav.style.opacity = '1';
+                nav.style.pointerEvents = 'auto';
+              }
+
+              function hideNav() {
+                if (!nav) return;
+                nav.classList.add(HIDDEN_CLASS);
+                nav.style.transform = 'translate3d(0, calc(100% + 64px), 0)';
+                nav.style.opacity = '0';
+                nav.style.pointerEvents = 'none';
+              }
+
+              function applyByDirection(direction, currentY) {
+                if (!nav) return;
+
+                if (!isMobileViewport()) {
+                  showNav();
+                  return;
+                }
+
+                if (currentY <= TOP_REVEAL) {
+                  showNav();
+                  return;
+                }
+
+                if (direction === 'down' && currentY > HIDE_AFTER) {
+                  hideNav();
+                  return;
+                }
+
+                if (direction === 'up') {
+                  showNav();
+                }
+              }
+
+              function handleScrollTarget(target) {
+                var currentY = Math.max(getWindowScrollY(), getElementScrollTop(target));
+                var delta = currentY - lastY;
+
+                if (Math.abs(delta) < MIN_DELTA) {
+                  ticking = false;
+                  return;
+                }
+
+                lastKnownDirection = delta > 0 ? 'down' : 'up';
+                applyByDirection(lastKnownDirection, currentY);
+                lastY = currentY;
+                ticking = false;
+              }
+
+              function requestScrollUpdate(event) {
+                if (!isMobileViewport()) {
+                  showNav();
+                  return;
+                }
+
+                if (ticking) return;
+                ticking = true;
+
+                var target = event && event.target ? event.target : null;
+                window.requestAnimationFrame(function () {
+                  handleScrollTarget(target);
+                });
+              }
+
+              function onWheel(event) {
+                if (!isMobileViewport()) {
+                  showNav();
+                  return;
+                }
+
+                var deltaY = event && typeof event.deltaY === 'number' ? event.deltaY : 0;
+                if (Math.abs(deltaY) < MIN_DELTA) return;
+
+                lastKnownDirection = deltaY > 0 ? 'down' : 'up';
+                applyByDirection(lastKnownDirection, Math.max(getWindowScrollY(), HIDE_AFTER + 1));
+              }
+
+              function onTouchStart(event) {
+                if (!isMobileViewport() || !event.touches || event.touches.length === 0) return;
+
+                touchStartY = event.touches[0].clientY;
+                lastTouchY = touchStartY;
+              }
+
+              function onTouchMove(event) {
+                if (
+                  !isMobileViewport() ||
+                  lastTouchY === null ||
+                  !event.touches ||
+                  event.touches.length === 0
+                ) {
+                  return;
+                }
+
+                var currentTouchY = event.touches[0].clientY;
+                var deltaY = currentTouchY - lastTouchY;
+
+                if (Math.abs(deltaY) < MIN_DELTA) return;
+
+                lastKnownDirection = deltaY < 0 ? 'down' : 'up';
+
+                // Important: we do not depend only on window.scrollY here because
+                // some mobile layouts scroll inside an inner container, not the window.
+                applyByDirection(
+                  lastKnownDirection,
+                  Math.max(getWindowScrollY(), HIDE_AFTER + 1)
+                );
+
+                lastTouchY = currentTouchY;
+              }
+
+              function onTouchEnd() {
+                touchStartY = null;
+                lastTouchY = null;
+              }
+
+              function onResize() {
+                if (!isMobileViewport()) {
+                  showNav();
+                }
+                lastY = getWindowScrollY();
+              }
+
+              function attach() {
+                nav = document.getElementById(NAV_ID);
+                if (!nav) return false;
+
+                if (attached || nav.getAttribute('data-scroll-hide-ready') === 'true') {
+                  return true;
+                }
+
+                attached = true;
+                nav.setAttribute('data-scroll-hide-ready', 'true');
+                nav.style.transition =
+                  'transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, box-shadow 0.28s ease';
+                nav.style.willChange = 'transform, opacity';
+
+                lastY = getWindowScrollY();
+                showNav();
+
+                window.addEventListener('scroll', requestScrollUpdate, { passive: true });
+                document.addEventListener('scroll', requestScrollUpdate, {
+                  passive: true,
+                  capture: true,
+                });
+                document.body &&
+                  document.body.addEventListener('scroll', requestScrollUpdate, {
+                    passive: true,
+                    capture: true,
+                  });
+
+                window.addEventListener('wheel', onWheel, { passive: true });
+                document.addEventListener('wheel', onWheel, { passive: true, capture: true });
+
+                window.addEventListener('touchstart', onTouchStart, { passive: true });
+                window.addEventListener('touchmove', onTouchMove, { passive: true });
+                window.addEventListener('touchend', onTouchEnd, { passive: true });
+                document.addEventListener('touchstart', onTouchStart, {
+                  passive: true,
+                  capture: true,
+                });
+                document.addEventListener('touchmove', onTouchMove, {
+                  passive: true,
+                  capture: true,
+                });
+                document.addEventListener('touchend', onTouchEnd, {
+                  passive: true,
+                  capture: true,
+                });
+
+                window.addEventListener('resize', onResize, { passive: true });
+                window.addEventListener('orientationchange', onResize, { passive: true });
+                window.addEventListener('pageshow', showNav);
+
+                return true;
+              }
+
+              function boot() {
+                if (attach()) return;
+
+                var attempts = 0;
+                var timer = window.setInterval(function () {
+                  attempts += 1;
+                  if (attach() || attempts > 80) {
+                    window.clearInterval(timer);
+                  }
+                }, 100);
+
+                if ('MutationObserver' in window) {
+                  var observer = new MutationObserver(function () {
+                    if (attach()) {
+                      observer.disconnect();
+                    }
+                  });
+                  observer.observe(document.documentElement, {
+                    childList: true,
+                    subtree: true,
+                  });
+                }
+              }
+
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', boot, { once: true });
+              } else {
+                boot();
+              }
+            })();
+          `,
+        }}
+      />
+
+      <nav
+        id="mobile-bottom-nav"
+        className="mobile-bottom-nav"
+        aria-label="Mobile bottom navigation"
+      >
         <div className="mobile-bottom-nav__inner">
           <Link
             href={buildPageLink()}
@@ -2572,13 +2693,19 @@ export default async function PropertiesPage({
           >
             <img
               src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
-              alt="Community"
+              alt={t.community}
               className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
             />
             <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 
-          <Link href={mobileAccountHref} className="mobile-bottom-nav__item">
+          <Link
+            href={mobileLanguageHref}
+            className="mobile-bottom-nav__item"
+            aria-label={mobileLanguageAriaLabel}
+            data-language-switcher="true"
+            data-next-language={nextMobileLanguage}
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -2590,16 +2717,16 @@ export default async function PropertiesPage({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
               />
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M4.5 19.125a7.5 7.5 0 0 1 15 0"
+                d="M3.75 9h16.5M3.75 15h16.5M12 3c2.25 2.45 3.35 5.35 3.35 9S14.25 18.55 12 21M12 3C9.75 5.45 8.65 8.35 8.65 12S9.75 18.55 12 21"
               />
             </svg>
             <span className="mobile-bottom-nav__label">
-              {mobileAccountLabel}
+              {mobileLanguageLabel}
             </span>
           </Link>
         </div>

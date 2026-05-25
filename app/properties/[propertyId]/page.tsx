@@ -11,7 +11,6 @@ import PropertyEnquireButton from './PropertyEnquireButton'
 import PropertyShareButton from './PropertyShareButton'
 import SwipeableSheetWrapper from './SwipeableSheetWrapper'
 import './property-page.css'
-import PwaInstallBanner from '../../components/PwaInstallBanner'
 
 const squadaOne = Squada_One({
   subsets: ['latin'],
@@ -2011,7 +2010,6 @@ export default async function PropertyPage({
         }}
       />
 
-      <PwaInstallBanner />
       <input
         id="nav-menu-toggle"
         type="checkbox"
@@ -2125,6 +2123,8 @@ export default async function PropertyPage({
           }
         }
       `}</style>
+
+
 
       <PropertiesHeader
         homeHref={buildPageLink()}
@@ -2416,7 +2416,7 @@ export default async function PropertyPage({
       </div>
 
       <div className="hidden md:block">
-        <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6 lg:px-7">
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -2552,6 +2552,9 @@ export default async function PropertyPage({
                       {!option.isBooked ? (
                         <PropertyEnquireButton
                           propertyId={typedProperty.id}
+                          propertyPublicId={typedProperty.property_id}
+                          propertyTitle={propertyTitle}
+                          brokerWhatsappNumber={brokerWhatsapp}
                           requestedOptionCode={option.code}
                           requestedOptionLabel={option.label}
                           isSignedIn={isSignedIn}
@@ -2807,6 +2810,9 @@ export default async function PropertyPage({
                         {!option.isBooked ? (
                           <PropertyEnquireButton
                             propertyId={typedProperty.id}
+                            propertyPublicId={typedProperty.property_id}
+                            propertyTitle={propertyTitle}
+                            brokerWhatsappNumber={brokerWhatsapp}
                             requestedOptionCode={option.code}
                             requestedOptionLabel={option.label}
                             isSignedIn={isSignedIn}
