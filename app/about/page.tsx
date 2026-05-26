@@ -119,14 +119,7 @@ const contactCards = [
     external: true,
     iconType: "whatsapp",
   },
-  {
-    title: "Toll-free phone",
-    text: "+20 101 866 8663",
-    color: "text-blue-600",
-    href: "tel:+201018668663",
-    external: false,
-    iconType: "phone",
-  },
+
   {
     title: "Email",
     text: "contact@navienty.com",
