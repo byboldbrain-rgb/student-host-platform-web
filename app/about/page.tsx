@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   ArrowRight,
   Mail,
-  Phone,
   ShieldCheck,
   Sparkles,
   Headphones,
@@ -119,7 +118,6 @@ const contactCards = [
     external: true,
     iconType: "whatsapp",
   },
-
   {
     title: "Email",
     text: "contact@navienty.com",
@@ -696,38 +694,38 @@ export default function AboutPage() {
       `}</style>
 
       <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
-  <div className="flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
-    <Link
-      href="/properties?lang=en&currency=EGP"
-      className="navienty-logo mt-2"
-      aria-label="Navienty home"
-    >
-      <img
-        src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
-        alt="Navienty icon"
-        className="navienty-logo-icon"
-      />
-      <span className="navienty-logo-text-wrap">
-        <img
-          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
-          alt="Navienty"
-          className="navienty-logo-text"
-        />
-      </span>
-    </Link>
+        <div className="flex h-[72px] w-full items-center justify-between px-4 pt-2 md:px-6 lg:px-8">
+          <Link
+            href="/properties?lang=en&currency=EGP"
+            className="navienty-logo mt-2"
+            aria-label="Navienty home"
+          >
+            <img
+              src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
+              alt="Navienty icon"
+              className="navienty-logo-icon"
+            />
+            <span className="navienty-logo-text-wrap">
+              <img
+                src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
+                alt="Navienty"
+                className="navienty-logo-text"
+              />
+            </span>
+          </Link>
 
-    <label
-      htmlFor="nav-menu-toggle"
-      className="menu-trigger ml-auto"
-      aria-label="Open menu"
-    >
-      <span className="menu-trigger-lines">
-        <span className="bg-black" />
-        <span className="bg-black" />
-      </span>
-    </label>
-  </div>
-</header>
+          <label
+            htmlFor="nav-menu-toggle"
+            className="menu-trigger ml-auto"
+            aria-label="Open menu"
+          >
+            <span className="menu-trigger-lines">
+              <span className="bg-black" />
+              <span className="bg-black" />
+            </span>
+          </label>
+        </div>
+      </header>
 
       <div className="mega-menu-overlay">
         <div className="mega-menu-wrap">
@@ -839,7 +837,9 @@ export default function AboutPage() {
             {stats.map((item, index) => (
               <div
                 key={index}
-                className={index === 0 ? "text-left" : "text-left xl:text-center"}
+                className={
+                  index === 0 ? "text-left" : "text-left xl:text-center"
+                }
               >
                 <h3
                   className={
@@ -908,7 +908,7 @@ export default function AboutPage() {
             </p>
           </div>
 
-          <div className="mx-auto mt-8 grid max-w-[860px] gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mx-auto mt-8 grid max-w-[760px] gap-5 md:grid-cols-2 md:justify-center">
             {contactCards.map((card) => (
               <a
                 key={card.title}

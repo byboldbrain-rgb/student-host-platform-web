@@ -66,25 +66,13 @@ const boardMembers = [
     name: "HISHAM EZZ ELARAB",
     role: "GROUP CHAIRMAN & OWNER",
     image:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=1400&q=90",
   },
   {
     name: "RANA ABBADI",
     role: "GROUP VICE CHAIRMAN",
     image:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1200&q=80",
-  },
-  {
-    name: "NINA EZZ ELARAB",
-    role: "VP CULTURE & COMMUNICATIONS",
-    image:
-      "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=1200&q=80",
-  },
-  {
-    name: "OMAR EZZ ELARAB",
-    role: "BOARD MEMBER & SHAREHOLDER",
-    image:
-      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1400&q=90",
   },
 ];
 
@@ -353,8 +341,8 @@ export default function BoardPage() {
 
         .board-members-showcase__top {
           background: #0808f4;
-          min-height: 290px;
-          padding: 96px 56px 110px;
+          min-height: 330px;
+          padding: 96px 56px 140px;
           position: relative;
         }
 
@@ -369,17 +357,19 @@ export default function BoardPage() {
         }
 
         .board-members-showcase__grid-wrap {
-          margin-top: -74px;
-          padding: 0 28px 34px;
+          margin-top: -105px;
+          padding: 0 44px 44px;
           position: relative;
           z-index: 2;
         }
 
         .board-members-showcase__grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 34px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 54px;
           align-items: start;
+          max-width: 1180px;
+          margin: 0 auto;
         }
 
         .board-member-card {
@@ -389,8 +379,8 @@ export default function BoardPage() {
         .board-member-card__image-wrap {
           background: #b7b7b7;
           overflow: hidden;
-          border: 2px solid rgba(255,255,255,0.35);
-          aspect-ratio: 0.9 / 1;
+          border: 2px solid rgba(255,255,255,0.45);
+          aspect-ratio: 0.92 / 1;
         }
 
         .board-member-card__image {
@@ -410,19 +400,19 @@ export default function BoardPage() {
         }
 
         .board-member-card__name {
-          margin: 24px 0 0;
+          margin: 28px 0 0;
           color: #3807fb;
-          font-size: clamp(22px, 2vw, 34px);
+          font-size: clamp(30px, 3vw, 48px);
           line-height: 1.02;
           font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.06em;
         }
 
         .board-member-card__role {
-          margin: 10px 0 0;
+          margin: 12px 0 0;
           color: #0f172a;
-          font-size: clamp(13px, 0.95vw, 17px);
+          font-size: clamp(15px, 1.15vw, 20px);
           line-height: 1.35;
           font-weight: 500;
           text-transform: uppercase;
@@ -582,7 +572,12 @@ export default function BoardPage() {
 
         @media (max-width: 1400px) {
           .board-members-showcase__grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-width: 1080px;
+            gap: 42px;
+          }
+
+          .board-member-card__name {
+            font-size: clamp(28px, 3.2vw, 42px);
           }
         }
 
@@ -594,6 +589,16 @@ export default function BoardPage() {
 
           .footer-esaf-top-left {
             grid-column: 1 / -1;
+          }
+
+          .board-members-showcase__grid {
+            max-width: 920px;
+            gap: 30px;
+          }
+
+          .board-members-showcase__grid-wrap {
+            padding-left: 28px;
+            padding-right: 28px;
           }
         }
 
@@ -669,17 +674,25 @@ export default function BoardPage() {
           }
 
           .board-members-showcase__top {
-            padding: 72px 32px 96px;
-            min-height: 220px;
+            padding: 72px 32px 120px;
+            min-height: 260px;
           }
 
           .board-members-showcase__grid-wrap {
-            padding: 0 22px 28px;
-            margin-top: -58px;
+            padding: 0 22px 32px;
+            margin-top: -82px;
           }
 
           .board-members-showcase__grid {
             gap: 24px;
+          }
+
+          .board-member-card__name {
+            font-size: clamp(24px, 3.7vw, 34px);
+          }
+
+          .board-member-card__role {
+            font-size: clamp(13px, 1.45vw, 17px);
           }
         }
 
@@ -738,26 +751,33 @@ export default function BoardPage() {
           }
 
           .board-members-showcase__top {
-            padding: 56px 20px 84px;
-            min-height: 180px;
+            padding: 56px 20px 92px;
+            min-height: 190px;
           }
 
           .board-members-showcase__grid-wrap {
-            margin-top: -48px;
+            margin-top: -58px;
             padding: 0 16px 22px;
           }
 
           .board-members-showcase__grid {
             grid-template-columns: 1fr;
-            gap: 22px;
+            gap: 28px;
+            max-width: 520px;
+          }
+
+          .board-member-card__image-wrap {
+            aspect-ratio: 0.95 / 1;
           }
 
           .board-member-card__name {
             margin-top: 18px;
+            font-size: clamp(26px, 8vw, 36px);
           }
 
           .board-member-card__role {
             margin-top: 8px;
+            font-size: 14px;
           }
         }
       `}</style>
@@ -985,5 +1005,3 @@ export default function BoardPage() {
     </main>
   );
 }
-
-
