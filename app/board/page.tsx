@@ -1,4 +1,3 @@
-/*
 
 
 import { Squada_One } from "next/font/google";
@@ -22,9 +21,8 @@ export default function BoardPage() {
   );
 }
 
-*/
 
-
+/*
 
 import Link from "next/link";
 import { Squada_One, Manrope, Inter } from "next/font/google";
@@ -1005,3 +1003,6 @@ export default function BoardPage() {
     </main>
   );
 }
+
+
+*/
