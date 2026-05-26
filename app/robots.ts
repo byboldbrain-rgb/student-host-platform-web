@@ -10,12 +10,19 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/admin',
+          '/admin/',
+          '/admin/*',
+
           '/account',
+          '/account/',
+          '/account/*',
+
           '/login',
           '/signup',
+
           '/api',
-          '/properties?*',
-          '/sakan/*?*',
+          '/api/',
+          '/api/*',
         ],
       },
     ],
