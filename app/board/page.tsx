@@ -1,3 +1,6 @@
+/*
+
+
 import { Squada_One } from "next/font/google";
 
 const squadaOne = Squada_One({
@@ -19,7 +22,9 @@ export default function BoardPage() {
   );
 }
 
-/*
+*/
+
+
 
 import Link from "next/link";
 import { Squada_One, Manrope, Inter } from "next/font/google";
@@ -982,4 +987,3 @@ export default function BoardPage() {
 }
 
 
-*/

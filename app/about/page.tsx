@@ -920,8 +920,6 @@ export default function AboutPage() {
                 <div className="flex justify-center">
                   {card.iconType === "whatsapp" ? (
                     <WhatsAppIcon className={`h-8 w-8 ${card.color}`} />
-                  ) : card.iconType === "phone" ? (
-                    <Phone className={`h-8 w-8 ${card.color}`} />
                   ) : (
                     <Mail className={`h-8 w-8 ${card.color}`} />
                   )}
