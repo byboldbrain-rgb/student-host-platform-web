@@ -7,7 +7,15 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        allow: [
+          '/',
+          '/about',
+          '/board',
+          '/contact',
+          '/community',
+          '/properties',
+          '/sakan/',
+        ],
         disallow: [
           '/admin',
           '/admin/',
@@ -20,8 +28,6 @@ export default function robots(): MetadataRoute.Robots {
           '/api',
           '/api/',
           '/api/*',
-          '/properties?*',
-          '/sakan/*?*',
         ],
       },
     ],
