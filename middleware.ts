@@ -58,6 +58,14 @@ function shouldSkipLanguageDetection(pathname: string) {
   )
 }
 
+function isSearchEngineCrawler(request: NextRequest) {
+  const userAgent = request.headers.get('user-agent') || ''
+
+  return /googlebot|google-inspectiontool|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot/i.test(
+    userAgent
+  )
+}
+
 function setLanguageCookie(
   response: NextResponse,
   language: SupportedLanguage
@@ -404,7 +412,9 @@ async function getDefaultAdminRoute(
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-  const shouldDetectLanguage = !shouldSkipLanguageDetection(pathname)
+  const isCrawlerRequest = isSearchEngineCrawler(request)
+  const shouldDetectLanguage =
+    !isCrawlerRequest && !shouldSkipLanguageDetection(pathname)
 
   if (shouldDetectLanguage) {
     const currentLang = request.nextUrl.searchParams.get('lang')
