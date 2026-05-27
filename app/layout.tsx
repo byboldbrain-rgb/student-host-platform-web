@@ -6,6 +6,81 @@ const SITE_URL = 'https://navienty.com'
 const SITE_NAME = 'Navienty'
 const DEFAULT_OG_IMAGE = '/og-image.jpg'
 
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  '@id': `${SITE_URL}/#organization`,
+  name: SITE_NAME,
+  url: SITE_URL,
+  logo: `${SITE_URL}/icon.png`,
+  sameAs: [
+    'https://www.facebook.com/',
+    'https://www.instagram.com/',
+    'https://www.linkedin.com/',
+  ],
+  contactPoint: [
+    {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: 'contact@navienty.com',
+      telephone: '+201018668663',
+      areaServed: 'EG',
+      availableLanguage: ['Arabic', 'English'],
+    },
+  ],
+}
+
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': `${SITE_URL}/#website`,
+  name: SITE_NAME,
+  alternateName: ['Navienty Student Housing', 'نافينتي'],
+  url: SITE_URL,
+  publisher: {
+    '@id': `${SITE_URL}/#organization`,
+  },
+  inLanguage: ['ar-EG', 'en'],
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: `${SITE_URL}/properties?search={search_term_string}`,
+    'query-input': 'required name=search_term_string',
+  },
+}
+
+const siteNavigationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  '@id': `${SITE_URL}/#site-navigation`,
+  name: 'Navienty main pages',
+  itemListElement: [
+    {
+      '@type': 'SiteNavigationElement',
+      position: 1,
+      name: 'About us',
+      url: `${SITE_URL}/about`,
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 2,
+      name: 'Board',
+      url: `${SITE_URL}/board`,
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 3,
+      name: 'Contact us',
+      url: `${SITE_URL}/contact`,
+    },
+    {
+      '@type': 'SiteNavigationElement',
+      position: 4,
+      name: 'Student housing',
+      url: `${SITE_URL}/properties`,
+    },
+  ],
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -112,6 +187,28 @@ export default function RootLayout({
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body>
         <SplashScreen />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(websiteJsonLd),
+          }}
+        />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(siteNavigationJsonLd),
+          }}
+        />
+
         {children}
       </body>
     </html>

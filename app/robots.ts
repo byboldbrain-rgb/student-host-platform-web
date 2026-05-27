@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-const SITE_URL = 'https://www.navienty.com'
+const SITE_URL = 'https://navienty.com'
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -12,17 +12,16 @@ export default function robots(): MetadataRoute.Robots {
           '/admin',
           '/admin/',
           '/admin/*',
-
           '/account',
           '/account/',
           '/account/*',
-
           '/login',
           '/signup',
-
           '/api',
           '/api/',
           '/api/*',
+          '/properties?*',
+          '/sakan/*?*',
         ],
       },
     ],

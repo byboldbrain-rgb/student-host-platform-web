@@ -1,26 +1,229 @@
-
-
-import { Squada_One } from "next/font/google";
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { Squada_One } from 'next/font/google'
 
 const squadaOne = Squada_One({
-  subsets: ["latin"],
-  weight: "400",
-});
+  subsets: ['latin'],
+  weight: '400',
+})
 
-export default function BoardPage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f7f8] px-6 text-center">
-      <div>
-        <h1
-          className={`${squadaOne.className} text-5xl uppercase tracking-[-0.04em] text-[#054aff] md:text-7xl`}
-        >
-          Coming Soon
-        </h1>
-      </div>
-    </main>
-  );
+export const metadata: Metadata = {
+  title: 'Board',
+  description:
+    'Meet the Navienty board and leadership vision behind building a trusted student housing platform for university students in Egypt.',
+  alternates: {
+    canonical: 'https://navienty.com/board',
+  },
+  openGraph: {
+    title: 'Board | Navienty',
+    description:
+      'Meet the Navienty board and leadership vision behind building a trusted student housing platform for university students in Egypt.',
+    url: 'https://navienty.com/board',
+    siteName: 'Navienty',
+    type: 'website',
+    locale: 'ar_EG',
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Navienty Board',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Board | Navienty',
+    description:
+      'Meet the Navienty board and leadership vision behind building a trusted student housing platform for university students in Egypt.',
+    images: ['/og-image.jpg'],
+  },
 }
 
+const boardPrinciples = [
+  {
+    title: 'Student-first decisions',
+    text: 'Every product, housing, and support decision starts with what makes student life safer, easier, and more transparent.',
+  },
+  {
+    title: 'Trust and transparency',
+    text: 'Navienty is built around clear information, verified housing data, and direct communication between students and providers.',
+  },
+  {
+    title: 'Better student living',
+    text: 'Our long-term vision is to make finding student accommodation as simple and reliable as booking any modern service online.',
+  },
+]
+
+const footerQuickLinks = [
+  { label: 'About us', href: '/about' },
+  { label: 'Board', href: '/board' },
+  { label: 'Contact', href: '/contact' },
+]
+
+export default function BoardPage() {
+  const currentYear = new Date().getFullYear()
+
+  return (
+    <main className="min-h-screen bg-[#f7f7f8] text-[#20212a]">
+      <header className="sticky top-0 z-40 bg-[#f7f7f8]/90 px-4 py-4 backdrop-blur md:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <Link
+            href="/properties"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#20212a]"
+            aria-label="Go to Navienty properties"
+          >
+            <img
+              src="https://i.ibb.co/FLsWDBr6/Untitled.png"
+              alt="Navienty"
+              className="h-10 w-10 object-contain"
+            />
+            <span>Navienty</span>
+          </Link>
+
+          <nav className="hidden items-center gap-6 text-sm font-semibold text-[#565865] md:flex">
+            <Link href="/about" className="transition hover:text-[#054aff]">
+              About us
+            </Link>
+            <Link href="/board" className="text-[#054aff]">
+              Board
+            </Link>
+            <Link href="/contact" className="transition hover:text-[#054aff]">
+              Contact us
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      <section className="px-4 py-16 md:px-8 md:py-24">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <p className="mb-5 inline-flex rounded-full bg-[#054aff]/10 px-4 py-2 text-sm font-bold text-[#054aff]">
+              Navienty Board
+            </p>
+
+            <h1
+              className={`${squadaOne.className} text-6xl uppercase leading-[0.9] tracking-[-0.06em] text-[#20212a] md:text-8xl`}
+            >
+              Building trust for student living
+            </h1>
+
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-[#5b5d68] md:text-xl">
+              Navienty’s board direction is focused on creating a safer, more
+              transparent, and more reliable student housing experience for
+              university students across Egypt.
+            </p>
+
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Link
+                href="/about"
+                className="inline-flex rounded-full bg-[#054aff] px-6 py-3 text-sm font-bold text-white shadow-[0_10px_28px_rgba(5,74,255,0.24)] transition hover:-translate-y-0.5"
+              >
+                Learn about Navienty
+              </Link>
+
+              <Link
+                href="/contact"
+                className="inline-flex rounded-full border border-[#d8dbe7] bg-white px-6 py-3 text-sm font-bold text-[#20212a] transition hover:-translate-y-0.5"
+              >
+                Contact us
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 pb-20 md:px-8">
+        <div className="mx-auto grid max-w-7xl gap-5 md:grid-cols-3">
+          {boardPrinciples.map((item) => (
+            <article
+              key={item.title}
+              className="rounded-[28px] bg-white p-7 shadow-[0_12px_34px_rgba(15,23,42,0.06)]"
+            >
+              <h2 className="text-2xl font-black tracking-[-0.04em] text-[#20212a]">
+                {item.title}
+              </h2>
+              <p className="mt-4 text-sm leading-7 text-[#5b5d68]">
+                {item.text}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="px-4 pb-20 md:px-8">
+        <div className="mx-auto max-w-7xl rounded-[32px] bg-[#054aff] px-7 py-12 text-white md:px-12 md:py-16">
+          <div className="max-w-3xl">
+            <h2 className="text-4xl font-black tracking-[-0.05em] md:text-5xl">
+              Our direction
+            </h2>
+            <p className="mt-5 text-base leading-8 text-white/85 md:text-lg">
+              We are working to make student housing discovery easier through
+              accurate listings, clear pricing, trusted communication, and a
+              student-first product experience.
+            </p>
+          </div>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/properties"
+              className="inline-flex rounded-full bg-white px-6 py-3 text-sm font-bold text-[#054aff] transition hover:-translate-y-0.5"
+            >
+              Explore student housing
+            </Link>
+            <Link
+              href="/community"
+              className="inline-flex rounded-full border border-white/30 px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5"
+            >
+              Visit community
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="bg-[#054aff] px-4 py-12 text-white md:px-8">
+        <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+          <div>
+            <h2
+              className={`${squadaOne.className} text-5xl uppercase leading-none tracking-[-0.06em] md:text-6xl`}
+            >
+              Find your way to better student living
+            </h2>
+          </div>
+
+          <div>
+            <h3 className="text-xl font-bold">Quick Links</h3>
+            <div className="mt-5 flex flex-col gap-3">
+              {footerQuickLinks.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="w-fit text-white underline underline-offset-8 transition hover:opacity-75"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xl font-bold">Contact Us</h3>
+            <a
+              href="mailto:info@navienty.com"
+              className="mt-5 block w-fit text-white transition hover:opacity-75"
+            >
+              info@navienty.com
+            </a>
+          </div>
+        </div>
+
+        <p className="mx-auto mt-12 max-w-7xl text-center text-sm text-white/85">
+          © {currentYear} Navienty | All rights reserved.
+        </p>
+      </footer>
+    </main>
+  )
+}
 
 /*
 
