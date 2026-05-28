@@ -33,6 +33,11 @@ type BookingRequest = {
   status: 'new' | 'contacted' | 'in_progress' | 'converted' | 'cancelled'
   created_at: string
   updated_at: string
+  request_source: 'student' | 'admin_internal' | string | null
+  created_by_admin_id: string | null
+  approved_by_admin_id: string | null
+  approved_at: string | null
+  admin_internal_notes: string | null
   properties:
     | {
         id: string
@@ -594,6 +599,11 @@ export default async function PropertyBookingRequestsPage() {
       status,
       created_at,
       updated_at,
+      request_source,
+      created_by_admin_id,
+      approved_by_admin_id,
+      approved_at,
+      admin_internal_notes,
       properties (
         id,
         property_id,
@@ -979,6 +989,13 @@ export default async function PropertyBookingRequestsPage() {
               </Link>
 
               <Link
+                href="/admin/properties/booking-requests/new"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                New Internal Request
+              </Link>
+
+              <Link
                 href="/admin/properties"
                 className="desktop-header-nav-button desktop-header-nav-button-inactive"
               >
@@ -1014,6 +1031,24 @@ export default async function PropertyBookingRequestsPage() {
         </header>
 
         <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-950">
+                Booking Requests
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Review student requests and internal admin booking requests.
+              </p>
+            </div>
+
+            <Link
+              href="/admin/properties/booking-requests/new"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[#054aff] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0437bf]"
+            >
+              New internal request
+            </Link>
+          </div>
+
           <AdminPropertyBookingNotifications openRequestsCount={newReservationsCount} />
 
           {requests.length === 0 ? (
@@ -1127,6 +1162,24 @@ export default async function PropertyBookingRequestsPage() {
                         </div>
 
                         <div className="p-5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {request.request_source === 'admin_internal' ? (
+                              <span className="inline-flex rounded-full border border-[#dbe5ff] bg-[#f3f6ff] px-3 py-1 text-[11px] font-bold text-[#054aff]">
+                                Internal admin request
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                                Student request
+                              </span>
+                            )}
+
+                            {request.created_by_admin_id === admin.id && (
+                              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700">
+                                Created by you
+                              </span>
+                            )}
+                          </div>
+
                           <div className="mt-4 grid gap-3">
                             {request.customer_phone && (
                               <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
@@ -1170,6 +1223,9 @@ export default async function PropertyBookingRequestsPage() {
                               rooms={mappedRooms}
                               userId={request.user_id}
                               currentWalletBalance={currentWalletBalance}
+                              requestSource={request.request_source}
+                              createdByAdminId={request.created_by_admin_id}
+                              currentAdminId={admin.id}
                             />
                           </div>
                         </div>

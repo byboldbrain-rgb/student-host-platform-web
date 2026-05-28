@@ -7,6 +7,7 @@ import {
   isSuperAdmin,
 } from '@/src/lib/admin-auth'
 import { applyWalletTransactionByAdmin } from '@/src/lib/services/wallet-service'
+import { sendReservationConfirmationEmail } from '@/src/lib/email/send-reservation-confirmation-email'
 
 type BookingRequestStatus =
   | 'new'
@@ -70,6 +71,11 @@ type AuthorizedBookingRequest = {
   message: string | null
   status: BookingRequestStatus
   requested_option_code: string | null
+  request_source: 'student' | 'admin_internal' | string | null
+  created_by_admin_id: string | null
+  approved_by_admin_id: string | null
+  approved_at: string | null
+  admin_internal_notes: string | null
 }
 
 type AuthorizedReservation = {
@@ -516,7 +522,12 @@ async function getAuthorizedBookingRequest(requestId: string) {
       preferred_end_date,
       message,
       status,
-      requested_option_code
+      requested_option_code,
+      request_source,
+      created_by_admin_id,
+      approved_by_admin_id,
+      approved_at,
+      admin_internal_notes
     `)
     .eq('id', requestId)
     .maybeSingle()
@@ -2191,6 +2202,94 @@ async function releaseLegacyBedReservation(params: {
   })
 }
 
+
+async function sendConfirmationEmailForReservation(params: {
+  supabase: ReturnType<typeof createAdminClient>
+  adminUserId: string
+  reservationId: string
+}) {
+  const { supabase, adminUserId, reservationId } = params
+
+  const { data: reservation, error } = await supabase
+    .from('property_reservations')
+    .select(`
+      id,
+      confirmation_code,
+      customer_name,
+      customer_email,
+      reservation_scope,
+      total_price_egp,
+      payment_status,
+      start_date,
+      end_date,
+      properties (
+        property_id,
+        title_en,
+        title_ar
+      )
+    `)
+    .eq('id', reservationId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if (!reservation) {
+    throw new Error('Reservation not found for confirmation email')
+  }
+
+  if (!reservation.customer_email) {
+    return {
+      skipped: true,
+      reason: 'Reservation has no customer email',
+    }
+  }
+
+  if (!reservation.confirmation_code) {
+    return {
+      skipped: true,
+      reason: 'Reservation has no confirmation code',
+    }
+  }
+
+  const property = Array.isArray((reservation as any).properties)
+    ? (reservation as any).properties[0]
+    : (reservation as any).properties
+
+  const result = await sendReservationConfirmationEmail({
+    to: reservation.customer_email,
+    customerName: reservation.customer_name || 'Student',
+    confirmationCode: reservation.confirmation_code,
+    propertyTitle:
+      property?.title_ar ||
+      property?.title_en ||
+      property?.property_id ||
+      'Navienty property',
+    propertyCode: property?.property_id || null,
+    reservationScope: reservation.reservation_scope,
+    totalPriceEgp:
+      typeof reservation.total_price_egp === 'number'
+        ? reservation.total_price_egp
+        : Number(reservation.total_price_egp || 0),
+    paymentStatus: reservation.payment_status || 'paid',
+    startDate: reservation.start_date,
+    endDate: reservation.end_date,
+  })
+
+  await supabase.from('admin_audit_logs').insert({
+    admin_user_id: adminUserId,
+    action_type: result.skipped
+      ? 'reservation_confirmation_email_skipped'
+      : 'reservation_confirmation_email_sent',
+    target_table: 'property_reservations',
+    target_id: reservationId,
+    details: result,
+  })
+
+  return result
+}
+
 export async function markBookingRequestContactedAction(formData: FormData) {
   const requestId = parseRequestId(formData)
 
@@ -2213,6 +2312,16 @@ export async function acceptBookingRequestAction(formData: FormData) {
   const requestId = parseRequestId(formData)
 
   const { supabase, request, admin } = await getAuthorizedBookingRequest(requestId)
+
+  const isAdminInternalRequest = request.request_source === 'admin_internal'
+
+  if (
+    isAdminInternalRequest &&
+    request.created_by_admin_id &&
+    request.created_by_admin_id === admin.id
+  ) {
+    throw new Error('You cannot approve a booking request that you created.')
+  }
 
   if (request.status === 'converted') {
     revalidatePath('/admin/properties/booking-requests')
@@ -2354,36 +2463,43 @@ export async function acceptBookingRequestAction(formData: FormData) {
     throw new Error('A valid total price is required before accepting the request')
   }
 
-  if (!request.user_id) {
-    throw new Error('This booking request is not linked to a user account')
+  let useWalletBalance = false
+  let walletAmountToUse = 0
+
+  if (!isAdminInternalRequest) {
+    if (!request.user_id) {
+      throw new Error('This booking request is not linked to a user account')
+    }
+
+    if (!submittedUseWalletBalance) {
+      throw new Error('Wallet payment is mandatory for accepting this booking request')
+    }
+
+    if (submittedWalletAmount !== null && submittedWalletAmount !== totalPrice) {
+      throw new Error('Wallet amount must equal 100% of the total reservation price')
+    }
+
+    const { data: walletRow, error: walletError } = await supabase
+      .from('user_wallets')
+      .select('balance')
+      .eq('user_id', request.user_id)
+      .maybeSingle()
+
+    if (walletError) {
+      throw new Error(walletError.message)
+    }
+
+    const currentBalance = Number(walletRow?.balance || 0)
+
+    if (currentBalance < totalPrice) {
+      throw new Error(
+        'Insufficient wallet balance to cover 100% of the reservation amount'
+      )
+    }
+
+    useWalletBalance = true
+    walletAmountToUse = totalPrice
   }
-
-  if (!submittedUseWalletBalance) {
-    throw new Error('Wallet payment is mandatory for accepting this booking request')
-  }
-
-  if (submittedWalletAmount !== null && submittedWalletAmount !== totalPrice) {
-    throw new Error('Wallet amount must equal 100% of the total reservation price')
-  }
-
-  const { data: walletRow, error: walletError } = await supabase
-    .from('user_wallets')
-    .select('balance')
-    .eq('user_id', request.user_id)
-    .maybeSingle()
-
-  if (walletError) {
-    throw new Error(walletError.message)
-  }
-
-  const currentBalance = Number(walletRow?.balance || 0)
-
-  if (currentBalance < totalPrice) {
-    throw new Error('Insufficient wallet balance to cover 100% of the reservation amount')
-  }
-
-  const useWalletBalance = true
-  const walletAmountToUse = totalPrice
 
   let reservationId: string | null = null
 
@@ -2469,37 +2585,91 @@ export async function acceptBookingRequestAction(formData: FormData) {
     throw new Error('Failed to create reservation')
   }
 
-  const walletResult = await applyWalletToReservation({
-    supabase,
-    adminUserId: admin.id,
-    reservationId,
-    request,
-    totalPrice,
-    useWalletBalance,
-    walletAmountToUse,
-  })
+  if (isAdminInternalRequest) {
+    const { error: markPaidError } = await supabase
+      .from('property_reservations')
+      .update({
+        payment_status: 'paid',
+        wallet_amount_used: 0,
+        updated_by_admin_id: admin.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', reservationId)
 
-  if (walletResult.paymentStatus === 'paid') {
-    await createFinanceRecordsForPaidReservation({
+    if (markPaidError) {
+      throw new Error(markPaidError.message)
+    }
+
+    await supabase.from('admin_audit_logs').insert({
+      admin_user_id: admin.id,
+      action_type: 'admin_internal_reservation_marked_paid',
+      target_table: 'property_reservations',
+      target_id: reservationId,
+      details: {
+        booking_request_id: request.id,
+        property_id: request.property_id,
+        amount: totalPrice,
+        payment_source: 'admin_internal',
+      },
+    })
+  } else {
+    const walletResult = await applyWalletToReservation({
       supabase,
       adminUserId: admin.id,
       reservationId,
-      propertyId: request.property_id,
-      userId: request.user_id,
-      customerName: request.customer_name,
-      customerPhone: request.customer_phone,
-      amount: totalPrice,
-      walletTransactionId: walletResult.walletTransactionId,
-      sourceType: 'initial_reservation',
-      receiptType: 'rent_collection',
-      billingCycleId: null,
+      request,
+      totalPrice,
+      useWalletBalance,
+      walletAmountToUse,
     })
+
+    if (walletResult.paymentStatus === 'paid' && request.user_id) {
+      await createFinanceRecordsForPaidReservation({
+        supabase,
+        adminUserId: admin.id,
+        reservationId,
+        propertyId: request.property_id,
+        userId: request.user_id,
+        customerName: request.customer_name,
+        customerPhone: request.customer_phone,
+        amount: totalPrice,
+        walletTransactionId: walletResult.walletTransactionId,
+        sourceType: 'initial_reservation',
+        receiptType: 'rent_collection',
+        billingCycleId: null,
+      })
+    }
+
+    if (request.user_id && walletResult.paymentStatus === 'paid') {
+      const rewardResult = await awardReferralAfterPaidReservationDirectly({
+        supabase,
+        invitedUserId: request.user_id,
+        sourceReservationId: reservationId,
+        adminUserId: admin.id,
+      })
+
+      console.log('Referral reward RPC result:', rewardResult)
+
+      if (
+        rewardResult.success === false &&
+        rewardResult.reason !== 'NO_REFERRAL_FOUND' &&
+        rewardResult.reason !== 'FIRST_PAID_BONUS_ALREADY_GRANTED'
+      ) {
+        throw new Error(
+          `Referral reward was not applied: ${
+            rewardResult.reason || 'UNKNOWN_REASON'
+          }`
+        )
+      }
+    }
   }
 
   const { error: updateRequestError } = await supabase
     .from('property_booking_requests')
     .update({
       status: 'converted',
+      approved_by_admin_id: admin.id,
+      approved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', requestId)
@@ -2508,25 +2678,28 @@ export async function acceptBookingRequestAction(formData: FormData) {
     throw new Error(updateRequestError.message)
   }
 
-  if (request.user_id && reservationId && walletResult.paymentStatus === 'paid') {
-    const rewardResult = await awardReferralAfterPaidReservationDirectly({
+
+  try {
+    await sendConfirmationEmailForReservation({
       supabase,
-      invitedUserId: request.user_id,
-      sourceReservationId: reservationId,
       adminUserId: admin.id,
+      reservationId,
     })
+  } catch (emailError) {
+    console.warn('Reservation confirmation email failed:', emailError)
 
-    console.log('Referral reward RPC result:', rewardResult)
-
-    if (
-      rewardResult.success === false &&
-      rewardResult.reason !== 'NO_REFERRAL_FOUND' &&
-      rewardResult.reason !== 'FIRST_PAID_BONUS_ALREADY_GRANTED'
-    ) {
-      throw new Error(
-        `Referral reward was not applied: ${rewardResult.reason || 'UNKNOWN_REASON'}`
-      )
-    }
+    await supabase.from('admin_audit_logs').insert({
+      admin_user_id: admin.id,
+      action_type: 'reservation_confirmation_email_failed',
+      target_table: 'property_reservations',
+      target_id: reservationId,
+      details: {
+        error:
+          emailError instanceof Error
+            ? emailError.message
+            : 'Unknown email error',
+      },
+    })
   }
 
   revalidatePath('/admin/properties/booking-requests')

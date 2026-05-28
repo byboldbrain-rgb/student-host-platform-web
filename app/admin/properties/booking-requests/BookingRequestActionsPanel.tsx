@@ -58,6 +58,9 @@ type Props = {
   requestedOptionCode?: RequestedOptionCode
   userId?: string | null
   currentWalletBalance?: number
+  requestSource?: 'student' | 'admin_internal' | string | null
+  createdByAdminId?: string | null
+  currentAdminId?: string | null
 }
 
 function formatPrice(value?: number | null) {
@@ -118,10 +121,20 @@ export default function BookingRequestActionsPanel({
   requestedOptionCode = null,
   userId = null,
   currentWalletBalance = 0,
+  requestSource = 'student',
+  createdByAdminId = null,
+  currentAdminId = null,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [errorMessage, setErrorMessage] = useState('')
+
+  const isAdminInternalRequest = requestSource === 'admin_internal'
+  const isCreatedByCurrentAdmin =
+    isAdminInternalRequest &&
+    Boolean(createdByAdminId) &&
+    Boolean(currentAdminId) &&
+    createdByAdminId === currentAdminId
 
   const isFullApartmentRequest = requestedOptionCode === 'full_apartment'
 
@@ -257,17 +270,19 @@ export default function BookingRequestActionsPanel({
   }, [calculatedTotalPrice])
 
   const hasSufficientWalletBalance = useMemo(() => {
+    if (isAdminInternalRequest) return true
     if (!userId) return false
     if (requiredWalletAmount <= 0) return false
     return currentWalletBalance >= requiredWalletAmount
-  }, [userId, currentWalletBalance, requiredWalletAmount])
+  }, [isAdminInternalRequest, userId, currentWalletBalance, requiredWalletAmount])
 
   const isAcceptDisabled =
     isPending ||
-    !userId ||
+    isCreatedByCurrentAdmin ||
+    (!isAdminInternalRequest && !userId) ||
     typeof calculatedTotalPrice !== 'number' ||
     calculatedTotalPrice <= 0 ||
-    !hasSufficientWalletBalance
+    (!isAdminInternalRequest && !hasSufficientWalletBalance)
 
   const handleReject = () => {
     setErrorMessage('')
@@ -285,29 +300,52 @@ export default function BookingRequestActionsPanel({
   }
 
   const appendWalletFields = (formData: FormData) => {
+    if (isAdminInternalRequest) {
+      formData.set('mark_as_paid', 'true')
+      formData.set('payment_source', 'admin_internal')
+      formData.set('use_wallet_balance', 'false')
+      formData.set('wallet_amount_to_use', '0')
+      return
+    }
+
     formData.set('use_wallet_balance', 'true')
     formData.set('wallet_amount_to_use', String(requiredWalletAmount))
+  }
+
+  const validateBeforeAccept = () => {
+    if (isCreatedByCurrentAdmin) {
+      setErrorMessage('You cannot approve a booking request that you created.')
+      return false
+    }
+
+    if (!isAdminInternalRequest) {
+      if (!userId) {
+        setErrorMessage(
+          'This request cannot be accepted because it is not linked to a user account with a wallet.'
+        )
+        return false
+      }
+
+      if (!hasSufficientWalletBalance) {
+        setErrorMessage(
+          'Insufficient wallet balance. The wallet must cover 100% of the reservation amount.'
+        )
+        return false
+      }
+    }
+
+    if (typeof calculatedTotalPrice !== 'number' || calculatedTotalPrice <= 0) {
+      setErrorMessage('Total price must be available before accepting the request.')
+      return false
+    }
+
+    return true
   }
 
   const handleAccept = () => {
     setErrorMessage('')
 
-    if (!userId) {
-      setErrorMessage(
-        'This request cannot be accepted because it is not linked to a user account with a wallet.'
-      )
-      return
-    }
-
-    if (typeof calculatedTotalPrice !== 'number' || calculatedTotalPrice <= 0) {
-      setErrorMessage('Total price must be available before accepting the request.')
-      return
-    }
-
-    if (!hasSufficientWalletBalance) {
-      setErrorMessage(
-        'Insufficient wallet balance. The wallet must cover 100% of the reservation amount.'
-      )
+    if (!validateBeforeAccept()) {
       return
     }
 
@@ -404,10 +442,24 @@ export default function BookingRequestActionsPanel({
             <div className="absolute bottom-0 right-0 h-20 w-20 rounded-full bg-[#6ea8ff]/20 blur-2xl" />
           </div>
 
-          <div className="relative z-10">
-            <h3 className="text-lg font-bold tracking-tight text-white">
-              {getRequestedOptionLabel(requestedOptionCode)}
-            </h3>
+          <div className="relative z-10 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold tracking-tight text-white">
+                {getRequestedOptionLabel(requestedOptionCode)}
+              </h3>
+
+              <p className="mt-1 text-xs font-semibold text-white/70">
+                {isAdminInternalRequest
+                  ? 'Internal admin request · will be marked paid on approval'
+                  : 'Student request · wallet payment required'}
+              </p>
+            </div>
+
+            {isCreatedByCurrentAdmin && (
+              <span className="rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold text-white">
+                Created by you
+              </span>
+            )}
           </div>
         </div>
 
@@ -433,91 +485,118 @@ export default function BookingRequestActionsPanel({
               </div>
             </div>
           ) : (
-            <>
-              <div className="rounded-[18px] border border-black/5 bg-[#f8faff] p-3">
-                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#054aff]">
-                  Room
-                </label>
+            <div className="rounded-[18px] border border-black/5 bg-[#f8faff] p-3">
+              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#054aff]">
+                Room
+              </label>
 
-                <select
-                  value={selectedRoomId}
-                  onChange={(e) => {
-                    setSelectedRoomId(e.target.value)
-                    setSelectedRoomSellableOptionId('')
-                  }}
-                  className="w-full rounded-[16px] border border-[#dbe5ff] bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#054aff]"
-                >
-                  <option value="">Select room</option>
-                  {eligibleRooms.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {getRoomDisplayName(room)} — {room.availableBedsCount} available beds
-                    </option>
-                  ))}
-                </select>
+              <select
+                value={selectedRoomId}
+                onChange={(e) => {
+                  setSelectedRoomId(e.target.value)
+                  setSelectedRoomSellableOptionId('')
+                }}
+                className="w-full rounded-[16px] border border-[#dbe5ff] bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#054aff]"
+              >
+                <option value="">Select room</option>
+                {eligibleRooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {getRoomDisplayName(room)} — {room.availableBedsCount} available beds
+                  </option>
+                ))}
+              </select>
 
-                {eligibleRooms.length > 0 ? (
-                  <div className="mt-3 grid gap-2.5">
-                    {eligibleRooms.map((room) => {
-                      const isSelected = selectedRoomId === room.id
+              {eligibleRooms.length > 0 ? (
+                <div className="mt-3 grid gap-2.5">
+                  {eligibleRooms.map((room) => {
+                    const isSelected = selectedRoomId === room.id
 
-                      return (
-                        <button
-                          key={room.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedRoomId(room.id)
-                            setSelectedRoomSellableOptionId('')
-                          }}
-                          className={`rounded-[18px] border p-3 text-left transition ${
-                            isSelected
-                              ? 'border-[#054aff] bg-[#eef4ff] shadow-[0_8px_18px_rgba(5,74,255,0.10)]'
-                              : 'border-black/5 bg-white hover:border-[#cdddff] hover:bg-[#fbfcff]'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-gray-900">
-                                {getRoomDisplayName(room)}
-                              </p>
-                              <p className="mt-1 text-xs text-gray-500">
-                                {room.availableBedsCount}/{room.totalBedsCount} beds available
-                              </p>
-                            </div>
-
-                            <span
-                              className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold ${getRoomStatusTone(
-                                room.status
-                              )}`}
-                            >
-                              {room.status.replaceAll('_', ' ')}
-                            </span>
+                    return (
+                      <button
+                        key={room.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoomId(room.id)
+                          setSelectedRoomSellableOptionId('')
+                        }}
+                        className={`rounded-[18px] border p-3 text-left transition ${
+                          isSelected
+                            ? 'border-[#054aff] bg-[#eef4ff] shadow-[0_8px_18px_rgba(5,74,255,0.10)]'
+                            : 'border-black/5 bg-white hover:border-[#cdddff] hover:bg-[#fbfcff]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-gray-900">
+                              {getRoomDisplayName(room)}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {room.availableBedsCount}/{room.totalBedsCount} beds available
+                            </p>
                           </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-[16px] border border-dashed border-black/10 bg-white px-3 py-2.5 text-sm text-gray-500">
-                    No eligible rooms available for this requested option.
-                  </div>
-                )}
-              </div>
-            </>
+
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold ${getRoomStatusTone(
+                              room.status
+                            )}`}
+                          >
+                            {room.status.replaceAll('_', ' ')}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-[16px] border border-dashed border-black/10 bg-white px-3 py-2.5 text-sm text-gray-500">
+                  No eligible rooms available for this requested option.
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isFullApartmentRequest && selectedRoom && (
+            <div className="rounded-[18px] border border-black/5 bg-[#f8faff] p-3">
+              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#054aff]">
+                Room option
+              </label>
+
+              <select
+                value={selectedRoomSellableOptionId}
+                onChange={(e) => setSelectedRoomSellableOptionId(e.target.value)}
+                className="w-full rounded-[16px] border border-[#dbe5ff] bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#054aff]"
+              >
+                <option value="">Select room option</option>
+                {filteredRoomOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {getOptionDisplayName(option)} — {formatPrice(option.price_egp)}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
 
           <div className="rounded-[18px] bg-[#f3f6ff] p-3 shadow-[0_10px_24px_rgba(5,74,255,0.10)]">
             <div className="grid gap-2.5 sm:grid-cols-2">
               <div className="rounded-[16px] border border-white/70 bg-white px-3 py-3 shadow-[0_6px_18px_rgba(5,74,255,0.06)]">
-                <p className="text-[11px] text-gray-500">Current wallet balance</p>
+                <p className="text-[11px] text-gray-500">
+                  {isAdminInternalRequest ? 'Payment source' : 'Current wallet balance'}
+                </p>
                 <p className="mt-1 text-sm font-extrabold text-gray-900">
-                  {userId ? formatPrice(currentWalletBalance) : 'No linked user'}
+                  {isAdminInternalRequest
+                    ? 'Admin internal · auto paid'
+                    : userId
+                      ? formatPrice(currentWalletBalance)
+                      : 'No linked user'}
                 </p>
               </div>
 
               <div className="rounded-[16px] border border-white/70 bg-white px-3 py-3 shadow-[0_6px_18px_rgba(5,74,255,0.06)]">
-                <p className="text-[11px] text-gray-500">Required wallet payment</p>
+                <p className="text-[11px] text-gray-500">
+                  {isAdminInternalRequest ? 'Reservation payment' : 'Required wallet payment'}
+                </p>
                 <p className="mt-1 text-sm font-extrabold text-gray-900">
-                  {formatPrice(requiredWalletAmount)}
+                  {isAdminInternalRequest ? 'Paid on approval' : formatPrice(requiredWalletAmount)}
                 </p>
               </div>
             </div>
