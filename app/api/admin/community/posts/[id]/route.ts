@@ -36,7 +36,7 @@ type UpdatePostPayload = {
 };
 
 const allowedPostTypes = ["blog", "announcement", "news", "update"] as const;
-const MAX_ASSETS_PER_POST = 5;
+const MAX_ASSETS_PER_POST = 15;
 
 function parsePostId(rawId: string | undefined) {
   if (!rawId) return null;

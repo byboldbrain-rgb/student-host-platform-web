@@ -87,7 +87,7 @@ type PostForm = {
 const STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "community-posts";
 
-const MAX_ASSETS_PER_POST = 5;
+const MAX_ASSETS_PER_POST = 15;
 const MAX_IMAGE_SIZE_MB = 8;
 const MAX_VIDEO_SIZE_MB = 80;
 const MAX_THUMBNAIL_SIZE_MB = 5;

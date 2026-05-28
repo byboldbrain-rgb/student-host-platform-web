@@ -36,7 +36,7 @@ type CreatePostPayload = {
 };
 
 const allowedPostTypes = ["blog", "announcement", "news", "update"] as const;
-const MAX_ASSETS_PER_POST = 5;
+const MAX_ASSETS_PER_POST = 15;
 
 function normalizeAssetType(value: unknown): AssetType | null {
   return value === "image" || value === "video" ? value : null;
