@@ -29,6 +29,7 @@ type UpdatePostPayload = {
   postType?: "blog" | "announcement" | "news" | "update";
   isFeatured?: boolean;
   isPublished?: boolean;
+  sortOrder?: number | null;
   publishedAt?: string | null;
   authorName?: string | null;
   socialMediaLink?: string | null;
@@ -304,6 +305,19 @@ export async function PATCH(
 
     if ("isFeatured" in body) {
       updateData.is_featured = Boolean(body.isFeatured);
+    }
+
+    if ("sortOrder" in body) {
+      const sortOrder = Number(body.sortOrder ?? 0);
+
+      if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+        return NextResponse.json(
+          { error: "Sort order must be a non-negative integer" },
+          { status: 400 }
+        );
+      }
+
+      updateData.sort_order = sortOrder;
     }
 
     if ("isPublished" in body) {

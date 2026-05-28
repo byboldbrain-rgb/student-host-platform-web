@@ -246,6 +246,8 @@ export default async function CommunityPage({
     `,
     )
     .eq("is_published", true)
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true })
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 

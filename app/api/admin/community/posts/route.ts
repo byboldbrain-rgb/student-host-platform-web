@@ -29,6 +29,7 @@ type CreatePostPayload = {
   postType?: "blog" | "announcement" | "news" | "update";
   isFeatured?: boolean;
   isPublished?: boolean;
+  sortOrder?: number | null;
   publishedAt?: string | null;
   authorName?: string | null;
   socialMediaLink?: string | null;
@@ -152,6 +153,9 @@ export async function GET() {
     const { data, error } = await supabase
       .from("community_posts")
       .select("*")
+      .order("is_featured", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -186,6 +190,7 @@ export async function POST(req: Request) {
     const isFeatured = Boolean(body.isFeatured);
     const isPublished =
       typeof body.isPublished === "boolean" ? body.isPublished : true;
+    const sortOrder = Number(body.sortOrder ?? 0);
     const publishedAt = body.publishedAt || null;
     const authorName = body.authorName?.trim() || null;
     const socialMediaLink = body.socialMediaLink?.trim() || null;
@@ -200,6 +205,13 @@ export async function POST(req: Request) {
     if (!allowedPostTypes.includes(postType)) {
       return NextResponse.json(
         { error: "Invalid post type" },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      return NextResponse.json(
+        { error: "Sort order must be a non-negative integer" },
         { status: 400 }
       );
     }
@@ -238,6 +250,7 @@ export async function POST(req: Request) {
         post_type: postType,
         is_featured: isFeatured,
         is_published: isPublished,
+        sort_order: sortOrder,
         published_at: publishedAt,
         social_media_link: socialMediaLink,
       })

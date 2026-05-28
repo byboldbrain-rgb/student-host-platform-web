@@ -14,21 +14,61 @@ export default function MobilePropertySlider({
   isArabic = false,
 }: Props) {
   const sliderRef = useRef<HTMLDivElement | null>(null)
+  const scrollFrameRef = useRef<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
 
-  const handleScroll = () => {
+  const updateActiveIndex = () => {
     const slider = sliderRef.current
     if (!slider) return
 
-    const slideWidth = slider.clientWidth
-    if (!slideWidth) return
+    const sliderRect = slider.getBoundingClientRect()
+    const sliderCenter = sliderRect.left + sliderRect.width / 2
 
-    const nextIndex = Math.round(slider.scrollLeft / slideWidth)
-    const safeIndex = Math.max(0, Math.min(nextIndex, images.length - 1))
+    const slides = Array.from(
+      slider.querySelectorAll<HTMLDivElement>('[data-slider-slide]')
+    )
 
-    if (safeIndex !== activeIndex) {
-      setActiveIndex(safeIndex)
+    if (!slides.length) return
+
+    let closestIndex = 0
+    let closestDistance = Number.POSITIVE_INFINITY
+
+    slides.forEach((slide, index) => {
+      const slideRect = slide.getBoundingClientRect()
+      const slideCenter = slideRect.left + slideRect.width / 2
+      const distance = Math.abs(slideCenter - sliderCenter)
+
+      if (distance < closestDistance) {
+        closestDistance = distance
+        closestIndex = index
+      }
+    })
+
+    setActiveIndex((currentIndex) => {
+      if (currentIndex === closestIndex) return currentIndex
+      return closestIndex
+    })
+  }
+
+  const handleScroll = () => {
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current)
     }
+
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      updateActiveIndex()
+      scrollFrameRef.current = null
+    })
+  }
+
+  if (!images.length) {
+    return (
+      <div className="relative flex h-[420px] items-center justify-center overflow-hidden bg-slate-100">
+        <span className="text-sm font-semibold text-slate-500">
+          {isArabic ? 'لا توجد صور' : 'No images'}
+        </span>
+      </div>
+    )
   }
 
   return (
@@ -36,17 +76,20 @@ export default function MobilePropertySlider({
       <div
         ref={sliderRef}
         onScroll={handleScroll}
+        dir="ltr"
         className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth hide-scrollbar"
       >
         {images.map((imageUrl, index) => (
           <div
             key={`${imageUrl}-${index}`}
+            data-slider-slide
             className="w-full shrink-0 snap-center"
           >
             <img
               src={imageUrl}
               alt={`${title} ${index + 1}`}
               className="h-[420px] w-full object-cover"
+              draggable={false}
             />
           </div>
         ))}
