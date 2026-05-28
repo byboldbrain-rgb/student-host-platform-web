@@ -126,9 +126,12 @@ export default function MediaCarousel({
       const node = scrollRef.current;
       if (!node) return;
 
-      const left = getScrollLeftForIndex(index);
+      const safeIndex = clampIndex(index, items.length);
+      const left = getScrollLeftForIndex(safeIndex);
 
       isProgrammaticScrollRef.current = true;
+      setCurrentIndex(safeIndex);
+
       node.scrollTo({ left, behavior });
 
       window.clearTimeout(scrollEndTimeoutRef.current ?? undefined);
@@ -136,7 +139,7 @@ export default function MediaCarousel({
         isProgrammaticScrollRef.current = false;
       }, behavior === "smooth" ? 350 : 120);
     },
-    [getScrollLeftForIndex]
+    [getScrollLeftForIndex, items.length, setCurrentIndex]
   );
 
   useEffect(() => {
@@ -306,6 +309,44 @@ export default function MediaCarousel({
         )}
       >
         {slides}
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-4">
+        <div
+          className={cx(
+            "pointer-events-auto flex items-center justify-center gap-1.5 rounded-full px-3 py-2",
+            "border border-white/45 bg-white/20 shadow-[0_10px_35px_rgba(0,0,0,0.22)]",
+            "backdrop-blur-xl backdrop-saturate-150",
+            "ring-1 ring-black/10"
+          )}
+          aria-label="Media pagination"
+        >
+          {items.map((item, index) => {
+            const isActive = index === currentIndex;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-label={`Go to media ${index + 1}`}
+                aria-current={isActive ? "true" : undefined}
+                onClick={() => scrollToIndex(index)}
+                className={cx(
+                  "h-2.5 rounded-full transition-all duration-300 ease-out",
+                  "border border-white/60 shadow-[0_1px_5px_rgba(0,0,0,0.28)]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
+                  isActive
+                    ? "w-7 bg-[#054aff]"
+                    : "w-2.5 bg-white/85 hover:bg-white"
+                )}
+              >
+                <span className="sr-only">
+                  {isActive ? "Current media" : `Media ${index + 1}`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
