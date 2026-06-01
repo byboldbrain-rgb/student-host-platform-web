@@ -4,7 +4,11 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { updatePropertyAction } from './actions'
+import { createClient } from '@supabase/supabase-js'
+import {
+  createPropertyImageUploadSignedUrlAction,
+  updatePropertyAction,
+} from './actions'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 
 type City = { id: string; name_en: string; name_ar: string }
@@ -222,6 +226,29 @@ type AmenityCategoryGroup = {
   key: string
   title: string
   items: Amenity[]
+}
+
+
+type SignedPropertyImageUpload = {
+  image_url: string
+  storage_path: string
+  token: string
+}
+
+const PROPERTY_IMAGES_BUCKET = 'property-images'
+const PROPERTY_IMAGE_UPLOAD_BATCH_SIZE = 4
+
+function getBrowserSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase browser environment variables are missing. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+    )
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey)
 }
 
 const FORM_STEPS = [
@@ -705,6 +732,8 @@ export default function EditPropertyForm({
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [errorMessage, setErrorMessage] = useState('')
@@ -1333,9 +1362,89 @@ export default function EditPropertyForm({
     })
 
     formData.delete('images')
-    newImageFiles.forEach((item) => {
-      if (item.file) formData.append('images', item.file)
-    })
+    formData.delete('uploaded_image_url')
+    formData.delete('uploaded_image_storage_path')
+
+    const filesToUpload = newImageFiles
+      .map((item) => item.file)
+      .filter((file): file is File => file instanceof File && file.size > 0)
+
+    if (filesToUpload.length > 0) {
+      setIsUploadingImages(true)
+
+      try {
+        const supabaseBrowserClient = getBrowserSupabaseClient()
+        const uploadedImages: SignedPropertyImageUpload[] = []
+
+        for (
+          let batchStart = 0;
+          batchStart < filesToUpload.length;
+          batchStart += PROPERTY_IMAGE_UPLOAD_BATCH_SIZE
+        ) {
+          const batch = filesToUpload.slice(
+            batchStart,
+            batchStart + PROPERTY_IMAGE_UPLOAD_BATCH_SIZE
+          )
+          const batchEnd = Math.min(
+            batchStart + batch.length,
+            filesToUpload.length
+          )
+
+          setUploadProgress(
+            `Uploading images ${batchStart + 1}-${batchEnd} of ${filesToUpload.length}...`
+          )
+
+          const batchResults = await Promise.all(
+            batch.map(async (file) => {
+              const signedUploadFormData = new FormData()
+              signedUploadFormData.set('property_db_id', property.id)
+              signedUploadFormData.set('file_name', file.name)
+              signedUploadFormData.set('file_type', file.type || 'image/jpeg')
+
+              const signedUpload = await createPropertyImageUploadSignedUrlAction(
+                signedUploadFormData
+              )
+
+              const { error: directUploadError } = await supabaseBrowserClient.storage
+                .from(PROPERTY_IMAGES_BUCKET)
+                .uploadToSignedUrl(
+                  signedUpload.storage_path,
+                  signedUpload.token,
+                  file,
+                  {
+                    cacheControl: '3600',
+                    contentType: file.type || undefined,
+                    upsert: false,
+                  }
+                )
+
+              if (directUploadError) {
+                throw new Error(
+                  `Failed to upload ${file.name}: ${directUploadError.message}`
+                )
+              }
+
+              return signedUpload
+            })
+          )
+
+          uploadedImages.push(...batchResults)
+        }
+
+        uploadedImages.forEach((uploadedImage) => {
+          formData.append('uploaded_image_url', uploadedImage.image_url)
+          formData.append(
+            'uploaded_image_storage_path',
+            uploadedImage.storage_path
+          )
+        })
+      } catch (error: any) {
+        setErrorMessage(error?.message || 'Failed to upload property images')
+        setUploadProgress('')
+        setIsUploadingImages(false)
+        return
+      }
+    }
 
     formData.set('cover_kind', coverSelection.kind)
     formData.set('cover_index', String(coverSelection.index))
@@ -1401,11 +1510,16 @@ export default function EditPropertyForm({
 
     startTransition(async () => {
       try {
+        setUploadProgress('Saving property updates...')
         await updatePropertyAction(formData)
+        setUploadProgress('')
+        setIsUploadingImages(false)
         router.push('/admin/properties')
         router.refresh()
       } catch (error: any) {
         setErrorMessage(error.message || 'Something went wrong')
+        setUploadProgress('')
+        setIsUploadingImages(false)
       }
     })
   }
@@ -1419,6 +1533,8 @@ export default function EditPropertyForm({
     coverSelection.kind === 'new' &&
     coverSelection.index >= 0 &&
     coverSelection.index < newImageFiles.length
+
+  const isBusy = isPending || isUploadingImages
 
   return (
     <form
@@ -2609,11 +2725,17 @@ export default function EditPropertyForm({
               </div>
             )}
 
+            {uploadProgress && (
+              <div className="mb-4 rounded-xl border border-[#bdd7f4] bg-[#f3f9ff] px-4 py-3 text-sm font-medium text-[#0b66c3]">
+                {uploadProgress}
+              </div>
+            )}
+
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={goBack}
-                disabled={currentStep === 1 || isPending}
+                disabled={currentStep === 1 || isBusy}
                 className="inline-flex h-[46px] items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-5 text-sm font-medium text-[#1a1a1a] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Back
@@ -2623,7 +2745,7 @@ export default function EditPropertyForm({
                 <button
                   type="button"
                   onClick={goNext}
-                  disabled={isPending}
+                  disabled={isBusy}
                   className="inline-flex h-[46px] min-w-[140px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Continue
@@ -2631,10 +2753,10 @@ export default function EditPropertyForm({
               ) : (
                 <button
                   type="submit"
-                  disabled={isPending || !propertyCode}
+                  disabled={isBusy || !propertyCode}
                   className="inline-flex h-[46px] min-w-[160px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isPending ? 'Saving...' : 'Update Property'}
+                  {isUploadingImages ? uploadProgress || 'Uploading images...' : isPending ? 'Saving...' : 'Update Property'}
                 </button>
               )}
             </div>

@@ -22,6 +22,20 @@ type UniversityRow = {
   name_ar: string
 }
 
+type BrokerRow = {
+  id: string
+  full_name: string
+  phone_number: string
+  whatsapp_number: string
+  email: string | null
+  company_name: string | null
+}
+
+type BrokerUniversityLinkRow = {
+  broker_id: string
+  university_id: string
+}
+
 const BROKER_IMAGES_BUCKET = 'Brokers-images'
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
@@ -39,6 +53,17 @@ const fileInputClass =
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) || '').trim()
+}
+
+function getUniqueFormValues(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(key)
+        .map((value) => String(value).trim())
+        .filter(Boolean)
+    )
+  )
 }
 
 function redirectWithError(message: string): never {
@@ -160,12 +185,19 @@ export default async function NewBrokerPage({
   const [
     { data: citiesData, error: citiesError },
     { data: universitiesData, error: universitiesError },
+    { data: brokersData, error: brokersError },
+    { data: brokerUniversityLinksData, error: brokerUniversityLinksError },
   ] = await Promise.all([
     supabase.from('cities').select('id, name_en, name_ar').order('name_en', { ascending: true }),
     supabase
       .from('universities')
       .select('id, city_id, name_en, name_ar')
       .order('name_en', { ascending: true }),
+    supabase
+      .from('brokers')
+      .select('id, full_name, phone_number, whatsapp_number, email, company_name')
+      .order('full_name', { ascending: true }),
+    supabase.from('broker_universities').select('broker_id, university_id'),
   ])
 
   if (citiesError) {
@@ -176,8 +208,123 @@ export default async function NewBrokerPage({
     throw new Error(universitiesError.message)
   }
 
+  if (brokersError) {
+    throw new Error(brokersError.message)
+  }
+
+  if (brokerUniversityLinksError) {
+    throw new Error(brokerUniversityLinksError.message)
+  }
+
   const cities = (citiesData || []) as CityRow[]
   const universities = (universitiesData || []) as UniversityRow[]
+  const brokers = (brokersData || []) as BrokerRow[]
+  const brokerUniversityLinks = (brokerUniversityLinksData || []) as BrokerUniversityLinkRow[]
+
+  async function linkExistingBrokerAction(formData: FormData) {
+    'use server'
+
+    try {
+      await requireSuperAdminAccess()
+
+      const broker_id = getString(formData, 'broker_id')
+      const city_id = getString(formData, 'city_id')
+      const university_ids = getUniqueFormValues(formData, 'university_ids')
+
+      if (!broker_id || !city_id) {
+        redirectWithError('Please choose a broker and city')
+      }
+
+      if (university_ids.length === 0) {
+        redirectWithError('Please choose at least one new university')
+      }
+
+      const supabase = await createClient()
+
+      const { data: brokerData, error: brokerError } = await supabase
+        .from('brokers')
+        .select('id')
+        .eq('id', broker_id)
+        .maybeSingle()
+
+      if (brokerError) {
+        redirectWithError(brokerError.message)
+      }
+
+      if (!brokerData) {
+        redirectWithError('Selected broker was not found')
+      }
+
+      const { data: selectedUniversities, error: selectedUniversitiesError } = await supabase
+        .from('universities')
+        .select('id, city_id')
+        .in('id', university_ids)
+
+      if (selectedUniversitiesError) {
+        redirectWithError(selectedUniversitiesError.message)
+      }
+
+      const selectedUniversityRows = selectedUniversities || []
+
+      const invalidUniversity = selectedUniversityRows.some(
+        (university) => university.city_id !== city_id
+      )
+
+      if (invalidUniversity || selectedUniversityRows.length !== university_ids.length) {
+        redirectWithError('Selected universities do not belong to the chosen city')
+      }
+
+      const { data: existingLinks, error: existingLinksError } = await supabase
+        .from('broker_universities')
+        .select('university_id')
+        .eq('broker_id', broker_id)
+        .in('university_id', university_ids)
+
+      if (existingLinksError) {
+        redirectWithError(existingLinksError.message)
+      }
+
+      const existingUniversityIds = new Set(
+        (existingLinks || []).map((link) => link.university_id)
+      )
+
+      const newUniversityIds = university_ids.filter(
+        (university_id) => !existingUniversityIds.has(university_id)
+      )
+
+      if (newUniversityIds.length === 0) {
+        redirectWithError('This broker is already linked to the selected universities')
+      }
+
+      const brokerUniversityRows = newUniversityIds.map((university_id) => ({
+        broker_id,
+        university_id,
+      }))
+
+      const { error: brokerUniversitiesError } = await supabase
+        .from('broker_universities')
+        .insert(brokerUniversityRows)
+
+      if (brokerUniversitiesError) {
+        redirectWithError(brokerUniversitiesError.message)
+      }
+
+      revalidatePath('/admin')
+      revalidatePath('/admin/properties')
+      revalidatePath('/admin/brokers/new')
+
+      redirect('/admin')
+    } catch (error) {
+      if (isRedirectError(error)) {
+        throw error
+      }
+
+      console.error('Link existing broker failed full error:', error)
+      console.error('Link existing broker failed message:', getErrorMessage(error))
+
+      redirectWithError(getErrorMessage(error))
+    }
+  }
 
   async function createBrokerAction(formData: FormData) {
     'use server'
@@ -194,16 +341,7 @@ export default async function NewBrokerPage({
       const email = getString(formData, 'email')
       const company_name = getString(formData, 'company_name')
       const city_id = getString(formData, 'city_id')
-
-      const university_ids = Array.from(
-        new Set(
-          formData
-            .getAll('university_ids')
-            .map((value) => String(value).trim())
-            .filter(Boolean)
-        )
-      )
-
+      const university_ids = getUniqueFormValues(formData, 'university_ids')
       const imageFile = formData.get('image_file')
 
       if (!full_name || !phone_number || !whatsapp_number || !city_id) {
@@ -541,8 +679,11 @@ export default async function NewBrokerPage({
             <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#222222]">
-                  Enter broker information
+                  Manage brokers and universities
                 </h2>
+                <p className="mt-2 text-sm text-gray-500">
+                  Link an existing broker to more universities, or create a new broker.
+                </p>
               </div>
             </div>
 
@@ -554,111 +695,167 @@ export default async function NewBrokerPage({
 
             {cities.length === 0 ? (
               <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800">
-                You need to create at least one city first before adding a broker.
+                You need to create at least one city first before managing brokers.
               </div>
             ) : universities.length === 0 ? (
               <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800">
-                You need to create at least one university first before adding a broker.
+                You need to create at least one university first before managing brokers.
               </div>
             ) : (
-              <form action={createBrokerAction} className="space-y-6">
-                <div className="grid gap-5 md:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="full_name"
-                      placeholder="Ahmed Ali"
-                      className={inputClass}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                      Area Name
-                    </label>
-                    <input
-                      type="text"
-                      name="company_name"
-                      placeholder="Navienty Brokers"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="phone_number"
-                      placeholder="+20 100 000 0000"
-                      className={inputClass}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                      WhatsApp Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="whatsapp_number"
-                      placeholder="+20 100 000 0000"
-                      className={inputClass}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      placeholder="broker@navienty.com"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-[#222222]">
-                      Broker Image
-                    </label>
-                    <input
-                      type="file"
-                      name="image_file"
-                      accept="image/*"
-                      className={fileInputClass}
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-gray-200 bg-[#fcfcfd] p-4 md:p-5">
-                  <div className="mb-4">
-                    <h3 className="text-sm font-semibold text-[#222222]">
-                      City & Universities
+              <div className="space-y-8">
+                <form
+                  action={linkExistingBrokerAction}
+                  className="rounded-[28px] border border-blue-100 bg-blue-50/40 p-4 md:p-6"
+                >
+                  <div className="mb-5">
+                    <h3 className="text-lg font-semibold text-[#222222]">
+                      Link existing broker to universities
                     </h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Choose a registered broker, then select the new universities you want to
+                      connect them with.
+                    </p>
                   </div>
 
-                  <BrokerUniversitySelector cities={cities} universities={universities} />
-                </div>
+                  {brokers.length === 0 ? (
+                    <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800">
+                      No brokers found yet. Create a new broker first.
+                    </div>
+                  ) : (
+                    <>
+                      <BrokerUniversitySelector
+                        mode="link-existing"
+                        cities={cities}
+                        universities={universities}
+                        brokers={brokers}
+                        brokerUniversityLinks={brokerUniversityLinks}
+                      />
 
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <button type="submit" className={primaryButtonClass}>
-                    Save Broker
-                  </button>
+                      <div className="mt-6 flex flex-wrap items-center gap-3 pt-2">
+                        <button type="submit" className={primaryButtonClass}>
+                          Link Broker
+                        </button>
 
-                  <Link href="/admin" className={secondaryButtonClass}>
-                    Cancel
-                  </Link>
-                </div>
-              </form>
+                        <Link href="/admin" className={secondaryButtonClass}>
+                          Cancel
+                        </Link>
+                      </div>
+                    </>
+                  )}
+                </form>
+
+                <form action={createBrokerAction} className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#222222]">
+                      Add new broker
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Create a broker profile and link it to one or more universities.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        name="full_name"
+                        placeholder="Ahmed Ali"
+                        className={inputClass}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                        Area Name
+                      </label>
+                      <input
+                        type="text"
+                        name="company_name"
+                        placeholder="Navienty Brokers"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                        Phone Number *
+                      </label>
+                      <input
+                        type="text"
+                        name="phone_number"
+                        placeholder="+20 100 000 0000"
+                        className={inputClass}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                        WhatsApp Number *
+                      </label>
+                      <input
+                        type="text"
+                        name="whatsapp_number"
+                        placeholder="+20 100 000 0000"
+                        className={inputClass}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        placeholder="broker@navienty.com"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#222222]">
+                        Broker Image
+                      </label>
+                      <input
+                        type="file"
+                        name="image_file"
+                        accept="image/*"
+                        className={fileInputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-gray-200 bg-[#fcfcfd] p-4 md:p-5">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-[#222222]">
+                        City & Universities
+                      </h3>
+                    </div>
+
+                    <BrokerUniversitySelector
+                      mode="create"
+                      cities={cities}
+                      universities={universities}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button type="submit" className={primaryButtonClass}>
+                      Save Broker
+                    </button>
+
+                    <Link href="/admin" className={secondaryButtonClass}>
+                      Cancel
+                    </Link>
+                  </div>
+                </form>
+              </div>
             )}
           </section>
         </div>

@@ -1553,6 +1553,79 @@ async function upsertPropertySellableOptions(params: {
   }
 }
 
+export async function createPropertyImageUploadSignedUrlAction(formData: FormData) {
+  const adminContext = await requirePropertyEditorAccess()
+  const supabase = createAdminClient()
+  const admin = adminContext.admin
+
+  const propertyDbId = String(formData.get('property_db_id') || '').trim()
+  if (!propertyDbId) {
+    throw new Error('Property ID is required before uploading images')
+  }
+
+  const originalFileName = String(formData.get('file_name') || '').trim()
+  const fileType = String(formData.get('file_type') || '').trim()
+
+  if (!originalFileName) {
+    throw new Error('Image file name is required')
+  }
+
+  if (!fileType.startsWith('image/')) {
+    throw new Error('Only image files are allowed')
+  }
+
+  const { data: existingProperty, error: existingPropertyError } = await supabase
+    .from('properties')
+    .select('id, broker_id')
+    .eq('id', propertyDbId)
+    .maybeSingle()
+
+  if (existingPropertyError) {
+    throw new Error(existingPropertyError.message)
+  }
+
+  if (!existingProperty) {
+    throw new Error('Property not found')
+  }
+
+  if (!isSuperAdmin(admin)) {
+    if (!admin.broker_id) {
+      throw new Error('Editor account is missing broker assignment')
+    }
+
+    if (existingProperty.broker_id !== admin.broker_id) {
+      throw new Error('You are not allowed to edit this property')
+    }
+  }
+
+  const safeFileName = slugifyFileName(originalFileName)
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const filePath = `properties/${propertyDbId}/${uniqueSuffix}-${safeFileName}`
+
+  const { data: signedUploadData, error: signedUploadError } =
+    await supabase.storage
+      .from(PROPERTY_IMAGES_BUCKET)
+      .createSignedUploadUrl(filePath)
+
+  if (signedUploadError || !signedUploadData?.token) {
+    throw new Error(
+      `Failed to prepare image upload: ${
+        signedUploadError?.message || 'Upload token was not created'
+      }`
+    )
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(PROPERTY_IMAGES_BUCKET)
+    .getPublicUrl(filePath)
+
+  return {
+    image_url: publicUrlData.publicUrl,
+    storage_path: filePath,
+    token: signedUploadData.token,
+  }
+}
+
 export async function updatePropertyAction(formData: FormData) {
   const adminContext = await requirePropertyEditorAccess()
   const supabase = createAdminClient()
@@ -1868,9 +1941,15 @@ export async function updatePropertyAction(formData: FormData) {
     .map((v) => String(v).trim())
     .filter(Boolean)
 
-  const uploadedImages = formData
-    .getAll('images')
-    .filter((item): item is File => item instanceof File && item.size > 0)
+  const uploadedImageUrls = formData
+    .getAll('uploaded_image_url')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+
+  const uploadedImageStoragePaths = formData
+    .getAll('uploaded_image_storage_path')
+    .map((value) => String(value).trim())
+    .filter(Boolean)
 
   const coverKind = String(formData.get('cover_kind') || 'existing').trim()
   const coverIndex = Number(String(formData.get('cover_index') || '0'))
@@ -1917,39 +1996,13 @@ export async function updatePropertyAction(formData: FormData) {
     storage_path: string
     is_cover: boolean
     sort_order: number
-  }> = []
-
-  for (let index = 0; index < uploadedImages.length; index++) {
-    const file = uploadedImages[index]
-    const safeFileName = slugifyFileName(file.name)
-    const filePath = `properties/${propertyDbId}/${Date.now()}-${index}-${safeFileName}`
-
-    const { error: uploadError } = await supabase.storage
-      .from(PROPERTY_IMAGES_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: file.type || undefined,
-      })
-
-    if (uploadError) {
-      throw new Error(
-        `Failed to upload property image: ${uploadError.message || 'Unknown error'}`
-      )
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(PROPERTY_IMAGES_BUCKET)
-      .getPublicUrl(filePath)
-
-    uploadedImageRows.push({
-      property_id_ref: propertyDbId,
-      image_url: publicUrlData.publicUrl,
-      storage_path: filePath,
-      is_cover: false,
-      sort_order: 0,
-    })
-  }
+  }> = uploadedImageUrls.map((imageUrl, index) => ({
+    property_id_ref: propertyDbId,
+    image_url: imageUrl,
+    storage_path: uploadedImageStoragePaths[index] || '',
+    is_cover: false,
+    sort_order: 0,
+  }))
 
   const combinedImages = [
     ...existingImagesToKeep.map((img) => ({

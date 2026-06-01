@@ -399,6 +399,17 @@ function getAvailabilityRank(status?: string) {
   return 3
 }
 
+function getStablePropertyRank(property: Property) {
+  const value = String(property.property_id || property.id || '')
+  let hash = 0
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) % 1000000007
+  }
+
+  return hash
+}
+
 function normalizeOptionCode(value?: string | null) {
   return value
     ?.toLowerCase()
@@ -713,17 +724,21 @@ export default async function PropertiesPage({
     )
   }
 
-  const sourceProperties = (((allPopularSource as Property[]) ?? [])
+  const sourceProperties = ((allPopularSource as Property[]) ?? [])
     .filter(
       (property) =>
         normalizeAvailabilityStatusForUi(property.availability_status) !==
         'unavailable'
     )
-    .sort(
-      (a, b) =>
+    .sort((a, b) => {
+      const availabilityDiff =
         getAvailabilityRank(a.availability_status) -
         getAvailabilityRank(b.availability_status)
-    ))
+
+      if (availabilityDiff !== 0) return availabilityDiff
+
+      return getStablePropertyRank(a) - getStablePropertyRank(b)
+    })
 
   const POPULAR_SECTION_ITEM_LIMIT = 10
   const POPULAR_SECTIONS_LIMIT = 10
