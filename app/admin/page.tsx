@@ -8,18 +8,71 @@ type SearchParams = {
   availability_status?: string
 }
 
+type AvailabilityStatus =
+  | 'available'
+  | 'reserved'
+  | 'partially_reserved'
+  | 'fully_reserved'
+  | 'inactive'
+  | null
+
+type NamedRelation = {
+  id: string
+  name_en: string | null
+  name_ar: string | null
+}
+
 type PropertyRow = {
   id: string
   property_id: string
   title_en: string | null
   title_ar: string | null
   price_egp: number | null
+  beds_count: number | null
   admin_status: 'draft' | 'pending_review' | 'published' | 'rejected' | 'archived'
-  availability_status: 'available' | 'reserved' | null
+  availability_status: AvailabilityStatus
   is_active: boolean
   created_at: string
   created_by_admin_id: string | null
   updated_by_admin_id: string | null
+  city_id: string | null
+  university_id: string | null
+  area_id: string | null
+  city: NamedRelation | NamedRelation[] | null
+  university: NamedRelation | NamedRelation[] | null
+  area: NamedRelation | NamedRelation[] | null
+}
+
+type ExecutiveMetricRow = {
+  id: string
+  label: string
+  subLabel?: string
+  bedsCount: number
+  propertiesCount: number
+}
+
+function getRelation(
+  relation: NamedRelation | NamedRelation[] | null | undefined
+): NamedRelation | null {
+  if (!relation) return null
+  if (Array.isArray(relation)) return relation[0] || null
+  return relation
+}
+
+function getDisplayName(
+  relation: NamedRelation | NamedRelation[] | null | undefined,
+  fallback: string
+) {
+  const normalizedRelation = getRelation(relation)
+  return (
+    normalizedRelation?.name_en ||
+    normalizedRelation?.name_ar ||
+    fallback
+  )
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('en-US').format(value)
 }
 
 function DashboardStatCard({
@@ -41,6 +94,152 @@ function DashboardStatCard({
       </div>
       <div className="mt-2 text-sm text-gray-500">{helper}</div>
     </div>
+  )
+}
+
+function ExecutiveSummaryCard({
+  label,
+  value,
+  helper,
+  iconUrl,
+}: {
+  label: string
+  value: string | number
+  helper: string
+  iconUrl: string
+}) {
+  return (
+    <div className="group overflow-hidden rounded-[30px] border border-black/[0.06] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(15,23,42,0.09)] md:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-[12px] font-semibold uppercase tracking-[0.2em] text-gray-500">
+            {label}
+          </div>
+          <div className="mt-4 text-[34px] font-semibold tracking-tight text-[#111827] md:text-[42px]">
+            {value}
+          </div>
+        </div>
+
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f5f7fb] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <img src={iconUrl} alt="" className="h-6 w-6 object-contain" />
+        </div>
+      </div>
+
+      <div className="mt-3 text-sm leading-6 text-gray-500">{helper}</div>
+    </div>
+  )
+}
+
+function AnalyticsTable({
+  title,
+  description,
+  rows,
+  primaryColumnLabel,
+  emptyLabel,
+  valueLabel = 'Beds',
+  showProperties = true,
+}: {
+  title: string
+  description: string
+  rows: ExecutiveMetricRow[]
+  primaryColumnLabel: string
+  emptyLabel: string
+  valueLabel?: string
+  showProperties?: boolean
+}) {
+  const maxBeds = Math.max(...rows.map((row) => row.bedsCount), 1)
+
+  return (
+    <section className="overflow-hidden rounded-[32px] border border-black/[0.06] bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)]">
+      <div className="border-b border-gray-100 px-5 py-5 md:px-6">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-[#111827]">
+              {title}
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-gray-500">
+              {description}
+            </p>
+          </div>
+
+          <div className="rounded-full bg-[#f5f7fb] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            {formatNumber(rows.length)} rows
+          </div>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="px-6 py-14 text-center text-sm text-gray-500">
+          {emptyLabel}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0">
+            <thead>
+              <tr className="bg-[#fbfbfc] text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                <th className="whitespace-nowrap px-5 py-4 md:px-6">
+                  {primaryColumnLabel}
+                </th>
+                <th className="whitespace-nowrap px-5 py-4 md:px-6">
+                  {valueLabel}
+                </th>
+                {showProperties && (
+                  <th className="whitespace-nowrap px-5 py-4 md:px-6">
+                    Apartments
+                  </th>
+                )}
+                <th className="whitespace-nowrap px-5 py-4 md:px-6">
+                  Share
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map((row) => {
+                const percentage = Math.round((row.bedsCount / maxBeds) * 100)
+
+                return (
+                  <tr
+                    key={row.id}
+                    className="border-b border-gray-100 last:border-b-0"
+                  >
+                    <td className="min-w-[240px] px-5 py-4 md:px-6">
+                      <div className="font-semibold text-[#111827]">
+                        {row.label}
+                      </div>
+                      {row.subLabel && (
+                        <div className="mt-1 text-xs text-gray-500">
+                          {row.subLabel}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-[#111827] md:px-6">
+                      {formatNumber(row.bedsCount)}
+                    </td>
+
+                    {showProperties && (
+                      <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600 md:px-6">
+                        {formatNumber(row.propertiesCount)}
+                      </td>
+                    )}
+
+                    <td className="min-w-[220px] px-5 py-4 md:px-6">
+                      <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="h-full rounded-full bg-blue-600"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -87,6 +286,68 @@ function MobileBottomNavItem({
   )
 }
 
+function buildExecutiveRows(properties: PropertyRow[]) {
+  const areaMap = new Map<string, ExecutiveMetricRow>()
+  const cityMap = new Map<string, ExecutiveMetricRow>()
+  const universityMap = new Map<string, ExecutiveMetricRow>()
+
+  properties.forEach((property) => {
+    const bedsCount = Number(property.beds_count || 0)
+
+    const cityName = getDisplayName(property.city, 'Unassigned city')
+    const universityName = getDisplayName(property.university, 'Unassigned university')
+    const areaName = getDisplayName(property.area, 'Unassigned area')
+
+    const cityKey = property.city_id || 'unassigned-city'
+    const universityKey = property.university_id || 'unassigned-university'
+    const areaKey = property.area_id || `unassigned-area-${cityKey}`
+
+    const existingArea = areaMap.get(areaKey)
+    areaMap.set(areaKey, {
+      id: areaKey,
+      label: areaName,
+      subLabel: cityName,
+      bedsCount: (existingArea?.bedsCount || 0) + bedsCount,
+      propertiesCount: (existingArea?.propertiesCount || 0) + 1,
+    })
+
+    const existingCity = cityMap.get(cityKey)
+    cityMap.set(cityKey, {
+      id: cityKey,
+      label: cityName,
+      bedsCount: (existingCity?.bedsCount || 0) + bedsCount,
+      propertiesCount: (existingCity?.propertiesCount || 0) + 1,
+    })
+
+    const existingUniversity = universityMap.get(universityKey)
+    universityMap.set(universityKey, {
+      id: universityKey,
+      label: universityName,
+      subLabel: cityName,
+      bedsCount: (existingUniversity?.bedsCount || 0) + bedsCount,
+      propertiesCount: (existingUniversity?.propertiesCount || 0) + 1,
+    })
+  })
+
+  const sortByBedsThenProperties = (a: ExecutiveMetricRow, b: ExecutiveMetricRow) => {
+    if (b.bedsCount !== a.bedsCount) return b.bedsCount - a.bedsCount
+    return b.propertiesCount - a.propertiesCount
+  }
+
+  const sortByPropertiesThenBeds = (a: ExecutiveMetricRow, b: ExecutiveMetricRow) => {
+    if (b.propertiesCount !== a.propertiesCount) {
+      return b.propertiesCount - a.propertiesCount
+    }
+    return b.bedsCount - a.bedsCount
+  }
+
+  return {
+    areaRows: Array.from(areaMap.values()).sort(sortByBedsThenProperties),
+    cityRows: Array.from(cityMap.values()).sort(sortByBedsThenProperties),
+    universityRows: Array.from(universityMap.values()).sort(sortByPropertiesThenBeds),
+  }
+}
+
 export default async function AdminPage({
   searchParams,
 }: {
@@ -105,12 +366,31 @@ export default async function AdminPage({
       title_en,
       title_ar,
       price_egp,
+      beds_count,
       admin_status,
       availability_status,
       is_active,
       created_at,
       created_by_admin_id,
-      updated_by_admin_id
+      updated_by_admin_id,
+      city_id,
+      university_id,
+      area_id,
+      city:cities (
+        id,
+        name_en,
+        name_ar
+      ),
+      university:universities (
+        id,
+        name_en,
+        name_ar
+      ),
+      area:property_areas (
+        id,
+        name_en,
+        name_ar
+      )
     `)
     .order('created_at', { ascending: false })
 
@@ -130,8 +410,10 @@ export default async function AdminPage({
 
   const properties = (data || []) as PropertyRow[]
 
-  const reservedCount = properties.filter(
-    (property) => property.availability_status === 'reserved'
+  const reservedCount = properties.filter((property) =>
+    ['reserved', 'partially_reserved', 'fully_reserved'].includes(
+      property.availability_status || ''
+    )
   ).length
 
   const publishedCount = properties.filter(
@@ -145,6 +427,25 @@ export default async function AdminPage({
   const availableCount = properties.filter(
     (property) => property.availability_status === 'available'
   ).length
+
+  const activeInventoryProperties = properties.filter(
+    (property) => property.is_active && property.admin_status !== 'archived'
+  )
+
+  const totalBedsCount = activeInventoryProperties.reduce(
+    (total, property) => total + Number(property.beds_count || 0),
+    0
+  )
+
+  const totalApartmentsCount = activeInventoryProperties.length
+
+  const { areaRows, cityRows, universityRows } =
+    buildExecutiveRows(activeInventoryProperties)
+
+  const averageBedsPerApartment =
+    totalApartmentsCount > 0
+      ? (totalBedsCount / totalApartmentsCount).toFixed(1)
+      : '0'
 
   return (
     <>
@@ -354,6 +655,9 @@ export default async function AdminPage({
                   <div className="rounded-[28px] border border-gray-200 bg-[#fcfcfd] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] md:p-5">
                     <div className="mb-4 flex items-center justify-between">
                       <div>
+                        <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                          CEO Snapshot
+                        </div>
                         <div className="mt-1 text-sm text-gray-600">
                           Quick numbers for your current inventory
                         </div>
@@ -370,9 +674,9 @@ export default async function AdminPage({
 
                     <div className="grid grid-cols-2 gap-3">
                       <DashboardStatCard
-                        label="Reserved Rooms"
+                        label="Reserved"
                         value={reservedCount}
-                        helper="Currently reserved listings"
+                        helper="Reserved or partially reserved"
                       />
                       <DashboardStatCard
                         label="Published"
@@ -395,6 +699,66 @@ export default async function AdminPage({
               </div>
             </div>
           </section>
+
+          <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ExecutiveSummaryCard
+              label="Total Beds"
+              value={formatNumber(totalBedsCount)}
+              helper="Total beds across active, non-archived inventory"
+              iconUrl="https://i.ibb.co/jZVKpdq7/dashboard.png"
+            />
+
+            <ExecutiveSummaryCard
+              label="Apartments"
+              value={formatNumber(totalApartmentsCount)}
+              helper="Total active apartments currently tracked"
+              iconUrl="https://i.ibb.co/jZVKpdq7/dashboard.png"
+            />
+
+            <ExecutiveSummaryCard
+              label="Covered Areas"
+              value={formatNumber(areaRows.length)}
+              helper="Areas with at least one active apartment"
+              iconUrl="https://i.ibb.co/jZVKpdq7/dashboard.png"
+            />
+
+            <ExecutiveSummaryCard
+              label="Avg Beds / Apt"
+              value={averageBedsPerApartment}
+              helper="Average inventory density per apartment"
+              iconUrl="https://i.ibb.co/jZVKpdq7/dashboard.png"
+            />
+          </section>
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <AnalyticsTable
+              title="Beds by Area"
+              description="Total number of beds available in every area."
+              rows={areaRows}
+              primaryColumnLabel="Area"
+              emptyLabel="No area-level bed data available."
+            />
+
+            <AnalyticsTable
+              title="Beds by City"
+              description="Total number of beds grouped by city."
+              rows={cityRows}
+              primaryColumnLabel="City"
+              emptyLabel="No city-level bed data available."
+            />
+          </div>
+
+          <div className="mt-6">
+            <AnalyticsTable
+              title="Apartments by University"
+              description="Total number of apartments connected to every university."
+              rows={universityRows}
+              primaryColumnLabel="University"
+              valueLabel="Apartments"
+              emptyLabel="No university-level apartment data available."
+              showProperties={false}
+            />
+          </div>
 
           {properties.length === 0 && (
             <section className="mt-6 rounded-[32px] border border-dashed border-gray-300 bg-white px-6 py-24 text-center shadow-sm">

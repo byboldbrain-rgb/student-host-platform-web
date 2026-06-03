@@ -194,7 +194,7 @@ type PricePriorityCode = (typeof PRICE_PRIORITY)[number]
 const TRANSLATIONS = {
   en: {
     seeAll: 'See All',
-    popularHomesIn: 'Popular stays in',
+    popularHomesIn: 'Popular Stays in',
     popularHomesNear: 'Popular stays near',
     stay: 'stay',
     night: 'night',
@@ -587,14 +587,6 @@ export default async function PropertiesPage({
       .map((page) => [String(page.area_id), page.path])
   )
 
-  const sakanPathByUniversityId = new Map(
-    (sakanSeoPages as SakanSeoPage[])
-      .filter(
-        (page) =>
-          page.page_type === 'university' && page.university_id && page.path
-      )
-      .map((page) => [String(page.university_id), page.path])
-  )
 
   const seoNavigationLinks = (sakanSeoPages as SakanSeoPage[])
     .filter(
@@ -708,13 +700,6 @@ export default async function PropertiesPage({
     cityMap.set(String(city.id), isArabic ? city.name_ar : city.name_en)
   }
 
-  const universityMap = new Map<string, string>()
-  for (const university of (universities as University[]) ?? []) {
-    universityMap.set(
-      String(university.id),
-      isArabic ? university.name_ar : university.name_en
-    )
-  }
 
   const areaMap = new Map<string, string>()
   for (const area of (areas as PropertyArea[]) ?? []) {
@@ -744,43 +729,20 @@ export default async function PropertiesPage({
   const POPULAR_SECTIONS_LIMIT = 10
 
   const areaSectionsMap = new Map<string, Property[]>()
-  const universitySectionsMap = new Map<string, Property[]>()
 
   for (const property of sourceProperties) {
-    if (property.area_id) {
-      const areaKey = String(property.area_id)
-      const existing = areaSectionsMap.get(areaKey) ?? []
+    if (!property.area_id) continue
 
-      if (existing.length < POPULAR_SECTION_ITEM_LIMIT) {
-        existing.push(property)
-        areaSectionsMap.set(areaKey, existing)
-      }
-    }
+    const areaKey = String(property.area_id)
+    const existing = areaSectionsMap.get(areaKey) ?? []
 
-    const linkedUniversityIds =
-      property.property_universities
-        ?.map((item) => item.university_id)
-        .filter(Boolean)
-        .map((id) => String(id)) ?? []
-
-    const universityIdsForSections =
-      linkedUniversityIds.length > 0
-        ? Array.from(new Set(linkedUniversityIds))
-        : property.university_id
-          ? [String(property.university_id)]
-          : []
-
-    for (const linkedUniversityId of universityIdsForSections) {
-      const existing = universitySectionsMap.get(linkedUniversityId) ?? []
-
-      if (existing.length < POPULAR_SECTION_ITEM_LIMIT) {
-        existing.push(property)
-        universitySectionsMap.set(linkedUniversityId, existing)
-      }
+    if (existing.length < POPULAR_SECTION_ITEM_LIMIT) {
+      existing.push(property)
+      areaSectionsMap.set(areaKey, existing)
     }
   }
 
-  const popularAreaSections = Array.from(areaSectionsMap.entries())
+  const showcaseSections = Array.from(areaSectionsMap.entries())
     .filter(([key, items]) => areaMap.has(key) && items.length > 0)
     .slice(0, POPULAR_SECTIONS_LIMIT)
     .map(([key, items]) => ({
@@ -790,61 +752,9 @@ export default async function PropertiesPage({
       items,
     }))
 
-  const popularUniversitySections = Array.from(universitySectionsMap.entries())
-    .filter(([key, items]) => universityMap.has(key) && items.length > 0)
-    .slice(0, POPULAR_SECTIONS_LIMIT)
-    .map(([key, items]) => ({
-      id: key,
-      type: 'university' as const,
-      title: `${t.popularHomesNear} ${universityMap.get(key)}`,
-      items,
-    }))
-
-  const showcaseSections: Array<
-    | (typeof popularAreaSections)[number]
-    | (typeof popularUniversitySections)[number]
-  > = []
-
-  const maxPopularLength = Math.max(
-    popularAreaSections.length,
-    popularUniversitySections.length
-  )
-
-  for (let index = 0; index < maxPopularLength; index += 1) {
-    if (
-      popularAreaSections[index] &&
-      showcaseSections.length < POPULAR_SECTIONS_LIMIT
-    ) {
-      showcaseSections.push(popularAreaSections[index])
-    }
-
-    if (
-      popularUniversitySections[index] &&
-      showcaseSections.length < POPULAR_SECTIONS_LIMIT
-    ) {
-      showcaseSections.push(popularUniversitySections[index])
-    }
-
-    if (showcaseSections.length >= POPULAR_SECTIONS_LIMIT) {
-      break
-    }
-  }
-
-  const buildSearchLink = ({
-    areaId,
-    universityId,
-  }: {
-    areaId?: string
-    universityId?: string
-  }) => {
+  const buildSearchLink = ({ areaId }: { areaId?: string }) => {
     if (areaId) {
       const seoPath = sakanPathByAreaId.get(String(areaId))
-
-      if (seoPath) return seoPath
-    }
-
-    if (universityId) {
-      const seoPath = sakanPathByUniversityId.get(String(universityId))
 
       if (seoPath) return seoPath
     }
@@ -852,7 +762,6 @@ export default async function PropertiesPage({
     const params = new URLSearchParams()
 
     if (areaId) params.set('area_id', areaId)
-    if (universityId) params.set('university_id', universityId)
 
     params.set('lang', selectedLanguage)
     params.set('currency', selectedCurrency)
@@ -900,11 +809,7 @@ export default async function PropertiesPage({
     return <span className="property-meta-gender">{label}</span>
   }
 
-  const renderSeeAllCard = (
-    sectionId: string,
-    sectionType: 'area' | 'university',
-    items: Property[]
-  ) => {
+  const renderSeeAllCard = (sectionId: string, items: Property[]) => {
     const images = items
       .map(getCoverImage)
       .filter(Boolean)
@@ -912,11 +817,8 @@ export default async function PropertiesPage({
 
     return (
       <Link
-        key={`see-all-${sectionType}-${sectionId}`}
-        href={buildSearchLink({
-          areaId: sectionType === 'area' ? sectionId : undefined,
-          universityId: sectionType === 'university' ? sectionId : undefined,
-        })}
+        key={`see-all-area-${sectionId}`}
+        href={buildSearchLink({ areaId: sectionId })}
         className="group block min-w-[150px] max-w-[150px] shrink-0 snap-start md:min-w-[160px] md:max-w-[160px]"
       >
         <div className="relative flex aspect-[4/3] w-full items-center justify-center rounded-xl transition duration-300 md:rounded-3xl">
@@ -2287,28 +2189,14 @@ export default async function PropertiesPage({
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-[19px] font-semibold tracking-tight text-gray-900 dark:text-slate-100 md:text-2xl">
                     <Link
-                      href={buildSearchLink({
-                        areaId:
-                          section.type === 'area' ? section.id : undefined,
-                        universityId:
-                          section.type === 'university'
-                            ? section.id
-                            : undefined,
-                      })}
+                      href={buildSearchLink({ areaId: section.id })}
                     >
                       {section.title}
                     </Link>
                   </h2>
 
                   <Link
-                    href={buildSearchLink({
-                      areaId:
-                        section.type === 'area' ? section.id : undefined,
-                      universityId:
-                        section.type === 'university'
-                          ? section.id
-                          : undefined,
-                    })}
+                    href={buildSearchLink({ areaId: section.id })}
                     className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 md:hidden"
                   >
                     <svg
@@ -2330,14 +2218,14 @@ export default async function PropertiesPage({
 
                 <div className="hide-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:gap-4 lg:hidden">
                   {section.items.map((property) => renderPropertyCard(property))}
-                  {renderSeeAllCard(section.id, section.type, section.items)}
+                  {renderSeeAllCard(section.id, section.items)}
                 </div>
 
                 <div className="popular-desktop-grid hidden gap-4 pb-4 lg:grid lg:grid-cols-6">
                   {section.items.slice(0, 5).map((property) =>
                     renderPropertyCard(property)
                   )}
-                  {renderSeeAllCard(section.id, section.type, section.items)}
+                  {renderSeeAllCard(section.id, section.items)}
                 </div>
               </div>
             ))}
