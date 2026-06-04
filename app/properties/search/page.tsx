@@ -5,6 +5,7 @@ import { createClient } from '../../../src/lib/supabase/server'
 import PropertiesHeader from '../PropertiesHeader'
 import SortDropdown from './SortDropdown'
 import PropertyImageSlider from './PropertyImageSlider'
+import PropertyAlertRequestCard from '../../sakan/[...slug]/PropertyAlertRequestCard'
 import { Squada_One } from 'next/font/google'
 
 export const metadata: Metadata = {
@@ -592,41 +593,20 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
   return pages
 }
 
-type HousingAlertType = 'any' | 'single' | 'double' | 'triple' | 'full_apartment'
 
-const HOUSING_ALERT_TYPES: { value: HousingAlertType; labelEn: string; labelAr: string }[] = [
-  { value: 'any', labelEn: 'Any stay type', labelAr: 'أي نوع سكن' },
-  { value: 'single', labelEn: 'Single room', labelAr: 'غرفة فردية' },
-  { value: 'double', labelEn: 'Double room', labelAr: 'غرفة مزدوجة' },
-  { value: 'triple', labelEn: 'Triple room', labelAr: 'غرفة ثلاثية' },
-  { value: 'full_apartment', labelEn: 'Full apartment', labelAr: 'شقة كاملة' },
+type PropertyAlertHousingType = 'single' | 'double' | 'triple' | 'full_apartment'
+
+const PROPERTY_ALERT_HOUSING_TYPES: PropertyAlertHousingType[] = [
+  'single',
+  'double',
+  'triple',
+  'full_apartment',
 ]
-
-function normalizeHousingAlertType(value?: FormDataEntryValue | null): HousingAlertType {
-  const normalized = String(value ?? 'any').trim()
-
-  if (
-    normalized === 'single' ||
-    normalized === 'double' ||
-    normalized === 'triple' ||
-    normalized === 'full_apartment'
-  ) {
-    return normalized
-  }
-
-  return 'any'
-}
 
 function sanitizeUuidLike(value?: FormDataEntryValue | null) {
   const normalized = String(value ?? '').trim()
 
   return normalized.length > 0 ? normalized : null
-}
-
-function sanitizeWhatsappNumber(value?: FormDataEntryValue | null) {
-  return String(value ?? '')
-    .trim()
-    .replace(/[\s-]+/g, '')
 }
 
 function sanitizeBudget(value?: FormDataEntryValue | null) {
@@ -637,7 +617,25 @@ function sanitizeBudget(value?: FormDataEntryValue | null) {
     : null
 }
 
-function addAlertStatusToReturnTo(returnTo: string, status: 'success' | 'error') {
+function normalizePropertyAlertHousingTypes(value?: FormDataEntryValue | null) {
+  const values = String(value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return Array.from(
+    new Set(
+      values.filter((item): item is PropertyAlertHousingType =>
+        PROPERTY_ALERT_HOUSING_TYPES.includes(item as PropertyAlertHousingType)
+      )
+    )
+  )
+}
+
+function addAlertStatusToReturnTo(
+  returnTo: string,
+  status: 'success' | 'invalid' | 'error' | 'login_required'
+) {
   const fallback = '/properties/search'
   const safeReturnTo = returnTo.startsWith('/properties/search')
     ? returnTo
@@ -654,241 +652,92 @@ async function createPropertyAlertRequest(formData: FormData) {
   'use server'
 
   const supabase = await createClient()
+
+  const currentPath = String(
+    formData.get('current_path') || formData.get('return_to') || '/properties/search'
+  ).trim()
+  const cityId = sanitizeUuidLike(formData.get('city_id'))
+  const universityId = sanitizeUuidLike(formData.get('university_id'))
+  const areaId = sanitizeUuidLike(formData.get('area_id'))
+  const housingTypes = normalizePropertyAlertHousingTypes(
+    formData.get('housing_types') ?? formData.get('housing_type')
+  )
+  const maxBudget = sanitizeBudget(
+    formData.get('max_budget') ?? formData.get('max_budget_egp')
+  )
+
+  const redirectWithStatus = (
+    status: 'success' | 'invalid' | 'error' | 'login_required'
+  ) => {
+    redirect(addAlertStatusToReturnTo(currentPath, status))
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const cityId = sanitizeUuidLike(formData.get('city_id'))
-  const universityId = sanitizeUuidLike(formData.get('university_id'))
-  const areaId = sanitizeUuidLike(formData.get('area_id'))
-  const housingType = normalizeHousingAlertType(formData.get('housing_type'))
-  const maxBudgetEgp = sanitizeBudget(formData.get('max_budget_egp'))
-  const whatsappNumber = sanitizeWhatsappNumber(formData.get('whatsapp_number'))
-  const sourcePage = String(formData.get('source_page') ?? 'search').trim()
-  const language = normalizeLanguage(String(formData.get('language') ?? 'ar'))
-  const returnTo = String(formData.get('return_to') ?? '/properties/search')
-
-  if (!universityId || !areaId || !maxBudgetEgp || whatsappNumber.length < 8) {
-    redirect(addAlertStatusToReturnTo(returnTo, 'error'))
+  if (!user) {
+    redirectWithStatus('login_required')
   }
 
-  const { error } = await supabase.from('property_alert_requests').insert({
-    user_id: user?.id ?? null,
+  if (
+    !cityId ||
+    !universityId ||
+    !areaId ||
+    housingTypes.length === 0 ||
+    !maxBudget
+  ) {
+    redirectWithStatus('invalid')
+  }
+
+  const { data: university } = await supabase
+    .from('universities')
+    .select('id, city_id')
+    .eq('id', universityId)
+    .maybeSingle()
+
+  if (!university || String(university.city_id) !== cityId) {
+    redirectWithStatus('invalid')
+  }
+
+  const { data: area } = await supabase
+    .from('property_areas')
+    .select('id, city_id, is_active')
+    .eq('id', areaId)
+    .maybeSingle()
+
+  if (!area || area.is_active === false || String(area.city_id) !== cityId) {
+    redirectWithStatus('invalid')
+  }
+
+  const { data: universityArea } = await supabase
+    .from('university_property_areas')
+    .select('id')
+    .eq('university_id', universityId)
+    .eq('area_id', areaId)
+    .maybeSingle()
+
+  if (!universityArea) {
+    redirectWithStatus('invalid')
+  }
+
+  const rows = housingTypes.map((housingType) => ({
+    user_id: user.id,
     city_id: cityId,
     university_id: universityId,
     area_id: areaId,
     housing_type: housingType,
-    max_budget_egp: maxBudgetEgp,
-    whatsapp_number: whatsappNumber,
-    notification_method: 'whatsapp',
-    source_page: sourcePage,
-    language,
+    max_budget: maxBudget,
     status: 'active',
-  })
+  }))
 
-  redirect(addAlertStatusToReturnTo(returnTo, error ? 'error' : 'success'))
-}
+  const { error } = await supabase.from('property_alert_requests').insert(rows)
 
-type PropertyAlertRequestCardProps = {
-  variant: 'empty' | 'compact'
-  isArabic: boolean
-  cities: City[]
-  universities: University[]
-  areas: PropertyArea[]
-  initialCityId?: string
-  initialUniversityId?: string
-  initialAreaId?: string
-  selectedLanguage: SupportedLanguage
-  returnTo: string
-}
+  if (error) {
+    redirectWithStatus('error')
+  }
 
-function PropertyAlertRequestCard({
-  variant,
-  isArabic,
-  cities,
-  universities,
-  areas,
-  initialCityId,
-  initialUniversityId,
-  initialAreaId,
-  selectedLanguage,
-  returnTo,
-}: PropertyAlertRequestCardProps) {
-  const copy = isArabic
-    ? {
-        eyebrow: 'تنبيه سكن جديد',
-        title:
-          variant === 'empty'
-            ? 'ملقتش السكن المناسب؟'
-            : 'مش لاقي حاجة مناسبة؟',
-        description:
-          'سيب مواصفات السكن اللي بتدور عليه، وأول ما ينزل سكن قريب من جامعتك وبنفس ميزانيتك هنبلغك على واتساب.',
-        university: 'الجامعة',
-        area: 'المنطقة',
-        housingType: 'نوع السكن',
-        budget: 'أقصى ميزانية شهريًا',
-        whatsapp: 'رقم الواتساب',
-        chooseUniversity: 'اختر الجامعة',
-        chooseArea: 'اختر المنطقة',
-        chooseHousingType: 'اختر نوع السكن',
-        budgetPlaceholder: 'مثال: 2500',
-        whatsappPlaceholder: 'مثال: 01012345678',
-        submit: 'بلغني عند توفر سكن',
-        note: 'هنستخدم رقمك فقط للتواصل معك عند توفر سكن مناسب.',
-      }
-    : {
-        eyebrow: 'New stay alert',
-        title:
-          variant === 'empty'
-            ? 'Didn’t find the right stay?'
-            : 'Still looking for something better?',
-        description:
-          'Leave the stay details you need, and we will notify you on WhatsApp when a matching student stay becomes available.',
-        university: 'University',
-        area: 'Area',
-        housingType: 'Stay type',
-        budget: 'Maximum monthly budget',
-        whatsapp: 'WhatsApp number',
-        chooseUniversity: 'Choose university',
-        chooseArea: 'Choose area',
-        chooseHousingType: 'Choose stay type',
-        budgetPlaceholder: 'Example: 2500',
-        whatsappPlaceholder: 'Example: 01012345678',
-        submit: 'Notify me when available',
-        note: 'We will only use your number to contact you when a matching stay is available.',
-      }
-
-  const selectedUniversity = universities.find(
-    (university) => String(university.id) === String(initialUniversityId ?? '')
-  )
-  const fallbackCityId = selectedUniversity?.city_id
-    ? String(selectedUniversity.city_id)
-    : initialCityId ?? ''
-
-  return (
-    <div
-      className={`overflow-hidden rounded-[32px] border border-[#054aff]/15 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)] ${
-        variant === 'empty' ? 'mx-auto max-w-4xl' : 'mt-12'
-      }`}
-    >
-      <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="relative flex flex-col justify-between overflow-hidden bg-[#054aff] p-7 text-white md:p-9">
-          <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
-          <div className="absolute -bottom-20 -left-16 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
-
-          <div className="relative z-10">
-            <p className="mb-3 inline-flex rounded-full bg-white/14 px-4 py-1.5 text-xs font-bold tracking-[0.18em] uppercase text-white/90">
-              {copy.eyebrow}
-            </p>
-            <h2 className="text-3xl font-black tracking-[-0.05em] text-white md:text-4xl">
-              {copy.title}
-            </h2>
-            <p className="mt-4 max-w-md text-sm leading-7 text-white/84 md:text-base">
-              {copy.description}
-            </p>
-          </div>
-
-          <div className="relative z-10 mt-8 rounded-2xl bg-white/12 p-4 text-sm leading-6 text-white/88 ring-1 ring-white/16">
-            {copy.note}
-          </div>
-        </div>
-
-        <form action={createPropertyAlertRequest} className="grid gap-4 p-5 md:p-7">
-          <input type="hidden" name="city_id" value={fallbackCityId} />
-          <input type="hidden" name="source_page" value="search" />
-          <input type="hidden" name="language" value={selectedLanguage} />
-          <input type="hidden" name="return_to" value={returnTo} />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-              <span>{copy.university}</span>
-              <select
-                name="university_id"
-                required
-                defaultValue={initialUniversityId ?? ''}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 dark:border-white/10 dark:bg-[#111827] dark:text-white"
-              >
-                <option value="">{copy.chooseUniversity}</option>
-                {universities.map((university) => (
-                  <option key={university.id} value={String(university.id)}>
-                    {isArabic ? university.name_ar : university.name_en}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-              <span>{copy.area}</span>
-              <select
-                name="area_id"
-                required
-                defaultValue={initialAreaId ?? ''}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 dark:border-white/10 dark:bg-[#111827] dark:text-white"
-              >
-                <option value="">{copy.chooseArea}</option>
-                {areas.map((area) => (
-                  <option key={area.id} value={String(area.id)}>
-                    {isArabic ? area.name_ar : area.name_en}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-              <span>{copy.housingType}</span>
-              <select
-                name="housing_type"
-                required
-                defaultValue="any"
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 dark:border-white/10 dark:bg-[#111827] dark:text-white"
-              >
-                <option value="">{copy.chooseHousingType}</option>
-                {HOUSING_ALERT_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {isArabic ? type.labelAr : type.labelEn}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-              <span>{copy.budget}</span>
-              <input
-                name="max_budget_egp"
-                required
-                inputMode="numeric"
-                min={1}
-                type="number"
-                placeholder={copy.budgetPlaceholder}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 dark:border-white/10 dark:bg-[#111827] dark:text-white"
-              />
-            </label>
-          </div>
-
-          <label className="space-y-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-            <span>{copy.whatsapp}</span>
-            <input
-              name="whatsapp_number"
-              required
-              inputMode="tel"
-              type="tel"
-              placeholder={copy.whatsappPlaceholder}
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#054aff] focus:ring-4 focus:ring-[#054aff]/10 dark:border-white/10 dark:bg-[#111827] dark:text-white"
-            />
-          </label>
-
-          <button
-            type="submit"
-            className="mt-2 rounded-2xl bg-[#054aff] px-6 py-4 text-sm font-black text-white shadow-[0_16px_34px_rgba(5,74,255,0.28)] transition hover:-translate-y-0.5 hover:bg-[#003ee0] focus:outline-none focus:ring-4 focus:ring-[#054aff]/20"
-          >
-            {copy.submit}
-          </button>
-        </form>
-      </div>
-    </div>
-  )
+  redirectWithStatus('success')
 }
 
 export default async function SearchResultsPage({
@@ -1293,21 +1142,13 @@ export default async function SearchResultsPage({
     mobileSearchBarClassName: 'mt-0',
   }
 
-  const alertRequestCardProps = {
-    isArabic,
-    cities: (cities as City[]) ?? [],
-    universities: (universities as University[]) ?? [],
-    areas: (areas as PropertyArea[]) ?? [],
-    initialCityId: params.city_id ?? '',
-    initialUniversityId: params.university_id ?? '',
-    initialAreaId: params.area_id ?? '',
-    selectedLanguage,
-    returnTo: buildAlertReturnTo(),
-  }
-
-  const alertStatus = params.alert === 'success' || params.alert === 'error'
-    ? params.alert
-    : null
+  const alertStatus =
+    params.alert === 'success' ||
+    params.alert === 'invalid' ||
+    params.alert === 'error' ||
+    params.alert === 'login_required'
+      ? params.alert
+      : undefined
 
 
   const mobileAccountHref = isLoggedIn
@@ -2635,18 +2476,6 @@ export default async function SearchResultsPage({
           />
         </div>
 
-        {alertStatus && (
-          <div
-            className={`mb-6 rounded-2xl border px-5 py-4 text-sm font-semibold ${
-              alertStatus === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200'
-                : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200'
-            }`}
-          >
-            {alertStatus === 'success' ? t.alertSuccess : t.alertError}
-          </div>
-        )}
-
         {sortedProperties.length > 0 ? (
           <>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -2747,7 +2576,21 @@ export default async function SearchResultsPage({
               </div>
             )}
 
-            <PropertyAlertRequestCard variant="compact" {...alertRequestCardProps} />
+            <PropertyAlertRequestCard
+              action={createPropertyAlertRequest}
+              cities={(cities as City[]) ?? []}
+              universities={(universities as University[]) ?? []}
+              areas={(areas as PropertyArea[]) ?? []}
+              universityAreas={(universityAreas as UniversityArea[]) ?? []}
+              initialCityId=""
+              initialUniversityId=""
+              initialAreaId=""
+              language={selectedLanguage}
+              currency={selectedCurrency}
+              currentPath={buildAlertReturnTo()}
+              resultCount={count}
+              alertStatus={alertStatus}
+            />
           </>
         ) : (
           <div className="space-y-6">
@@ -2757,7 +2600,21 @@ export default async function SearchResultsPage({
               </p>
             </div>
 
-            <PropertyAlertRequestCard variant="empty" {...alertRequestCardProps} />
+            <PropertyAlertRequestCard
+              action={createPropertyAlertRequest}
+              cities={(cities as City[]) ?? []}
+              universities={(universities as University[]) ?? []}
+              areas={(areas as PropertyArea[]) ?? []}
+              universityAreas={(universityAreas as UniversityArea[]) ?? []}
+              initialCityId=""
+              initialUniversityId=""
+              initialAreaId=""
+              language={selectedLanguage}
+              currency={selectedCurrency}
+              currentPath={buildAlertReturnTo()}
+              resultCount={count}
+              alertStatus={alertStatus}
+            />
           </div>
         )}
       </section>
