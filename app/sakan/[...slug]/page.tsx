@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../src/lib/supabase/server'
 import PropertiesHeader from '../../properties/PropertiesHeader'
 import SortDropdown from '../../properties/search/SortDropdown'
@@ -10,6 +10,7 @@ import {
   getCachedSakanPageData,
   getCachedSakanSeoPages,
 } from '../../properties/data'
+import PropertyAlertRequestCard from './PropertyAlertRequestCard'
 
 const SITE_URL = 'https://navienty.com'
 const MIN_INDEXABLE_RESULTS = 3
@@ -31,6 +32,7 @@ type SearchParams = {
   sort?: string
   gender?: string
   amenity_ids?: string
+  alert?: string
 }
 
 type PageProps = {
@@ -675,6 +677,95 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
   return pages
 }
 
+
+async function createPropertyAlertRequest(formData: FormData) {
+  'use server'
+
+  const supabase = await createClient()
+
+  const currentPath = String(formData.get('current_path') || '/properties/search').trim()
+  const lang = normalizeLanguage(String(formData.get('lang') || 'ar'))
+  const currency = normalizeCurrency(String(formData.get('currency') || 'EGP'))
+
+  const cityId = String(formData.get('city_id') || '').trim()
+  const universityId = String(formData.get('university_id') || '').trim()
+  const areaId = String(formData.get('area_id') || '').trim()
+  const housingType = String(formData.get('housing_type') || '').trim()
+  const maxBudgetValue = String(formData.get('max_budget') || '').trim()
+  const maxBudget = Number(maxBudgetValue)
+
+  const redirectWithStatus = (status: 'success' | 'invalid' | 'error') => {
+    const nextParams = new URLSearchParams()
+    nextParams.set('lang', lang)
+    nextParams.set('currency', currency)
+    nextParams.set('alert', status)
+
+    redirect(`${currentPath}?${nextParams.toString()}`)
+  }
+
+  if (
+    !cityId ||
+    !universityId ||
+    !areaId ||
+    !['single', 'double', 'triple', 'full_apartment', 'any'].includes(housingType) ||
+    !Number.isFinite(maxBudget) ||
+    maxBudget < 0
+  ) {
+    redirectWithStatus('invalid')
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: university } = await supabase
+    .from('universities')
+    .select('id, city_id')
+    .eq('id', universityId)
+    .maybeSingle()
+
+  if (!university || String(university.city_id) !== cityId) {
+    redirectWithStatus('invalid')
+  }
+
+  const { data: area } = await supabase
+    .from('property_areas')
+    .select('id, city_id, is_active')
+    .eq('id', areaId)
+    .maybeSingle()
+
+  if (!area || area.is_active === false || String(area.city_id) !== cityId) {
+    redirectWithStatus('invalid')
+  }
+
+  const { data: universityArea } = await supabase
+    .from('university_property_areas')
+    .select('id')
+    .eq('university_id', universityId)
+    .eq('area_id', areaId)
+    .maybeSingle()
+
+  if (!universityArea) {
+    redirectWithStatus('invalid')
+  }
+
+  const { error } = await supabase.from('property_alert_requests').insert({
+    user_id: user?.id ?? null,
+    city_id: cityId,
+    university_id: universityId,
+    area_id: areaId,
+    housing_type: housingType,
+    max_budget: maxBudget,
+    status: 'active',
+  })
+
+  if (error) {
+    redirectWithStatus('error')
+  }
+
+  redirectWithStatus('success')
+}
+
 export default async function SakanSeoPage({
   params: routeParams,
   searchParams,
@@ -688,6 +779,7 @@ export default async function SakanSeoPage({
   }
 
   const incomingParams = await searchParams
+  const alertStatus = incomingParams.alert
   const paramsForSearch: SearchParams = {
     ...incomingParams,
     lang: incomingParams.lang ?? 'ar',
@@ -973,7 +1065,7 @@ export default async function SakanSeoPage({
     const p = new URLSearchParams()
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'page' && key !== 'sort' && key !== 'gender') {
+      if (value && key !== 'page' && key !== 'sort' && key !== 'gender' && key !== 'alert') {
         p.set(key, value)
       }
     })
@@ -995,7 +1087,7 @@ export default async function SakanSeoPage({
     const p = new URLSearchParams()
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'page' && key !== 'sort' && key !== 'gender') {
+      if (value && key !== 'page' && key !== 'sort' && key !== 'gender' && key !== 'alert') {
         p.set(key, value)
       }
     })
@@ -2516,6 +2608,22 @@ export default async function SakanSeoPage({
             amenities={(amenities as Amenity[]) ?? []}
           />
         </div>
+
+        <PropertyAlertRequestCard
+          action={createPropertyAlertRequest}
+          cities={(cities as City[]) ?? []}
+          universities={(universities as University[]) ?? []}
+          areas={(areas as PropertyArea[]) ?? []}
+          universityAreas={(universityAreas as UniversityArea[]) ?? []}
+          initialCityId={params.city_id ?? ''}
+          initialUniversityId={params.university_id ?? ''}
+          initialAreaId={params.area_id ?? ''}
+          language={selectedLanguage}
+          currency={selectedCurrency}
+          currentPath={seoPage.path}
+          resultCount={count}
+          alertStatus={alertStatus}
+        />
 
         {sortedProperties.length > 0 ? (
           <>

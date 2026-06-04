@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import SplashScreen from '@/components/SplashScreen'
+import PushNotificationInitializer from './PushNotificationInitializer'
 
 const SITE_URL = 'https://navienty.com'
 const SITE_NAME = 'Navienty'
@@ -186,6 +187,8 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <body>
+        <PushNotificationInitializer />
+
         <SplashScreen />
 
         <script
