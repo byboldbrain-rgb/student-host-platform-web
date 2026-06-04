@@ -678,45 +678,118 @@ function buildVisiblePages(currentPage: number, totalPages: number) {
 }
 
 
+type PropertyAlertHousingType = 'single' | 'double' | 'triple' | 'full_apartment'
+
+const PROPERTY_ALERT_HOUSING_TYPES: PropertyAlertHousingType[] = [
+  'single',
+  'double',
+  'triple',
+  'full_apartment',
+]
+
+function sanitizeUuidLike(value?: FormDataEntryValue | null) {
+  const normalized = String(value ?? '').trim()
+
+  return normalized.length > 0 ? normalized : null
+}
+
+function sanitizeBudget(value?: FormDataEntryValue | null) {
+  const numericValue = Number(String(value ?? '').replace(/[^0-9.]/g, ''))
+
+  return Number.isFinite(numericValue) && numericValue > 0
+    ? Math.round(numericValue)
+    : null
+}
+
+function sanitizeAnonymousAlertToken(value?: FormDataEntryValue | null) {
+  const token = String(value ?? '').trim()
+
+  if (!token) return null
+
+  return /^[a-zA-Z0-9_-]{12,120}$/.test(token) ? token : null
+}
+
+function normalizePropertyAlertHousingTypes(value?: FormDataEntryValue | null) {
+  const values = String(value ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return Array.from(
+    new Set(
+      values.filter((item): item is PropertyAlertHousingType =>
+        PROPERTY_ALERT_HOUSING_TYPES.includes(item as PropertyAlertHousingType)
+      )
+    )
+  )
+}
+
+function addAlertStatusToReturnTo(
+  returnTo: string,
+  status: 'success' | 'invalid' | 'error',
+  lang: SupportedLanguage,
+  currency: SupportedCurrency
+) {
+  const fallback = '/properties/search'
+  const safeReturnTo =
+    returnTo.startsWith('/sakan/') || returnTo.startsWith('/properties/search')
+      ? returnTo
+      : fallback
+  const [pathname, queryString = ''] = safeReturnTo.split('?')
+  const p = new URLSearchParams(queryString)
+
+  p.set('lang', lang)
+  p.set('currency', currency)
+  p.set('alert', status)
+
+  return `${pathname}?${p.toString()}`
+}
+
 async function createPropertyAlertRequest(formData: FormData) {
   'use server'
 
   const supabase = await createClient()
 
-  const currentPath = String(formData.get('current_path') || '/properties/search').trim()
+  const currentPath = String(
+    formData.get('current_path') || formData.get('return_to') || '/properties/search'
+  ).trim()
   const lang = normalizeLanguage(String(formData.get('lang') || 'ar'))
   const currency = normalizeCurrency(String(formData.get('currency') || 'EGP'))
 
-  const cityId = String(formData.get('city_id') || '').trim()
-  const universityId = String(formData.get('university_id') || '').trim()
-  const areaId = String(formData.get('area_id') || '').trim()
-  const housingType = String(formData.get('housing_type') || '').trim()
-  const maxBudgetValue = String(formData.get('max_budget') || '').trim()
-  const maxBudget = Number(maxBudgetValue)
+  const cityId = sanitizeUuidLike(formData.get('city_id'))
+  const universityId = sanitizeUuidLike(formData.get('university_id'))
+  const areaId = sanitizeUuidLike(formData.get('area_id'))
+  const anonymousAlertToken = sanitizeAnonymousAlertToken(
+    formData.get('anonymous_alert_token')
+  )
+  const housingTypes = normalizePropertyAlertHousingTypes(
+    formData.get('housing_types') ?? formData.get('housing_type')
+  )
+  const maxBudget = sanitizeBudget(
+    formData.get('max_budget') ?? formData.get('max_budget_egp')
+  )
 
   const redirectWithStatus = (status: 'success' | 'invalid' | 'error') => {
-    const nextParams = new URLSearchParams()
-    nextParams.set('lang', lang)
-    nextParams.set('currency', currency)
-    nextParams.set('alert', status)
+    redirect(addAlertStatusToReturnTo(currentPath, status, lang, currency))
+  }
 
-    redirect(`${currentPath}?${nextParams.toString()}`)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user && !anonymousAlertToken) {
+    redirectWithStatus('invalid')
   }
 
   if (
     !cityId ||
     !universityId ||
     !areaId ||
-    !['single', 'double', 'triple', 'full_apartment', 'any'].includes(housingType) ||
-    !Number.isFinite(maxBudget) ||
-    maxBudget < 0
+    housingTypes.length === 0 ||
+    !maxBudget
   ) {
     redirectWithStatus('invalid')
   }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
   const { data: university } = await supabase
     .from('universities')
@@ -749,17 +822,21 @@ async function createPropertyAlertRequest(formData: FormData) {
     redirectWithStatus('invalid')
   }
 
-  const { error } = await supabase.from('property_alert_requests').insert({
+  const rows = housingTypes.map((housingType) => ({
     user_id: user?.id ?? null,
+    anonymous_alert_token: user ? null : anonymousAlertToken,
     city_id: cityId,
     university_id: universityId,
     area_id: areaId,
     housing_type: housingType,
     max_budget: maxBudget,
     status: 'active',
-  })
+  }))
+
+  const { error } = await supabase.from('property_alert_requests').insert(rows)
 
   if (error) {
+    console.error('Failed to create property alert request:', error)
     redirectWithStatus('error')
   }
 

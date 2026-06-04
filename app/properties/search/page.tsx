@@ -617,6 +617,14 @@ function sanitizeBudget(value?: FormDataEntryValue | null) {
     : null
 }
 
+function sanitizeAnonymousAlertToken(value?: FormDataEntryValue | null) {
+  const token = String(value ?? '').trim()
+
+  if (!token) return null
+
+  return /^[a-zA-Z0-9_-]{12,120}$/.test(token) ? token : null
+}
+
 function normalizePropertyAlertHousingTypes(value?: FormDataEntryValue | null) {
   const values = String(value ?? '')
     .split(',')
@@ -634,7 +642,7 @@ function normalizePropertyAlertHousingTypes(value?: FormDataEntryValue | null) {
 
 function addAlertStatusToReturnTo(
   returnTo: string,
-  status: 'success' | 'invalid' | 'error' | 'login_required'
+  status: 'success' | 'invalid' | 'error'
 ) {
   const fallback = '/properties/search'
   const safeReturnTo = returnTo.startsWith('/properties/search')
@@ -659,6 +667,9 @@ async function createPropertyAlertRequest(formData: FormData) {
   const cityId = sanitizeUuidLike(formData.get('city_id'))
   const universityId = sanitizeUuidLike(formData.get('university_id'))
   const areaId = sanitizeUuidLike(formData.get('area_id'))
+  const anonymousAlertToken = sanitizeAnonymousAlertToken(
+    formData.get('anonymous_alert_token')
+  )
   const housingTypes = normalizePropertyAlertHousingTypes(
     formData.get('housing_types') ?? formData.get('housing_type')
   )
@@ -666,9 +677,7 @@ async function createPropertyAlertRequest(formData: FormData) {
     formData.get('max_budget') ?? formData.get('max_budget_egp')
   )
 
-  const redirectWithStatus = (
-    status: 'success' | 'invalid' | 'error' | 'login_required'
-  ) => {
+  const redirectWithStatus = (status: 'success' | 'invalid' | 'error') => {
     redirect(addAlertStatusToReturnTo(currentPath, status))
   }
 
@@ -676,8 +685,8 @@ async function createPropertyAlertRequest(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirectWithStatus('login_required')
+  if (!user && !anonymousAlertToken) {
+    redirectWithStatus('invalid')
   }
 
   if (
@@ -722,7 +731,8 @@ async function createPropertyAlertRequest(formData: FormData) {
   }
 
   const rows = housingTypes.map((housingType) => ({
-    user_id: user.id,
+    user_id: user?.id ?? null,
+    anonymous_alert_token: user ? null : anonymousAlertToken,
     city_id: cityId,
     university_id: universityId,
     area_id: areaId,
@@ -734,6 +744,7 @@ async function createPropertyAlertRequest(formData: FormData) {
   const { error } = await supabase.from('property_alert_requests').insert(rows)
 
   if (error) {
+    console.error('Failed to create property alert request:', error)
     redirectWithStatus('error')
   }
 

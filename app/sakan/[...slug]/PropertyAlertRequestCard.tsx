@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enablePushNotifications } from '@/src/lib/push-client'
+import { enablePushNotifications, getAnonymousAlertToken } from '@/src/lib/push-client'
 
 type City = {
   id: string | number
@@ -158,12 +158,17 @@ export default function PropertyAlertRequestCard({
   const [cityQuery, setCityQuery] = useState('')
   const [universityQuery, setUniversityQuery] = useState('')
   const [areaQuery, setAreaQuery] = useState('')
+  const [anonymousAlertToken, setAnonymousAlertToken] = useState('')
 
   const [isEnablingPush, setIsEnablingPush] = useState(false)
   const [pushMessage, setPushMessage] = useState<string | null>(null)
   const [pushMessageType, setPushMessageType] = useState<'success' | 'error' | null>(
     null
   )
+
+  useEffect(() => {
+    setAnonymousAlertToken(getAnonymousAlertToken())
+  }, [])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -203,6 +208,10 @@ export default function PropertyAlertRequestCard({
       const result = await enablePushNotifications()
 
       if (!isMounted) return
+
+      if (result.anonymousAlertToken) {
+        setAnonymousAlertToken(result.anonymousAlertToken)
+      }
 
       setIsEnablingPush(false)
       setPushMessage(result.message)
@@ -310,6 +319,7 @@ export default function PropertyAlertRequestCard({
     !!draftAreaId &&
     selectedHousingTypes.length > 0 &&
     !!maxBudget &&
+    !!anonymousAlertToken &&
     Number(maxBudget) >= 0
 
   const housingOptions: Array<{ value: HousingType; label: string }> = [
@@ -666,6 +676,11 @@ export default function PropertyAlertRequestCard({
           <input type="hidden" name="current_path" value={currentPath} />
           <input type="hidden" name="lang" value={language} />
           <input type="hidden" name="currency" value={currency} />
+          <input
+            type="hidden"
+            name="anonymous_alert_token"
+            value={anonymousAlertToken}
+          />
           <input type="hidden" name="city_id" value={draftCityId} />
           <input type="hidden" name="university_id" value={draftUniversityId} />
           <input type="hidden" name="area_id" value={draftAreaId} />

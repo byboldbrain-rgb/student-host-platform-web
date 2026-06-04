@@ -1,5 +1,6 @@
 'use server'
 
+import webpush from 'web-push'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/src/lib/supabase/server'
 import { createAdminClient } from '@/src/lib/supabase/admin'
@@ -12,13 +13,16 @@ type PropertyReviewStatus =
   | 'rejected'
   | 'archived'
 
+type HousingType = 'single' | 'double' | 'triple' | 'full_apartment'
+
 type PropertyAlertRequest = {
   id: string
-  user_id: string
+  user_id: string | null
+  anonymous_alert_token: string | null
   city_id: string | null
   university_id: string | null
   area_id: string | null
-  housing_type: 'single' | 'double' | 'triple' | 'full_apartment' | 'any'
+  housing_type: HousingType
   max_budget: number | string | null
 }
 
@@ -62,6 +66,27 @@ type PropertyForAlert = {
     | null
 }
 
+type PushSubscriptionRow = {
+  id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+function configureWebPush() {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  const privateKey = process.env.VAPID_PRIVATE_KEY
+  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@navienty.com'
+
+  if (!publicKey || !privateKey) {
+    console.warn('Missing VAPID keys. Guest push notification was skipped.')
+    return false
+  }
+
+  webpush.setVapidDetails(subject, publicKey, privateKey)
+  return true
+}
+
 function normalizeOptionCode(value?: string | null) {
   return value
     ?.toLowerCase()
@@ -90,11 +115,25 @@ function isUsablePrice(value: unknown) {
   return Number.isFinite(price) && price >= 0
 }
 
+function isExpiredPushSubscriptionError(error: unknown) {
+  const statusCode = (error as { statusCode?: number } | null)?.statusCode
+  return statusCode === 404 || statusCode === 410
+}
+
 function getPropertyAlertPrices(property: PropertyForAlert) {
-  const pricesByHousingType = new Map<string, number>()
+  const pricesByHousingType = new Map<HousingType, number>()
 
   const addPrice = (housingType: string | null, priceValue: unknown) => {
     if (!housingType || !isUsablePrice(priceValue)) return
+
+    if (
+      housingType !== 'single' &&
+      housingType !== 'double' &&
+      housingType !== 'triple' &&
+      housingType !== 'full_apartment'
+    ) {
+      return
+    }
 
     const price = Number(priceValue)
     const existingPrice = pricesByHousingType.get(housingType)
@@ -138,7 +177,7 @@ function getPropertyAlertPrices(property: PropertyForAlert) {
       'double',
       'triple',
       'full_apartment',
-    ]) {
+    ] as HousingType[]) {
       if (!pricesByHousingType.has(housingType)) {
         pricesByHousingType.set(housingType, fallbackPrice)
       }
@@ -155,9 +194,9 @@ function doesAlertMatchProperty({
 }: {
   alert: PropertyAlertRequest
   property: PropertyForAlert
-  pricesByHousingType: Map<string, number>
+  pricesByHousingType: Map<HousingType, number>
 }) {
-  if (!alert.user_id) return false
+  if (!alert.user_id && !alert.anonymous_alert_token) return false
 
   if (alert.city_id && property.city_id && alert.city_id !== property.city_id) {
     return false
@@ -181,15 +220,149 @@ function doesAlertMatchProperty({
     return false
   }
 
-  if (alert.housing_type === 'any') {
-    return Array.from(pricesByHousingType.values()).some(
-      (price) => price <= maxBudget
-    )
-  }
-
   const matchedPrice = pricesByHousingType.get(alert.housing_type)
 
   return typeof matchedPrice === 'number' && matchedPrice <= maxBudget
+}
+
+async function sendPropertyAlertNotificationToAnonymousToken({
+  anonymousAlertToken,
+  propertyId,
+  propertyPublicId,
+  alertRequestId,
+  notificationId,
+  title,
+  body,
+  url,
+}: {
+  anonymousAlertToken: string
+  propertyId: string
+  propertyPublicId: string
+  alertRequestId: string
+  notificationId: string
+  title: string
+  body: string
+  url: string
+}) {
+  if (!configureWebPush()) {
+    return {
+      ok: false,
+      sentCount: 0,
+      failedCount: 0,
+      message: 'Missing VAPID keys.',
+    }
+  }
+
+  const admin = createAdminClient()
+
+  const { data: subscriptions, error: subscriptionsError } = await admin
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .eq('anonymous_alert_token', anonymousAlertToken)
+    .eq('is_active', true)
+
+  if (subscriptionsError) {
+    await admin
+      .from('property_alert_notifications')
+      .update({
+        status: 'failed',
+        error_message: subscriptionsError.message,
+      })
+      .eq('id', notificationId)
+
+    return {
+      ok: false,
+      sentCount: 0,
+      failedCount: 0,
+      message: subscriptionsError.message,
+    }
+  }
+
+  if (!subscriptions?.length) {
+    await admin
+      .from('property_alert_notifications')
+      .update({
+        status: 'failed',
+        error_message: 'No active push subscriptions for this guest token.',
+      })
+      .eq('id', notificationId)
+
+    return {
+      ok: false,
+      sentCount: 0,
+      failedCount: 0,
+      message: 'No active push subscriptions for this guest token.',
+    }
+  }
+
+  let sentCount = 0
+  let failedCount = 0
+  let lastErrorMessage: string | null = null
+
+  await Promise.allSettled(
+    (subscriptions as PushSubscriptionRow[]).map(async (subscription) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.p256dh,
+              auth: subscription.auth,
+            },
+          },
+          JSON.stringify({
+            title,
+            body,
+            url: url || `/properties/${propertyPublicId || propertyId}`,
+            tag: `property-alert-${propertyId}`,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            badgeCount: 1,
+            renotify: true,
+            requireInteraction: true,
+            propertyId,
+            alertRequestId,
+            notificationId,
+          })
+        )
+
+        sentCount += 1
+      } catch (error) {
+        failedCount += 1
+        lastErrorMessage =
+          error instanceof Error ? error.message : 'Failed to send push.'
+
+        if (isExpiredPushSubscriptionError(error)) {
+          await admin
+            .from('push_subscriptions')
+            .update({
+              is_active: false,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', subscription.id)
+        }
+      }
+    })
+  )
+
+  await admin
+    .from('property_alert_notifications')
+    .update({
+      status: sentCount > 0 ? 'sent' : 'failed',
+      sent_at: sentCount > 0 ? new Date().toISOString() : null,
+      error_message: sentCount > 0 ? null : lastErrorMessage,
+    })
+    .eq('id', notificationId)
+
+  return {
+    ok: sentCount > 0,
+    sentCount,
+    failedCount,
+    message:
+      sentCount > 0
+        ? 'Guest property alert push notification sent.'
+        : lastErrorMessage || 'Failed to send guest property alert push notification.',
+  }
 }
 
 async function notifyMatchingPropertyAlerts(propertyId: string) {
@@ -261,6 +434,7 @@ async function notifyMatchingPropertyAlerts(propertyId: string) {
     .select(`
       id,
       user_id,
+      anonymous_alert_token,
       city_id,
       university_id,
       area_id,
@@ -307,7 +481,8 @@ async function notifyMatchingPropertyAlerts(propertyId: string) {
           {
             alert_request_id: alert.id,
             property_id: typedProperty.id,
-            user_id: alert.user_id,
+            user_id: alert.user_id ?? null,
+            anonymous_alert_token: alert.anonymous_alert_token ?? null,
             notification_title: notificationTitle,
             notification_body: notificationBody,
             notification_url: notificationUrl,
@@ -336,16 +511,33 @@ async function notifyMatchingPropertyAlerts(propertyId: string) {
         return
       }
 
-      await sendPropertyAlertNotificationToUser({
-        userId: alert.user_id,
-        propertyId: typedProperty.id,
-        propertyPublicId: typedProperty.property_id,
-        alertRequestId: alert.id,
-        notificationId: notification.id,
-        title: notificationTitle,
-        body: notificationBody,
-        url: notificationUrl,
-      })
+      if (alert.user_id) {
+        await sendPropertyAlertNotificationToUser({
+          userId: alert.user_id,
+          propertyId: typedProperty.id,
+          propertyPublicId: typedProperty.property_id,
+          alertRequestId: alert.id,
+          notificationId: notification.id,
+          title: notificationTitle,
+          body: notificationBody,
+          url: notificationUrl,
+        })
+
+        return
+      }
+
+      if (alert.anonymous_alert_token) {
+        await sendPropertyAlertNotificationToAnonymousToken({
+          anonymousAlertToken: alert.anonymous_alert_token,
+          propertyId: typedProperty.id,
+          propertyPublicId: typedProperty.property_id,
+          alertRequestId: alert.id,
+          notificationId: notification.id,
+          title: notificationTitle,
+          body: notificationBody,
+          url: notificationUrl,
+        })
+      }
     })
   )
 }
