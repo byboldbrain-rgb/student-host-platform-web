@@ -85,7 +85,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
       airbnb_price_max,
       smoking_policy,
       admin_status,
-      is_active
+      is_active,
+      floor_number
     `)
     .eq('id', id)
     .maybeSingle()
@@ -309,7 +310,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
     })
   })
 
-    if (currentOwnerRes.data && currentOwnerRes.data.is_active !== false) {
+  if (currentOwnerRes.data && currentOwnerRes.data.is_active !== false) {
     const existingOwner = ownersMap.get(currentOwnerRes.data.id)
 
     if (existingOwner) {

@@ -274,41 +274,41 @@ function buildRoomOptions(params: {
 function derivePropertyAvailabilityStatus(
   submittedStatus: PropertyAvailabilityStatus
 ): PropertyAvailabilityStatus {
-  if (submittedStatus === 'inactive') {
-    return 'inactive'
-  }
-
-  return 'available'
+  return submittedStatus
 }
 
 function deriveRoomStatus(params: {
   propertyAvailabilityStatus: PropertyAvailabilityStatus
-  existingStatus?: RoomStatus | null
+  roomIsReserved?: boolean
 }): RoomStatus {
   if (params.propertyAvailabilityStatus === 'inactive') {
     return 'inactive'
   }
 
-  if (
-    params.existingStatus === 'partially_reserved' ||
-    params.existingStatus === 'fully_reserved'
-  ) {
-    return params.existingStatus
-  }
-
-  return 'available'
+  return params.roomIsReserved ? 'fully_reserved' : 'available'
 }
 
 function deriveBedStatus(params: {
   propertyAvailabilityStatus: PropertyAvailabilityStatus
+  roomIsReserved?: boolean
   existingStatus?: BedStatus | null
 }): BedStatus {
   if (params.propertyAvailabilityStatus === 'inactive') {
     return 'inactive'
   }
 
+  if (params.roomIsReserved) {
+    if (
+      params.existingStatus === 'occupied' ||
+      params.existingStatus === 'maintenance'
+    ) {
+      return params.existingStatus
+    }
+
+    return 'reserved'
+  }
+
   if (
-    params.existingStatus === 'reserved' ||
     params.existingStatus === 'occupied' ||
     params.existingStatus === 'maintenance'
   ) {
@@ -848,6 +848,7 @@ async function syncRoomBeds(params: {
   roomId: string
   desiredBedsCount: number
   propertyAvailabilityStatus: PropertyAvailabilityStatus
+  roomIsReserved: boolean
   activeReservationIds: string[]
 }) {
   const {
@@ -855,6 +856,7 @@ async function syncRoomBeds(params: {
     roomId,
     desiredBedsCount,
     propertyAvailabilityStatus,
+    roomIsReserved,
     activeReservationIds,
   } = params
 
@@ -878,6 +880,7 @@ async function syncRoomBeds(params: {
 
     const nextStatus = deriveBedStatus({
       propertyAvailabilityStatus,
+      roomIsReserved,
       existingStatus: bed.status,
     })
 
@@ -936,7 +939,12 @@ async function syncRoomBeds(params: {
           bed_label: `Bed ${bedIndex + 1}`,
           bed_type: desiredBedsCount === 1 ? 'single' : 'custom',
           price_egp: null,
-          status: propertyAvailabilityStatus === 'inactive' ? 'inactive' : 'available',
+          status:
+            propertyAvailabilityStatus === 'inactive'
+              ? 'inactive'
+              : roomIsReserved
+              ? 'reserved'
+              : 'available',
           is_active: propertyAvailabilityStatus !== 'inactive',
           sort_order: bedIndex,
           deleted_at: null,
@@ -975,7 +983,7 @@ async function recalculatePropertyAvailabilityState(params: {
 
   const { data: rooms, error: roomsError } = await supabase
     .from('property_rooms')
-    .select('id, is_active')
+    .select('id, is_active, status')
     .eq('property_id_ref', propertyId)
 
   if (roomsError) {
@@ -985,19 +993,20 @@ async function recalculatePropertyAvailabilityState(params: {
   const typedRooms = (rooms || []) as Array<{
     id: string
     is_active: boolean
+    status: RoomStatus
   }>
 
   const roomIds = typedRooms.map((room) => room.id)
 
   const bedsByRoomId = new Map<
     string,
-    Array<{ id: string; room_id: string; is_active: boolean }>
+    Array<{ id: string; room_id: string; is_active: boolean; status: BedStatus }>
   >()
 
   if (roomIds.length > 0) {
     const { data: allBeds, error: allBedsError } = await supabase
       .from('room_beds')
-      .select('id, room_id, is_active')
+      .select('id, room_id, is_active, status')
       .in('room_id', roomIds)
 
     if (allBedsError) {
@@ -1008,6 +1017,7 @@ async function recalculatePropertyAvailabilityState(params: {
       id: string
       room_id: string
       is_active: boolean
+      status: BedStatus
     }>) {
       const current = bedsByRoomId.get(bed.room_id) || []
       current.push(bed)
@@ -1104,6 +1114,10 @@ async function recalculatePropertyAvailabilityState(params: {
         ? 'inactive'
         : activeReservedBedIds.has(bed.id)
         ? 'reserved'
+        : bed.status === 'reserved' ||
+          bed.status === 'occupied' ||
+          bed.status === 'maintenance'
+        ? bed.status
         : 'available'
 
       const { error: updateBedError } = await supabase
@@ -1129,7 +1143,7 @@ async function recalculatePropertyAvailabilityState(params: {
       nextRoomStatus = 'inactive'
     } else if (hasActiveEntirePropertyReservation) {
       nextRoomStatus = 'fully_reserved'
-    } else if (activeReservedRoomIds.has(room.id)) {
+    } else if (activeReservedRoomIds.has(room.id) || room.status === 'fully_reserved') {
       nextRoomStatus = 'fully_reserved'
     } else {
       const roomBeds = bedsByRoomId.get(room.id) || []
@@ -1138,8 +1152,8 @@ async function recalculatePropertyAvailabilityState(params: {
       if (activeRoomBeds.length === 0) {
         nextRoomStatus = 'available'
       } else {
-        const reservedBedsCount = activeRoomBeds.filter((bed) =>
-          activeReservedBedIds.has(bed.id)
+        const reservedBedsCount = activeRoomBeds.filter(
+          (bed) => activeReservedBedIds.has(bed.id) || bed.status === 'reserved'
         ).length
 
         if (reservedBedsCount === 0) {
@@ -1265,7 +1279,7 @@ async function syncPropertyRoomsStructure(params: {
 
       const roomStatus = deriveRoomStatus({
         propertyAvailabilityStatus: availabilityStatus,
-        existingStatus: matchedRoom.status,
+        roomIsReserved: room.is_reserved,
       })
 
       const { error: updateRoomError } = await supabase
@@ -1294,6 +1308,7 @@ async function syncPropertyRoomsStructure(params: {
     } else {
       const roomStatus = deriveRoomStatus({
         propertyAvailabilityStatus: availabilityStatus,
+        roomIsReserved: room.is_reserved,
       })
 
       const { data: insertedRoom, error: insertRoomError } = await supabase
@@ -1338,6 +1353,7 @@ async function syncPropertyRoomsStructure(params: {
       roomId,
       desiredBedsCount: room.beds_count,
       propertyAvailabilityStatus: availabilityStatus,
+      roomIsReserved: room.is_reserved,
       activeReservationIds,
     })
 
