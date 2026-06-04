@@ -2488,6 +2488,22 @@ export default async function SearchResultsPage({
           />
         </div>
 
+        <PropertyAlertRequestCard
+          action={createPropertyAlertRequest}
+          cities={(cities as City[]) ?? []}
+          universities={(universities as University[]) ?? []}
+          areas={(areas as PropertyArea[]) ?? []}
+          universityAreas={(universityAreas as UniversityArea[]) ?? []}
+          initialCityId=""
+          initialUniversityId=""
+          initialAreaId=""
+          language={selectedLanguage}
+          currency={selectedCurrency}
+          currentPath={buildAlertReturnTo()}
+          resultCount={count}
+          alertStatus={alertStatus}
+        />
+
         {sortedProperties.length > 0 ? (
           <>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -2587,46 +2603,12 @@ export default async function SearchResultsPage({
                 </Link>
               </div>
             )}
-
-            <PropertyAlertRequestCard
-              action={createPropertyAlertRequest}
-              cities={(cities as City[]) ?? []}
-              universities={(universities as University[]) ?? []}
-              areas={(areas as PropertyArea[]) ?? []}
-              universityAreas={(universityAreas as UniversityArea[]) ?? []}
-              initialCityId=""
-              initialUniversityId=""
-              initialAreaId=""
-              language={selectedLanguage}
-              currency={selectedCurrency}
-              currentPath={buildAlertReturnTo()}
-              resultCount={count}
-              alertStatus={alertStatus}
-            />
           </>
         ) : (
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-10 text-center dark:border-white/10 dark:bg-[#0b1220]">
-              <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">
-                {t.noResults}
-              </p>
-            </div>
-
-            <PropertyAlertRequestCard
-              action={createPropertyAlertRequest}
-              cities={(cities as City[]) ?? []}
-              universities={(universities as University[]) ?? []}
-              areas={(areas as PropertyArea[]) ?? []}
-              universityAreas={(universityAreas as UniversityArea[]) ?? []}
-              initialCityId=""
-              initialUniversityId=""
-              initialAreaId=""
-              language={selectedLanguage}
-              currency={selectedCurrency}
-              currentPath={buildAlertReturnTo()}
-              resultCount={count}
-              alertStatus={alertStatus}
-            />
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-10 text-center dark:border-white/10 dark:bg-[#0b1220]">
+            <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">
+              {t.noResults}
+            </p>
           </div>
         )}
       </section>
