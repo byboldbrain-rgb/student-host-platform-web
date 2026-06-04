@@ -730,16 +730,17 @@ async function createPropertyAlertRequest(formData: FormData) {
     redirectWithStatus('invalid')
   }
 
-  const rows = housingTypes.map((housingType) => ({
-    user_id: user?.id ?? null,
-    anonymous_alert_token: user ? null : anonymousAlertToken,
-    city_id: cityId,
-    university_id: universityId,
-    area_id: areaId,
-    housing_type: housingType,
-    max_budget: maxBudget,
-    status: 'active',
-  }))
+ const rows = housingTypes.map((housingType) => ({
+  user_id: user?.id ?? null,
+  anonymous_alert_token: user ? null : anonymousAlertToken,
+  city_id: cityId,
+  university_id: universityId,
+  area_id: areaId,
+  housing_type: housingType,
+  max_budget: maxBudget,
+  max_budget_egp: maxBudget,
+  status: 'active',
+}))
 
   const { error } = await supabase.from('property_alert_requests').insert(rows)
 
