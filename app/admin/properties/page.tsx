@@ -10,6 +10,7 @@ import {
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 
 type SearchParams = Promise<{
+  search?: string
   owner_number?: string
 }>
 
@@ -182,9 +183,9 @@ function NotificationBadge({ count }: { count: number }) {
 }
 
 function EmptyState({
-  ownerSearchTerm,
+  searchTerm,
 }: {
-  ownerSearchTerm?: string | null
+  searchTerm?: string | null
 }) {
   return (
     <div className="rounded-[32px] border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
@@ -194,8 +195,8 @@ function EmptyState({
 
       <h3 className="text-lg font-semibold text-slate-900">No properties found</h3>
       <p className="mt-2 text-sm text-slate-500">
-        {ownerSearchTerm
-          ? `No properties found for owner number: ${ownerSearchTerm}.`
+        {searchTerm
+          ? `No properties found for: ${searchTerm}.`
           : 'There are no properties available for this account right now.'}
       </p>
     </div>
@@ -215,10 +216,10 @@ function PropertyImagePlaceholder() {
   )
 }
 
-function OwnerSearchForm({
-  ownerSearchTerm,
+function PropertySearchForm({
+  searchTerm,
 }: {
-  ownerSearchTerm: string
+  searchTerm: string
 }) {
   return (
     <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.05)] md:p-5">
@@ -229,7 +230,7 @@ function OwnerSearchForm({
       >
         <label className="relative block">
           <span className="mb-2 block text-sm font-semibold text-slate-900">
-            Search by Owner Number
+            Search Properties
           </span>
 
           <span className="pointer-events-none absolute bottom-[13px] left-4 text-slate-400">
@@ -238,9 +239,9 @@ function OwnerSearchForm({
 
           <input
             type="text"
-            name="owner_number"
-            defaultValue={ownerSearchTerm}
-            placeholder="Owner phone, WhatsApp, national ID, email, or owner ID"
+            name="search"
+            defaultValue={searchTerm}
+            placeholder="Search by property name, Property ID, owner phone, WhatsApp, national ID, email, or owner ID"
             className="h-[52px] w-full rounded-full border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#155dfc] focus:bg-white focus:ring-4 focus:ring-blue-100"
           />
         </label>
@@ -255,7 +256,7 @@ function OwnerSearchForm({
           </button>
         </div>
 
-        {ownerSearchTerm ? (
+        {searchTerm ? (
           <div className="flex items-end">
             <Link
               href="/admin/properties"
@@ -303,14 +304,17 @@ function normalizeDigits(value?: string | null) {
   return (value || '').replace(/\D/g, '')
 }
 
-function propertyMatchesOwnerSearch(property: Property, ownerSearchTerm: string) {
-  const term = normalizeSearchValue(ownerSearchTerm)
+function propertyMatchesSearch(property: Property, searchTerm: string) {
+  const term = normalizeSearchValue(searchTerm)
 
   if (!term) return true
 
   const digitTerm = normalizeDigits(term)
 
   const searchableValues = [
+    property.property_id,
+    property.title_en,
+    property.title_ar,
     property.owner_id,
     property.owner_name,
     property.owner_phone,
@@ -341,7 +345,10 @@ export default async function AdminPropertiesPage({
   searchParams: SearchParams
 }) {
   const resolvedSearchParams = await searchParams
-  const ownerSearchTerm = resolvedSearchParams?.owner_number?.trim() || ''
+  const searchTerm =
+    resolvedSearchParams?.search?.trim() ||
+    resolvedSearchParams?.owner_number?.trim() ||
+    ''
 
   const adminContext = await requirePropertiesSectionAccess()
   const supabase = await createClient()
@@ -431,7 +438,7 @@ export default async function AdminPropertiesPage({
   })
 
   const properties = allProperties.filter((property) =>
-    propertyMatchesOwnerSearch(property, ownerSearchTerm)
+    propertyMatchesSearch(property, searchTerm)
   )
 
   let propertyImagesMap: Record<string, PropertyImage[]> = {}
@@ -716,25 +723,25 @@ export default async function AdminPropertiesPage({
         </header>
 
         <section className="mx-auto max-w-[1600px] px-4 pb-8 pt-6 md:px-6 md:pt-8">
-          <OwnerSearchForm ownerSearchTerm={ownerSearchTerm} />
+          <PropertySearchForm searchTerm={searchTerm} />
 
           {properties.length === 0 ? (
             <div className="mt-6">
-              <EmptyState ownerSearchTerm={ownerSearchTerm} />
+              <EmptyState searchTerm={searchTerm} />
             </div>
           ) : (
             <section className="mt-8 rounded-[32px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
               <div className="border-b border-slate-200 px-5 py-5 md:px-7">
                 <div className="flex flex-col gap-1">
                   <h3 className="text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
-                    {ownerSearchTerm ? 'Owner Property Listings' : 'Property Listings'}
+                    {searchTerm ? 'Search Results' : 'Property Listings'}
                   </h3>
 
-                  {ownerSearchTerm ? (
+                  {searchTerm ? (
                     <p className="text-sm text-slate-500">
-                      Showing properties matching owner number:{' '}
+                      Showing properties matching:{' '}
                       <span className="font-semibold text-slate-900">
-                        {ownerSearchTerm}
+                        {searchTerm}
                       </span>
                     </p>
                   ) : null}
@@ -770,6 +777,10 @@ export default async function AdminPropertiesPage({
                           <h4 className="text-lg font-semibold text-slate-900">
                             {title}
                           </h4>
+
+                          <div className="mt-2 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#155dfc]">
+                            Property ID: {property.property_id || '—'}
+                          </div>
 
                           <div className="mt-3 rounded-[18px] border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
                             <p>
