@@ -2315,14 +2315,6 @@ export async function acceptBookingRequestAction(formData: FormData) {
 
   const isAdminInternalRequest = request.request_source === 'admin_internal'
 
-  if (
-    isAdminInternalRequest &&
-    request.created_by_admin_id &&
-    request.created_by_admin_id === admin.id
-  ) {
-    throw new Error('You cannot approve a booking request that you created.')
-  }
-
   if (request.status === 'converted') {
     revalidatePath('/admin/properties/booking-requests')
     return

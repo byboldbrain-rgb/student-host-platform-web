@@ -103,13 +103,17 @@ function normalizeRoomOptionCode(value?: string | null) {
 
 function getRoomStatusTone(status: string) {
   if (status === 'available') return 'border-[#dbe5ff] bg-[#f3f6ff] text-[#054aff]'
+
   if (status === 'partially_reserved') {
     return 'border-yellow-200 bg-yellow-50 text-yellow-700'
   }
+
   if (status === 'fully_reserved') {
     return 'border-rose-200 bg-rose-50 text-rose-700'
   }
+
   if (status === 'inactive') return 'border-gray-200 bg-gray-100 text-gray-500'
+
   return 'border-gray-200 bg-gray-50 text-gray-700'
 }
 
@@ -130,6 +134,7 @@ export default function BookingRequestActionsPanel({
   const [errorMessage, setErrorMessage] = useState('')
 
   const isAdminInternalRequest = requestSource === 'admin_internal'
+
   const isCreatedByCurrentAdmin =
     isAdminInternalRequest &&
     Boolean(createdByAdminId) &&
@@ -237,6 +242,7 @@ export default function BookingRequestActionsPanel({
       ) {
         setSelectedRoomSellableOptionId(firstOption.id)
       }
+
       return
     }
 
@@ -278,7 +284,6 @@ export default function BookingRequestActionsPanel({
 
   const isAcceptDisabled =
     isPending ||
-    isCreatedByCurrentAdmin ||
     (!isAdminInternalRequest && !userId) ||
     typeof calculatedTotalPrice !== 'number' ||
     calculatedTotalPrice <= 0 ||
@@ -291,7 +296,9 @@ export default function BookingRequestActionsPanel({
       try {
         const formData = new FormData()
         formData.set('request_id', requestId)
+
         await rejectBookingRequestAction(formData)
+
         router.refresh()
       } catch (error: any) {
         setErrorMessage(error.message || 'Something went wrong')
@@ -313,11 +320,6 @@ export default function BookingRequestActionsPanel({
   }
 
   const validateBeforeAccept = () => {
-    if (isCreatedByCurrentAdmin) {
-      setErrorMessage('You cannot approve a booking request that you created.')
-      return false
-    }
-
     if (!isAdminInternalRequest) {
       if (!userId) {
         setErrorMessage(
@@ -358,6 +360,7 @@ export default function BookingRequestActionsPanel({
       startTransition(async () => {
         try {
           const formData = new FormData()
+
           formData.set('request_id', requestId)
           formData.set('property_id', propertyId)
           formData.set('requested_option_code', 'full_apartment')
@@ -371,6 +374,7 @@ export default function BookingRequestActionsPanel({
           appendWalletFields(formData)
 
           await acceptBookingRequestAction(formData)
+
           router.refresh()
         } catch (error: any) {
           setErrorMessage(error.message || 'Something went wrong')
@@ -398,6 +402,7 @@ export default function BookingRequestActionsPanel({
     startTransition(async () => {
       try {
         const formData = new FormData()
+
         formData.set('request_id', requestId)
         formData.set('property_id', propertyId)
         formData.set('room_id', selectedRoomId)
@@ -426,6 +431,7 @@ export default function BookingRequestActionsPanel({
         appendWalletFields(formData)
 
         await acceptBookingRequestAction(formData)
+
         router.refresh()
       } catch (error: any) {
         setErrorMessage(error.message || 'Something went wrong')
@@ -470,12 +476,14 @@ export default function BookingRequestActionsPanel({
                 <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#054aff]">
                   Full Apartment Option
                 </label>
+
                 <div className="mt-2 rounded-[16px] border border-white/70 bg-white px-3 py-3 shadow-[0_6px_18px_rgba(5,74,255,0.06)]">
                   <p className="text-sm font-bold text-gray-900">
                     {fullApartmentOption
                       ? getOptionDisplayName(fullApartmentOption)
                       : 'Full apartment option not found'}
                   </p>
+
                   <p className="mt-1 text-sm text-gray-500">
                     {fullApartmentOption
                       ? formatPrice(fullApartmentOption.price_egp)
@@ -499,6 +507,7 @@ export default function BookingRequestActionsPanel({
                 className="w-full rounded-[16px] border border-[#dbe5ff] bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#054aff]"
               >
                 <option value="">Select room</option>
+
                 {eligibleRooms.map((room) => (
                   <option key={room.id} value={room.id}>
                     {getRoomDisplayName(room)} — {room.availableBedsCount} available beds
@@ -530,6 +539,7 @@ export default function BookingRequestActionsPanel({
                             <p className="text-sm font-bold text-gray-900">
                               {getRoomDisplayName(room)}
                             </p>
+
                             <p className="mt-1 text-xs text-gray-500">
                               {room.availableBedsCount}/{room.totalBedsCount} beds available
                             </p>
@@ -567,6 +577,7 @@ export default function BookingRequestActionsPanel({
                 className="w-full rounded-[16px] border border-[#dbe5ff] bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#054aff]"
               >
                 <option value="">Select room option</option>
+
                 {filteredRoomOptions.map((option) => (
                   <option key={option.id} value={option.id}>
                     {getOptionDisplayName(option)} — {formatPrice(option.price_egp)}
@@ -582,6 +593,7 @@ export default function BookingRequestActionsPanel({
                 <p className="text-[11px] text-gray-500">
                   {isAdminInternalRequest ? 'Payment source' : 'Current wallet balance'}
                 </p>
+
                 <p className="mt-1 text-sm font-extrabold text-gray-900">
                   {isAdminInternalRequest
                     ? 'Admin internal · auto paid'
@@ -595,6 +607,7 @@ export default function BookingRequestActionsPanel({
                 <p className="text-[11px] text-gray-500">
                   {isAdminInternalRequest ? 'Reservation payment' : 'Required wallet payment'}
                 </p>
+
                 <p className="mt-1 text-sm font-extrabold text-gray-900">
                   {isAdminInternalRequest ? 'Paid on approval' : formatPrice(requiredWalletAmount)}
                 </p>
