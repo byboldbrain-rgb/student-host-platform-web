@@ -18,6 +18,13 @@ type PropertyEnquireButtonProps = {
   successMessage?: string
 }
 
+type WhatsAppClickIntentResponse = {
+  ok: boolean
+  clickIntentId?: string
+  whatsappTargetNumber?: string
+  error?: string
+}
+
 function normalizeWhatsAppNumber(value?: string | null) {
   const rawValue = String(value || '').trim()
 
@@ -61,25 +68,19 @@ function getRequestedOptionMessageLabel({
   return 'هذا السكن'
 }
 
-function buildWhatsAppBookingUrl({
-  brokerWhatsappNumber,
+function buildWhatsAppMessage({
   requestedOptionCode,
   requestedOptionLabel,
   propertyPublicId,
   propertyId,
   propertyTitle,
 }: {
-  brokerWhatsappNumber?: string | null
   requestedOptionCode: RequestedOptionCode
   requestedOptionLabel?: string
   propertyPublicId?: string
   propertyId: string
   propertyTitle?: string
 }) {
-  const whatsappNumber = normalizeWhatsAppNumber(brokerWhatsappNumber)
-
-  if (!whatsappNumber) return ''
-
   const optionLabel = getRequestedOptionMessageLabel({
     requestedOptionCode,
     requestedOptionLabel,
@@ -89,14 +90,29 @@ function buildWhatsAppBookingUrl({
   const cleanPropertyTitle = propertyTitle?.trim()
 
   const lines = [
-    `مساء الخير، عاوز احجز ${optionLabel}.`,
-    cleanPropertyTitle ? `اسم السكن: ${cleanPropertyTitle}` : '',
+    `مساء الخير، عاوز أستفسر عن السكن.`,
+    '',
     `Property ID: ${propertyIdentifier}`,
-  ].filter(Boolean)
+    cleanPropertyTitle ? `Property: ${cleanPropertyTitle}` : '',
+    `Room type: ${optionLabel}`,
+    `Source: Navienty Website`,
+  ].filter((line) => line !== '' || true)
 
-  return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-    lines.join('\n')
-  )}`
+  return lines.join('\n')
+}
+
+function buildWhatsAppBookingUrl({
+  whatsappNumber,
+  message,
+}: {
+  whatsappNumber: string
+  message: string
+}) {
+  const normalizedNumber = normalizeWhatsAppNumber(whatsappNumber)
+
+  if (!normalizedNumber) return ''
+
+  return `https://wa.me/${normalizedNumber}?text=${encodeURIComponent(message)}`
 }
 
 export default function PropertyEnquireButton({
@@ -110,31 +126,93 @@ export default function PropertyEnquireButton({
   className,
 }: PropertyEnquireButtonProps) {
   const [message, setMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  function handleClick() {
+  async function handleClick() {
+    if (isLoading) return
+
     setMessage('')
+    setIsLoading(true)
 
-    const whatsappUrl = buildWhatsAppBookingUrl({
-      brokerWhatsappNumber,
-      requestedOptionCode,
-      requestedOptionLabel,
-      propertyPublicId,
-      propertyId,
-      propertyTitle,
-    })
+    try {
+      const generatedMessage = buildWhatsAppMessage({
+        requestedOptionCode,
+        requestedOptionLabel,
+        propertyPublicId,
+        propertyId,
+        propertyTitle,
+      })
 
-    if (!whatsappUrl) {
-      setMessage('رقم واتساب الوسيط غير متاح لهذا السكن.')
-      return
+      const optionLabel = getRequestedOptionMessageLabel({
+        requestedOptionCode,
+        requestedOptionLabel,
+      })
+
+      const response = await fetch('/api/whatsapp/click-intents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          propertyId,
+          propertyPublicId,
+          requestedOptionCode,
+          roomTypeLabel: optionLabel,
+          source: 'property_page',
+          generatedMessage,
+          whatsappTargetNumber: null,
+          metadata: {
+            old_broker_whatsapp_number: brokerWhatsappNumber || null,
+            property_title: propertyTitle || null,
+          },
+        }),
+      })
+
+      const data = (await response.json()) as WhatsAppClickIntentResponse
+
+      if (!response.ok || !data.ok) {
+        setMessage(
+          data.error ||
+            'حدث خطأ أثناء تسجيل طلب التواصل. حاول مرة أخرى بعد لحظات.'
+        )
+        return
+      }
+
+      const whatsappNumber = data.whatsappTargetNumber
+
+      if (!whatsappNumber) {
+        setMessage('رقم واتساب Navienty غير متاح حاليًا.')
+        return
+      }
+
+      const whatsappUrl = buildWhatsAppBookingUrl({
+        whatsappNumber,
+        message: generatedMessage,
+      })
+
+      if (!whatsappUrl) {
+        setMessage('رقم واتساب Navienty غير صالح.')
+        return
+      }
+
+      window.location.href = whatsappUrl
+    } catch (error) {
+      console.error('WHATSAPP_CLICK_INTENT_CLIENT_ERROR:', error)
+      setMessage('حدث خطأ أثناء فتح واتساب. حاول مرة أخرى.')
+    } finally {
+      setIsLoading(false)
     }
-
-    window.location.href = whatsappUrl
   }
 
   return (
     <div className="w-full shrink-0">
-      <button type="button" onClick={handleClick} className={className}>
-        {label}
+      <button
+        type="button"
+        onClick={handleClick}
+        className={className}
+        disabled={isLoading}
+      >
+        {isLoading ? 'جاري فتح واتساب...' : label}
       </button>
 
       {message ? (
