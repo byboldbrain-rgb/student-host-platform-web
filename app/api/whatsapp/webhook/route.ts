@@ -24,6 +24,19 @@ function normalizeWhatsAppPhone(phone: string | null | undefined) {
   return phone.replace(/[^\d]/g, '')
 }
 
+function normalizeWhatsAppStatus(status: string | null | undefined) {
+  if (
+    status === 'sent' ||
+    status === 'delivered' ||
+    status === 'read' ||
+    status === 'failed'
+  ) {
+    return status
+  }
+
+  return null
+}
+
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
 
@@ -62,6 +75,7 @@ export async function POST(req: NextRequest) {
         const value = change?.value
         const messages = value?.messages ?? []
         const contacts = value?.contacts ?? []
+        const statuses = value?.statuses ?? []
 
         for (const message of messages) {
           const waId =
@@ -75,6 +89,7 @@ export async function POST(req: NextRequest) {
 
           const displayName = contacts?.[0]?.profile?.name ?? null
           const messageType = message?.type ?? 'unknown'
+
           const textBody =
             messageType === 'text'
               ? message?.text?.body ?? null
@@ -195,6 +210,36 @@ export async function POST(req: NextRequest) {
 
           if (messageInsertError) {
             console.error('WHATSAPP_MESSAGE_INSERT_ERROR:', messageInsertError)
+          }
+        }
+
+        for (const statusEvent of statuses) {
+          const wamid = statusEvent?.id ?? null
+          const rawStatus = statusEvent?.status ?? null
+          const normalizedStatus = normalizeWhatsAppStatus(rawStatus)
+          const error = statusEvent?.errors?.[0] ?? null
+
+          if (!wamid || !normalizedStatus) {
+            console.warn('WHATSAPP_STATUS_SKIPPED:', statusEvent)
+            continue
+          }
+
+          const { error: statusUpdateError } = await supabase
+            .from('whatsapp_messages')
+            .update({
+              status: normalizedStatus,
+              error_code: error?.code ? String(error.code) : null,
+              error_message: error?.message ?? error?.title ?? null,
+            })
+            .or(`wamid.eq.${wamid},meta_message_id.eq.${wamid}`)
+
+          if (statusUpdateError) {
+            console.error('WHATSAPP_STATUS_UPDATE_ERROR:', statusUpdateError)
+          } else {
+            console.log('WHATSAPP_STATUS_UPDATED:', {
+              wamid,
+              status: normalizedStatus,
+            })
           }
         }
       }
