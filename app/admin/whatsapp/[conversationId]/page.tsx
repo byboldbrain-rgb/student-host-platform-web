@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import ReplyBox from './ReplyBox'
 
 type WhatsAppContact = {
   id: string
@@ -224,6 +225,7 @@ export default async function WhatsAppConversationPage({
           )}
         </div>
       </section>
+      <ReplyBox conversationId={conversation.id} />
     </main>
   )
 }
