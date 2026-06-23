@@ -64,11 +64,7 @@ function getDisplayName(
   fallback: string
 ) {
   const normalizedRelation = getRelation(relation)
-  return (
-    normalizedRelation?.name_en ||
-    normalizedRelation?.name_ar ||
-    fallback
-  )
+  return normalizedRelation?.name_en || normalizedRelation?.name_ar || fallback
 }
 
 function formatNumber(value: number) {
@@ -188,9 +184,7 @@ function AnalyticsTable({
                     Apartments
                   </th>
                 )}
-                <th className="whitespace-nowrap px-5 py-4 md:px-6">
-                  Share
-                </th>
+                <th className="whitespace-nowrap px-5 py-4 md:px-6">Share</th>
               </tr>
             </thead>
 
@@ -295,7 +289,10 @@ function buildExecutiveRows(properties: PropertyRow[]) {
     const bedsCount = Number(property.beds_count || 0)
 
     const cityName = getDisplayName(property.city, 'Unassigned city')
-    const universityName = getDisplayName(property.university, 'Unassigned university')
+    const universityName = getDisplayName(
+      property.university,
+      'Unassigned university'
+    )
     const areaName = getDisplayName(property.area, 'Unassigned area')
 
     const cityKey = property.city_id || 'unassigned-city'
@@ -329,12 +326,18 @@ function buildExecutiveRows(properties: PropertyRow[]) {
     })
   })
 
-  const sortByBedsThenProperties = (a: ExecutiveMetricRow, b: ExecutiveMetricRow) => {
+  const sortByBedsThenProperties = (
+    a: ExecutiveMetricRow,
+    b: ExecutiveMetricRow
+  ) => {
     if (b.bedsCount !== a.bedsCount) return b.bedsCount - a.bedsCount
     return b.propertiesCount - a.propertiesCount
   }
 
-  const sortByPropertiesThenBeds = (a: ExecutiveMetricRow, b: ExecutiveMetricRow) => {
+  const sortByPropertiesThenBeds = (
+    a: ExecutiveMetricRow,
+    b: ExecutiveMetricRow
+  ) => {
     if (b.propertiesCount !== a.propertiesCount) {
       return b.propertiesCount - a.propertiesCount
     }
@@ -344,7 +347,9 @@ function buildExecutiveRows(properties: PropertyRow[]) {
   return {
     areaRows: Array.from(areaMap.values()).sort(sortByBedsThenProperties),
     cityRows: Array.from(cityMap.values()).sort(sortByBedsThenProperties),
-    universityRows: Array.from(universityMap.values()).sort(sortByPropertiesThenBeds),
+    universityRows: Array.from(universityMap.values()).sort(
+      sortByPropertiesThenBeds
+    ),
   }
 }
 
@@ -399,7 +404,10 @@ export default async function AdminPage({
   }
 
   if (availability_status) {
-    propertiesQuery = propertiesQuery.eq('availability_status', availability_status)
+    propertiesQuery = propertiesQuery.eq(
+      'availability_status',
+      availability_status
+    )
   }
 
   const { data, error } = await propertiesQuery
@@ -627,6 +635,13 @@ export default async function AdminPage({
                 Property Admins
               </Link>
 
+              <Link
+                href="/admin/whatsapp"
+                className="desktop-header-nav-button desktop-header-nav-button-inactive"
+              >
+                WhatsApp Inbox
+              </Link>
+
               <AdminLogoutButton />
             </div>
 
@@ -794,6 +809,10 @@ export default async function AdminPage({
             <MobileBottomNavItem
               href="/admin/properties/admins"
               label="Property Admins"
+            />
+            <MobileBottomNavItem
+              href="/admin/whatsapp"
+              label="WhatsApp Inbox"
             />
           </div>
         </nav>
