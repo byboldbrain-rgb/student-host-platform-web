@@ -29,13 +29,20 @@ type WhatsAppConversation = {
   messages: WhatsAppMessage[]
 }
 
-async function getWhatsAppConversations() {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000'
+function getBaseUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
+  }
 
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`
+  }
+
+  return 'http://localhost:3000'
+}
+
+async function getWhatsAppConversations() {
+  const baseUrl = getBaseUrl()
   const secret = process.env.WHATSAPP_TEST_SEND_SECRET
 
   if (!secret) {
@@ -50,6 +57,14 @@ async function getWhatsAppConversations() {
   )
 
   if (!res.ok) {
+    const errorText = await res.text()
+
+    console.error('WHATSAPP_INBOX_FETCH_ERROR:', {
+      status: res.status,
+      statusText: res.statusText,
+      body: errorText,
+    })
+
     throw new Error('Failed to fetch WhatsApp conversations')
   }
 
@@ -113,7 +128,7 @@ export default async function WhatsAppInboxPage() {
                         {contact?.display_name || contact?.phone || 'Unknown'}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {contact?.phone}
+                        {contact?.phone || '—'}
                       </div>
                     </td>
 
@@ -128,7 +143,7 @@ export default async function WhatsAppInboxPage() {
                         {lastMessage?.body || '—'}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {lastMessage?.direction}
+                        {lastMessage?.direction || '—'}
                       </div>
                     </td>
 
