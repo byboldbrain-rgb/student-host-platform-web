@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
+type LinkedProperty = {
+  id: string
+  property_id: string
+  title_en: string | null
+  title_ar: string | null
+}
+
 function getSupabaseAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -18,6 +25,8 @@ function getSupabaseAdminClient() {
     },
   })
 }
+
+type SupabaseAdminClient = ReturnType<typeof getSupabaseAdminClient>
 
 function normalizeWhatsAppPhone(phone: string | null | undefined) {
   if (!phone) return null
@@ -35,6 +44,127 @@ function normalizeWhatsAppStatus(status: string | null | undefined) {
   }
 
   return null
+}
+
+function extractPropertyPublicIdFromMessage(text: string | null | undefined) {
+  if (!text) return null
+
+  const patterns = [
+    /Property\s*ID\s*:\s*(PROP-[A-Za-z0-9_-]+)/i,
+    /Property\s*ID\s*[:：]\s*(PROP-[A-Za-z0-9_-]+)/i,
+    /(PROP-[A-Za-z0-9_-]+)/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+
+    if (match?.[1]) {
+      return match[1].trim()
+    }
+  }
+
+  return null
+}
+
+async function findLinkedPropertyFromMessage({
+  supabase,
+  textBody,
+}: {
+  supabase: SupabaseAdminClient
+  textBody: string | null
+}): Promise<LinkedProperty | null> {
+  const propertyPublicId = extractPropertyPublicIdFromMessage(textBody)
+
+  if (!propertyPublicId) {
+    return null
+  }
+
+  const { data, error } = await supabase
+    .from('properties')
+    .select(
+      `
+      id,
+      property_id,
+      title_en,
+      title_ar
+    `
+    )
+    .eq('property_id', propertyPublicId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('WHATSAPP_LINKED_PROPERTY_LOOKUP_ERROR:', {
+      propertyPublicId,
+      error,
+    })
+
+    return null
+  }
+
+  if (!data) {
+    console.warn('WHATSAPP_LINKED_PROPERTY_NOT_FOUND:', {
+      propertyPublicId,
+    })
+
+    return null
+  }
+
+  return data as LinkedProperty
+}
+
+async function markLatestClickIntentAsSent({
+  supabase,
+  linkedProperty,
+  conversationId,
+}: {
+  supabase: SupabaseAdminClient
+  linkedProperty: LinkedProperty
+  conversationId: string
+}) {
+  const { data: latestIntentData, error: lookupError } = await supabase
+    .from('whatsapp_click_intents')
+    .select('id')
+    .eq('property_id', linkedProperty.id)
+    .eq('status', 'clicked')
+    .is('linked_conversation_id', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (lookupError) {
+    console.error('WHATSAPP_CLICK_INTENT_LOOKUP_ERROR:', lookupError)
+    return
+  }
+
+  const latestIntent = latestIntentData as { id: string } | null
+
+  if (!latestIntent?.id) {
+    console.log('WHATSAPP_CLICK_INTENT_NO_MATCH:', {
+      propertyPublicId: linkedProperty.property_id,
+      conversationId,
+    })
+    return
+  }
+
+  const { error: updateError } = await supabase
+    .from('whatsapp_click_intents')
+    .update({
+      status: 'sent',
+      linked_conversation_id: conversationId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', latestIntent.id)
+
+  if (updateError) {
+    console.error('WHATSAPP_CLICK_INTENT_UPDATE_ERROR:', updateError)
+    return
+  }
+
+  console.log('WHATSAPP_CLICK_INTENT_LINKED:', {
+    clickIntentId: latestIntent.id,
+    conversationId,
+    propertyPublicId: linkedProperty.property_id,
+  })
 }
 
 export async function GET(req: NextRequest) {
@@ -101,25 +231,33 @@ export async function POST(req: NextRequest) {
                     null
                   : null
 
+          const linkedProperty = await findLinkedPropertyFromMessage({
+            supabase,
+            textBody,
+          })
+
           const now = new Date().toISOString()
+
+          const contactPayload: Record<string, unknown> = {
+            phone: waId,
+            display_name: displayName,
+            last_inbound_at: now,
+            last_message_at: now,
+            updated_at: now,
+            metadata: {
+              last_raw_contact: contacts?.[0] ?? null,
+            },
+          }
+
+          if (linkedProperty) {
+            contactPayload.contact_type = 'student'
+          }
 
           const { data: contact, error: contactError } = await supabase
             .from('whatsapp_contacts')
-            .upsert(
-              {
-                phone: waId,
-                display_name: displayName,
-                last_inbound_at: now,
-                last_message_at: now,
-                updated_at: now,
-                metadata: {
-                  last_raw_contact: contacts?.[0] ?? null,
-                },
-              },
-              {
-                onConflict: 'phone',
-              }
-            )
+            .upsert(contactPayload, {
+              onConflict: 'phone',
+            })
             .select('id')
             .single()
 
@@ -150,12 +288,19 @@ export async function POST(req: NextRequest) {
           if (existingConversation?.id) {
             conversationId = existingConversation.id
 
+            const conversationUpdatePayload: Record<string, unknown> = {
+              last_message_at: now,
+              updated_at: now,
+            }
+
+            if (linkedProperty) {
+              conversationUpdatePayload.conversation_type = 'student_booking'
+              conversationUpdatePayload.related_property_id = linkedProperty.id
+            }
+
             const { error: conversationUpdateError } = await supabase
               .from('whatsapp_conversations')
-              .update({
-                last_message_at: now,
-                updated_at: now,
-              })
+              .update(conversationUpdatePayload)
               .eq('id', conversationId)
 
             if (conversationUpdateError) {
@@ -165,15 +310,21 @@ export async function POST(req: NextRequest) {
               )
             }
           } else {
+            const conversationCreatePayload: Record<string, unknown> = {
+              contact_id: contact.id,
+              status: 'open',
+              conversation_type: linkedProperty ? 'student_booking' : 'general',
+              last_message_at: now,
+            }
+
+            if (linkedProperty) {
+              conversationCreatePayload.related_property_id = linkedProperty.id
+            }
+
             const { data: newConversation, error: conversationCreateError } =
               await supabase
                 .from('whatsapp_conversations')
-                .insert({
-                  contact_id: contact.id,
-                  status: 'open',
-                  conversation_type: 'general',
-                  last_message_at: now,
-                })
+                .insert(conversationCreatePayload)
                 .select('id')
                 .single()
 
@@ -205,11 +356,27 @@ export async function POST(req: NextRequest) {
                 value,
                 message,
                 contact: contacts?.[0] ?? null,
+                linked_property: linkedProperty,
               },
             })
 
           if (messageInsertError) {
             console.error('WHATSAPP_MESSAGE_INSERT_ERROR:', messageInsertError)
+          }
+
+          if (linkedProperty && conversationId) {
+            await markLatestClickIntentAsSent({
+              supabase,
+              linkedProperty,
+              conversationId,
+            })
+
+            console.log('WHATSAPP_STUDENT_BOOKING_LINKED:', {
+              conversationId,
+              propertyPublicId: linkedProperty.property_id,
+              propertyId: linkedProperty.id,
+              waId,
+            })
           }
         }
 
