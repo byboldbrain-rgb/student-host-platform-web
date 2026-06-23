@@ -477,6 +477,8 @@ export async function middleware(request: NextRequest) {
   const isAdminChangePasswordRoute =
     pathname === '/admin/change-password' ||
     pathname.startsWith('/admin/change-password/')
+  const isWhatsAppAdminRoute =
+    pathname === '/admin/whatsapp' || pathname.startsWith('/admin/whatsapp/')
 
   const isUserProtectedRoute = pathname === '/account'
   const isUserGuestOnlyRoute = pathname === '/login' || pathname === '/signup'
@@ -537,6 +539,12 @@ export async function middleware(request: NextRequest) {
 
   if (isUnauthorizedRoute || isAdminChangePasswordRoute) {
     return response
+  }
+
+  if (isWhatsAppAdminRoute && adminUser.role !== 'super_admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/admin/unauthorized'
+    return NextResponse.redirect(url)
   }
 
   if (adminUser.role === 'property_owner') {
