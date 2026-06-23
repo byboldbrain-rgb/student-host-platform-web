@@ -6,6 +6,14 @@ export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams
     const to = searchParams.get('to')
+    const secret = searchParams.get('secret')
+
+    if (secret !== process.env.WHATSAPP_TEST_SEND_SECRET) {
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     if (!to) {
       return NextResponse.json(
