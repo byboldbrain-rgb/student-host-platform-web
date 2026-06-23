@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 
 type WhatsAppContact = {
@@ -29,49 +30,89 @@ type WhatsAppConversation = {
   messages: WhatsAppMessage[]
 }
 
-function getBaseUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
+function getSupabaseAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing Supabase environment variables')
   }
 
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`
-  }
-
-  return 'http://localhost:3000'
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  })
 }
 
 async function getWhatsAppConversations() {
-  const baseUrl = getBaseUrl()
-  const secret = process.env.WHATSAPP_TEST_SEND_SECRET
+  const supabase = getSupabaseAdminClient()
 
-  if (!secret) {
-    throw new Error('Missing WHATSAPP_TEST_SEND_SECRET')
-  }
+  const { data, error } = await supabase
+    .from('whatsapp_conversations')
+    .select(
+      `
+      id,
+      status,
+      conversation_type,
+      last_message_at,
+      created_at,
+      contact:whatsapp_contacts (
+        id,
+        phone,
+        display_name,
+        contact_type,
+        opted_out,
+        blocked
+      ),
+      messages:whatsapp_messages (
+        id,
+        direction,
+        message_type,
+        body,
+        status,
+        created_at
+      )
+    `
+    )
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .limit(50)
 
-  const res = await fetch(
-    `${baseUrl}/api/whatsapp/conversations?secret=${secret}`,
-    {
-      cache: 'no-store',
-    }
-  )
-
-  if (!res.ok) {
-    const errorText = await res.text()
-
-    console.error('WHATSAPP_INBOX_FETCH_ERROR:', {
-      status: res.status,
-      statusText: res.statusText,
-      body: errorText,
-    })
-
+  if (error) {
+    console.error('WHATSAPP_INBOX_SUPABASE_ERROR:', error)
     throw new Error('Failed to fetch WhatsApp conversations')
   }
 
-  return res.json() as Promise<{
-    ok: boolean
-    conversations: WhatsAppConversation[]
-  }>
+  const conversations =
+    data?.map((conversation) => {
+      const messages = Array.isArray(conversation.messages)
+        ? conversation.messages
+        : []
+
+      const sortedMessages = [...messages].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() -
+          new Date(a.created_at).getTime()
+      )
+
+      const contact = Array.isArray(conversation.contact)
+        ? conversation.contact[0] ?? null
+        : conversation.contact ?? null
+
+      return {
+        id: conversation.id,
+        status: conversation.status,
+        conversation_type: conversation.conversation_type,
+        last_message_at: conversation.last_message_at,
+        created_at: conversation.created_at,
+        contact,
+        last_message: sortedMessages[0] ?? null,
+        messages: sortedMessages.slice(0, 5),
+      } as WhatsAppConversation
+    }) ?? []
+
+  return conversations
 }
 
 function formatDate(value: string | null) {
@@ -84,8 +125,7 @@ function formatDate(value: string | null) {
 }
 
 export default async function WhatsAppInboxPage() {
-  const data = await getWhatsAppConversations()
-  const conversations = data.conversations ?? []
+  const conversations = await getWhatsAppConversations()
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
@@ -127,6 +167,7 @@ export default async function WhatsAppInboxPage() {
                       <div className="font-medium">
                         {contact?.display_name || contact?.phone || 'Unknown'}
                       </div>
+
                       <div className="text-xs text-gray-500">
                         {contact?.phone || '—'}
                       </div>
@@ -142,6 +183,7 @@ export default async function WhatsAppInboxPage() {
                       <div className="truncate">
                         {lastMessage?.body || '—'}
                       </div>
+
                       <div className="text-xs text-gray-500">
                         {lastMessage?.direction || '—'}
                       </div>
