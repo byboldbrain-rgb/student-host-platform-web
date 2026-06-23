@@ -51,9 +51,19 @@ function normalizeSource(value: string | null | undefined) {
   return 'property_page'
 }
 
+function isUuid(value: string | null | undefined) {
+  if (!value) return false
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  )
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ClickIntentBody
+
+    console.log('WHATSAPP_CLICK_INTENT_REQUEST:', body)
 
     const propertyId = body.propertyId?.trim() || null
     const propertyPublicId = body.propertyPublicId?.trim() || null
@@ -86,40 +96,82 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdminClient()
 
-    let propertyQuery = supabase
-      .from('properties')
-      .select(
+    let property:
+      | {
+          id: string
+          property_id: string
+          title_en: string | null
+          title_ar: string | null
+        }
+      | null = null
+
+    if (propertyPublicId) {
+      const { data, error } = await supabase
+        .from('properties')
+        .select(
+          `
+          id,
+          property_id,
+          title_en,
+          title_ar
         `
-        id,
-        property_id,
-        title_en,
-        title_ar
-      `
-      )
-      .limit(1)
+        )
+        .eq('property_id', propertyPublicId)
+        .maybeSingle()
 
-    if (propertyId) {
-      propertyQuery = propertyQuery.eq('id', propertyId)
-    } else if (propertyPublicId) {
-      propertyQuery = propertyQuery.eq('property_id', propertyPublicId)
+      if (error) {
+        console.error('WHATSAPP_CLICK_PROPERTY_PUBLIC_LOOKUP_ERROR:', error)
+
+        return NextResponse.json(
+          { ok: false, error: 'Failed to find property by public ID' },
+          { status: 500 }
+        )
+      }
+
+      property = data
     }
 
-    const { data: properties, error: propertyError } = await propertyQuery
+    if (!property && isUuid(propertyId)) {
+      const { data, error } = await supabase
+        .from('properties')
+        .select(
+          `
+          id,
+          property_id,
+          title_en,
+          title_ar
+        `
+        )
+        .eq('id', propertyId)
+        .maybeSingle()
 
-    if (propertyError) {
-      console.error('WHATSAPP_CLICK_PROPERTY_LOOKUP_ERROR:', propertyError)
+      if (error) {
+        console.error('WHATSAPP_CLICK_PROPERTY_UUID_LOOKUP_ERROR:', error)
 
-      return NextResponse.json(
-        { ok: false, error: 'Failed to find property' },
-        { status: 500 }
-      )
+        return NextResponse.json(
+          { ok: false, error: 'Failed to find property by UUID' },
+          { status: 500 }
+        )
+      }
+
+      property = data
     }
-
-    const property = properties?.[0] ?? null
 
     if (!property) {
+      console.warn('WHATSAPP_CLICK_PROPERTY_NOT_FOUND:', {
+        propertyId,
+        propertyPublicId,
+      })
+
       return NextResponse.json(
-        { ok: false, error: 'Property not found' },
+        {
+          ok: false,
+          error: 'Property not found',
+          debug: {
+            propertyId,
+            propertyPublicId,
+          },
+        },
         { status: 404 }
       )
     }
@@ -150,6 +202,8 @@ export async function POST(req: NextRequest) {
 
         metadata: {
           ...(body.metadata || {}),
+          client_property_id: propertyId,
+          client_property_public_id: propertyPublicId,
           user_agent: req.headers.get('user-agent'),
           referer: req.headers.get('referer'),
         },
@@ -168,6 +222,11 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       )
     }
+
+    console.log('WHATSAPP_CLICK_INTENT_CREATED:', {
+      id: clickIntent.id,
+      propertyPublicId: property.property_id,
+    })
 
     return NextResponse.json({
       ok: true,
