@@ -40,6 +40,26 @@ type WhatsAppMessage = {
   created_at: string
 }
 
+type WhatsAppListMessage = {
+  id: string
+  direction: 'inbound' | 'outbound'
+  message_type: string
+  body: string | null
+  status: string | null
+  created_at: string
+}
+
+type WhatsAppConversationListItem = {
+  id: string
+  status: string
+  conversation_type: string
+  last_message_at: string | null
+  created_at: string
+  contact: WhatsAppContact | null
+  last_message: WhatsAppListMessage | null
+  messages: WhatsAppListMessage[]
+}
+
 type WhatsAppConversation = {
   id: string
   status: string
@@ -49,6 +69,22 @@ type WhatsAppConversation = {
   created_at: string
   contact: WhatsAppContact | null
   related_property: RelatedProperty | null
+}
+
+type ConversationFilter = 'all' | 'unread' | 'open' | 'owners' | 'students'
+
+type SearchParams = {
+  q?: string | string[]
+  filter?: string | string[]
+}
+
+const navientyChatPattern = {
+  backgroundColor: '#F8FBFF',
+  backgroundImage:
+    "linear-gradient(rgba(248, 251, 255, 0.78), rgba(248, 251, 255, 0.78)), url('https://i.ibb.co/W4YtBrdH/Chat-GPT-Image-Jun-24-2026-08-05-08-PM.png')",
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
 }
 
 function getSupabaseAdminClient() {
@@ -73,6 +109,75 @@ function normalizeRelation<T>(relation: T | T[] | null): T | null {
   }
 
   return relation
+}
+
+async function getWhatsAppConversations() {
+  const supabase = getSupabaseAdminClient()
+
+  const { data, error } = await supabase
+    .from('whatsapp_conversations')
+    .select(
+      `
+      id,
+      status,
+      conversation_type,
+      last_message_at,
+      created_at,
+      contact:whatsapp_contacts (
+        id,
+        phone,
+        display_name,
+        contact_type,
+        opted_out,
+        blocked
+      ),
+      messages:whatsapp_messages (
+        id,
+        direction,
+        message_type,
+        body,
+        status,
+        created_at
+      )
+    `
+    )
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .limit(50)
+
+  if (error) {
+    console.error('WHATSAPP_INBOX_SUPABASE_ERROR:', error)
+    throw new Error('Failed to fetch WhatsApp conversations')
+  }
+
+  const conversations =
+    data?.map((conversation) => {
+      const messages = Array.isArray(conversation.messages)
+        ? conversation.messages
+        : []
+
+      const sortedMessages = [...messages].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() -
+          new Date(a.created_at).getTime()
+      )
+
+      const contact = Array.isArray(conversation.contact)
+        ? conversation.contact[0] ?? null
+        : conversation.contact ?? null
+
+      return {
+        id: conversation.id,
+        status: conversation.status,
+        conversation_type: conversation.conversation_type,
+        last_message_at: conversation.last_message_at,
+        created_at: conversation.created_at,
+        contact,
+        last_message: sortedMessages[0] ?? null,
+        messages: sortedMessages.slice(0, 5),
+      } as WhatsAppConversationListItem
+    }) ?? []
+
+  return conversations
 }
 
 async function getExistingBookingRequestId({
@@ -228,6 +333,28 @@ async function getConversation(conversationId: string) {
   }
 }
 
+function getSingleSearchParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return value ?? ''
+}
+
+function getActiveFilter(
+  value: string | string[] | undefined
+): ConversationFilter {
+  const rawValue = getSingleSearchParam(value)
+
+  if (
+    rawValue === 'unread' ||
+    rawValue === 'open' ||
+    rawValue === 'owners' ||
+    rawValue === 'students'
+  ) {
+    return rawValue
+  }
+
+  return 'all'
+}
+
 function formatDate(value: string | null) {
   if (!value) return '—'
 
@@ -235,6 +362,49 @@ function formatDate(value: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function formatMessageTime(value: string | null) {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function formatListTime(value: string | null) {
+  if (!value) return '—'
+
+  const date = new Date(value)
+  const now = new Date()
+
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate()
+
+  if (sameDay) {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date)
+  }
+
+  if (isYesterday) return 'Yesterday'
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date)
 }
 
 function formatPrice(value: number | null) {
@@ -260,14 +430,128 @@ function getPropertyTitle(property: RelatedProperty | null) {
 
 function getConversationTypeBadgeClass(type: string) {
   if (type === 'student_booking') {
-    return 'bg-blue-50 text-blue-700'
+    return 'bg-blue-50 text-blue-700 ring-blue-100'
   }
 
   if (type === 'owner_onboarding') {
-    return 'bg-green-50 text-green-700'
+    return 'bg-indigo-50 text-indigo-700 ring-indigo-100'
   }
 
-  return 'bg-gray-100 text-gray-700'
+  return 'bg-slate-100 text-slate-700 ring-slate-200'
+}
+
+function getContactName(contact: WhatsAppContact | null) {
+  return contact?.display_name || contact?.phone || 'Unknown contact'
+}
+
+function getContactPhone(contact: WhatsAppContact | null) {
+  return contact?.phone || '—'
+}
+
+function getLastMessagePreview(message: WhatsAppListMessage | null) {
+  if (!message) return 'No messages yet'
+
+  if (message.body) {
+    return message.direction === 'outbound'
+      ? `You: ${message.body}`
+      : message.body
+  }
+
+  return `[${message.message_type}]`
+}
+
+function needsReply(conversation: WhatsAppConversationListItem) {
+  return conversation.last_message?.direction === 'inbound'
+}
+
+function conversationMatchesSearch(
+  conversation: WhatsAppConversationListItem,
+  searchQuery: string
+) {
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  if (!normalizedQuery) return true
+
+  const contact = conversation.contact
+  const lastMessage = conversation.last_message
+
+  const searchableText = [
+    contact?.display_name,
+    contact?.phone,
+    contact?.contact_type,
+    conversation.status,
+    conversation.conversation_type,
+    lastMessage?.body,
+    lastMessage?.status,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return searchableText.includes(normalizedQuery)
+}
+
+function filterConversations({
+  conversations,
+  searchQuery,
+  activeFilter,
+}: {
+  conversations: WhatsAppConversationListItem[]
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
+  return conversations.filter((conversation) => {
+    if (!conversationMatchesSearch(conversation, searchQuery)) {
+      return false
+    }
+
+    const contactType = conversation.contact?.contact_type
+    const conversationType = conversation.conversation_type
+
+    if (activeFilter === 'unread') {
+      return needsReply(conversation)
+    }
+
+    if (activeFilter === 'open') {
+      return conversation.status === 'open'
+    }
+
+    if (activeFilter === 'owners') {
+      return contactType === 'owner' || conversationType === 'owner_onboarding'
+    }
+
+    if (activeFilter === 'students') {
+      return contactType === 'student' || conversationType === 'student_booking'
+    }
+
+    return true
+  })
+}
+
+function buildConversationHref({
+  conversationId,
+  searchQuery,
+  activeFilter,
+}: {
+  conversationId: string
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
+  const params = new URLSearchParams()
+
+  if (activeFilter !== 'all') {
+    params.set('filter', activeFilter)
+  }
+
+  if (searchQuery.trim()) {
+    params.set('q', searchQuery.trim())
+  }
+
+  const queryString = params.toString()
+
+  return queryString
+    ? `/admin/whatsapp/${conversationId}?${queryString}`
+    : `/admin/whatsapp/${conversationId}`
 }
 
 function isImageMessage(message: WhatsAppMessage) {
@@ -291,6 +575,347 @@ function isAudioMessage(message: WhatsAppMessage) {
   )
 }
 
+function SearchIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="m21 21-4.35-4.35M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function MessageIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M6.6 18.5 3.5 21V6.8A3.8 3.8 0 0 1 7.3 3h9.4a3.8 3.8 0 0 1 3.8 3.8v7.9a3.8 3.8 0 0 1-3.8 3.8H6.6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 9.2h8M8 13h5.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M20 12a8 8 0 1 1-2.34-5.66M20 4.5v5h-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function BackIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M15 6 9 12l6 6"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function StudentIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M12 12.25a4.25 4.25 0 1 0 0-8.5 4.25 4.25 0 0 0 0 8.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M4.75 20.25c.8-3.35 3.35-5.25 7.25-5.25s6.45 1.9 7.25 5.25"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8.75 5.75 12 4l3.25 1.75L12 7.5 8.75 5.75Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function OwnerIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M4 10.75 12 4l8 6.75"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.25 10.25V20h11.5v-9.75"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.5 20v-5.5h5V20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function NavientyRail({
+  activeFilter,
+}: {
+  activeFilter: ConversationFilter
+}) {
+  const railItems = [
+    {
+      label: 'Inbox',
+      href: '/admin/whatsapp',
+      icon: <MessageIcon />,
+      active: activeFilter === 'all',
+    },
+    {
+      label: 'Students',
+      href: '/admin/whatsapp?filter=students',
+      icon: <StudentIcon />,
+      active: activeFilter === 'students',
+    },
+    {
+      label: 'Owners',
+      href: '/admin/whatsapp?filter=owners',
+      icon: <OwnerIcon />,
+      active: activeFilter === 'owners',
+    },
+  ]
+
+  return (
+    <aside className="hidden w-[72px] shrink-0 flex-col items-center justify-between border-r border-blue-100 bg-[#F7FAFF] py-4 lg:flex">
+      <div className="flex flex-col items-center gap-4">
+        <Link
+          href="/admin/whatsapp"
+          className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white p-2 shadow-lg shadow-blue-500/15 ring-1 ring-blue-100 transition hover:shadow-blue-500/25"
+          title="Navienty WhatsApp Inbox"
+        >
+          <img
+            src="https://i.ibb.co/7NVrNvxd/Untitled.png"
+            alt="Navienty logo"
+            className="h-full w-full object-contain"
+            draggable={false}
+          />
+        </Link>
+
+        <div className="mt-2 flex flex-col gap-2">
+          {railItems.map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={[
+                'flex h-11 w-11 items-center justify-center rounded-2xl transition',
+                item.active
+                  ? 'bg-[#0B55FF] text-white shadow-lg shadow-blue-500/20'
+                  : 'text-slate-500 hover:bg-blue-50 hover:text-[#0B55FF]',
+              ].join(' ')}
+              title={item.label}
+            >
+              {item.icon}
+              <span className="sr-only">{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+function ConversationSidebar({
+  conversations,
+  totalCount,
+  activeConversationId,
+  searchQuery,
+  activeFilter,
+  basePath,
+  className = '',
+}: {
+  conversations: WhatsAppConversationListItem[]
+  totalCount: number
+  activeConversationId: string
+  searchQuery: string
+  activeFilter: ConversationFilter
+  basePath: string
+  className?: string
+}) {
+  return (
+    <aside
+      className={[
+        'flex h-full w-full min-w-0 flex-col border-r border-blue-100 bg-white md:w-[390px] md:shrink-0 xl:w-[420px]',
+        className,
+      ].join(' ')}
+    >
+      <div className="border-b border-blue-100 bg-white px-4 pb-4 pt-5">
+        <div className="mb-4">
+          <h1 className="text-2xl font-black tracking-tight text-slate-950">
+            Navienty
+          </h1>
+        </div>
+
+        <form action={basePath} className="relative">
+          {activeFilter !== 'all' ? (
+            <input type="hidden" name="filter" value={activeFilter} />
+          ) : null}
+
+          <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            <SearchIcon />
+          </div>
+
+          <input
+            name="q"
+            defaultValue={searchQuery}
+            placeholder="Search or start a new chat"
+            className="h-12 w-full rounded-full border border-transparent bg-[#F3F7FF] pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:bg-white focus:ring-4 focus:ring-blue-50"
+          />
+        </form>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+        {conversations.length === 0 ? (
+          <div className="mx-4 mt-6 rounded-3xl border border-dashed border-blue-200 bg-blue-50/40 p-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#0B55FF] shadow-sm">
+              <MessageIcon />
+            </div>
+
+            <h2 className="font-bold text-slate-950">
+              No conversations found
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              جرّب تغيير البحث. أي رسائل جديدة من WhatsApp API هتظهر هنا.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {conversations.map((conversation) => {
+              const contact = conversation.contact
+              const lastMessage = conversation.last_message
+              const isActive = conversation.id === activeConversationId
+              const hasUnreadSignal = needsReply(conversation)
+
+              return (
+                <Link
+                  key={conversation.id}
+                  href={buildConversationHref({
+                    conversationId: conversation.id,
+                    searchQuery,
+                    activeFilter,
+                  })}
+                  className={[
+                    'group relative block px-4 py-3 transition',
+                    isActive
+                      ? 'bg-[#EAF2FF]'
+                      : 'bg-white hover:bg-[#F8FBFF]',
+                  ].join(' ')}
+                >
+                  <div className="min-w-0">
+                    <div className="mb-1 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div
+                          className="truncate text-[15px] font-black text-slate-950"
+                          dir="auto"
+                        >
+                          {getContactName(contact)}
+                        </div>
+
+                        <div
+                          className="mt-0.5 truncate text-xs font-semibold text-slate-500"
+                          dir="ltr"
+                        >
+                          {getContactPhone(contact)}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 text-xs font-semibold text-slate-400">
+                        {formatListTime(conversation.last_message_at)}
+                      </div>
+                    </div>
+
+                    <p
+                      className={[
+                        'truncate text-sm',
+                        hasUnreadSignal
+                          ? 'font-semibold text-slate-900'
+                          : 'text-slate-500',
+                      ].join(' ')}
+                      dir="auto"
+                    >
+                      {getLastMessagePreview(lastMessage)}
+                    </p>
+                  </div>
+
+                  {isActive ? (
+                    <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[#0B55FF]" />
+                  ) : null}
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 function MediaPreview({
   message,
   isOutbound,
@@ -311,14 +936,14 @@ function MediaPreview({
     return (
       <div
         className={[
-          'mb-2 rounded-xl border p-3 text-xs',
+          'mb-2 rounded-2xl border p-3 text-xs',
           isOutbound
-            ? 'border-white/20 bg-white/10 text-white'
-            : 'border-gray-200 bg-white text-gray-700',
+            ? 'border-blue-100 bg-white/60 text-slate-700'
+            : 'border-slate-200 bg-slate-50 text-slate-700',
         ].join(' ')}
       >
-        <div className="font-medium">{filename}</div>
-        <div className={isOutbound ? 'text-gray-300' : 'text-gray-500'}>
+        <div className="font-bold">{filename}</div>
+        <div className="mt-1 text-slate-500">
           Media received but preview URL is not available.
         </div>
       </div>
@@ -331,12 +956,12 @@ function MediaPreview({
         href={mediaUrl}
         target="_blank"
         rel="noreferrer"
-        className="mb-2 block overflow-hidden rounded-xl"
+        className="mb-2 block overflow-hidden rounded-2xl"
       >
         <img
           src={mediaUrl}
           alt={filename}
-          className="max-h-[360px] w-full max-w-[360px] rounded-xl object-cover"
+          className="max-h-[360px] w-full max-w-[360px] rounded-2xl object-cover shadow-sm"
         />
       </a>
     )
@@ -344,11 +969,11 @@ function MediaPreview({
 
   if (isVideoMessage(message)) {
     return (
-      <div className="mb-2 overflow-hidden rounded-xl">
+      <div className="mb-2 overflow-hidden rounded-2xl">
         <video
           src={mediaUrl}
           controls
-          className="max-h-[360px] w-full max-w-[420px] rounded-xl"
+          className="max-h-[360px] w-full max-w-[420px] rounded-2xl"
         />
       </div>
     )
@@ -368,18 +993,14 @@ function MediaPreview({
       target="_blank"
       rel="noreferrer"
       className={[
-        'mb-2 block rounded-xl border p-3 text-sm transition',
+        'mb-2 block rounded-2xl border p-3 text-sm transition',
         isOutbound
-          ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
-          : 'border-gray-200 bg-white text-gray-900 hover:bg-gray-50',
+          ? 'border-blue-100 bg-white/60 text-slate-900 hover:bg-white'
+          : 'border-slate-200 bg-slate-50 text-slate-900 hover:bg-white',
       ].join(' ')}
     >
-      <div className="font-semibold">Open file</div>
-      <div
-        className={
-          isOutbound ? 'text-xs text-gray-300' : 'text-xs text-gray-500'
-        }
-      >
+      <div className="font-bold">Open file</div>
+      <div className="mt-1 text-xs text-slate-500">
         {filename}
         {fileSize ? ` · ${fileSize}` : ''}
       </div>
@@ -387,14 +1008,176 @@ function MediaPreview({
   )
 }
 
+function ConversationContextCard({
+  conversation,
+}: {
+  conversation: WhatsAppConversation
+}) {
+  return (
+    <section className="rounded-[28px] border border-blue-100 bg-white/90 p-4 shadow-xl shadow-blue-950/5 backdrop-blur">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-[#0B55FF]">
+            Conversation Details
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span
+              className={[
+                'rounded-full px-3 py-1 text-xs font-bold ring-1',
+                getConversationTypeBadgeClass(conversation.conversation_type),
+              ].join(' ')}
+            >
+              {conversation.conversation_type}
+            </span>
+
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+              {conversation.status}
+            </span>
+          </div>
+        </div>
+
+        <div className="text-sm font-medium text-slate-500">
+          Last activity: {formatDate(conversation.last_message_at)}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function LinkedPropertyCard({
+  property,
+}: {
+  property: RelatedProperty
+}) {
+  return (
+    <section className="rounded-[28px] border border-blue-100 bg-[#EAF2FF]/90 p-4 shadow-xl shadow-blue-950/5 backdrop-blur">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-[#0B55FF]">
+            Linked Property
+          </div>
+
+          <h2 className="mt-2 truncate text-lg font-black text-slate-950">
+            {getPropertyTitle(property)}
+          </h2>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
+            <span className="rounded-full bg-white px-3 py-1">
+              {property.property_id}
+            </span>
+
+            <span className="rounded-full bg-white px-3 py-1">
+              {formatPrice(property.price_egp)}
+            </span>
+
+            <span className="rounded-full bg-white px-3 py-1">
+              {property.availability_status || 'unknown'}
+            </span>
+
+            <span className="rounded-full bg-white px-3 py-1">
+              {property.admin_status || 'unknown'}
+            </span>
+          </div>
+        </div>
+
+        <Link
+          href={`/properties/${property.property_id}`}
+          className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-[#0B55FF] px-5 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition hover:bg-[#0048DB]"
+        >
+          Open property
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+function MessageBubble({ message }: { message: WhatsAppMessage }) {
+  const isOutbound = message.direction === 'outbound'
+
+  return (
+    <div
+      className={[
+        'flex w-full',
+        isOutbound ? 'justify-end' : 'justify-start',
+      ].join(' ')}
+    >
+      <div
+        className={[
+          'max-w-[85%] rounded-3xl border px-3.5 py-2.5 text-[15px] leading-7 shadow-sm md:max-w-[75%]',
+          isOutbound
+            ? 'rounded-br-md border-blue-100 bg-[#DCEBFF] text-slate-950'
+            : 'rounded-bl-md border-white bg-white text-slate-950 shadow-blue-950/5',
+        ].join(' ')}
+      >
+        <MediaPreview message={message} isOutbound={isOutbound} />
+
+        {message.body ? (
+          <div className="whitespace-pre-wrap break-words" dir="auto">
+            {message.body}
+          </div>
+        ) : !message.media_url ? (
+          <div className="whitespace-pre-wrap break-words" dir="auto">
+            [{message.message_type}]
+          </div>
+        ) : null}
+
+        <div
+          className={[
+            'mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] font-semibold',
+            isOutbound ? 'text-[#2C61B8]' : 'text-slate-400',
+          ].join(' ')}
+        >
+          <span>{formatMessageTime(message.created_at)}</span>
+
+          {message.status ? (
+            <>
+              <span>·</span>
+              <span>{message.status}</span>
+            </>
+          ) : null}
+
+          {message.media_mime_type ? (
+            <>
+              <span>·</span>
+              <span>{message.media_mime_type}</span>
+            </>
+          ) : null}
+        </div>
+
+        {message.error_message ? (
+          <div className="mt-2 rounded-2xl bg-red-50 p-2 text-xs font-semibold leading-5 text-red-700 ring-1 ring-red-100">
+            {message.error_message}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export default async function WhatsAppConversationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ conversationId: string }>
+  searchParams?: Promise<SearchParams>
 }) {
   const { conversationId } = await params
-  const { conversation, messages, existingBookingRequestId } =
-    await getConversation(conversationId)
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const searchQuery = getSingleSearchParam(resolvedSearchParams.q)
+  const activeFilter = getActiveFilter(resolvedSearchParams.filter)
+
+  const [{ conversation, messages, existingBookingRequestId }, conversations] =
+    await Promise.all([
+      getConversation(conversationId),
+      getWhatsAppConversations(),
+    ])
+
+  const filteredConversations = filterConversations({
+    conversations,
+    searchQuery,
+    activeFilter,
+  })
 
   const contact = conversation.contact
   const relatedProperty = conversation.related_property
@@ -403,183 +1186,110 @@ export default async function WhatsAppConversationPage({
     contact?.contact_type === 'owner'
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <Link
-            href="/admin/whatsapp"
-            className="text-sm text-gray-500 hover:text-black"
-          >
-            ← Back to WhatsApp Inbox
-          </Link>
+    <main className="min-h-screen bg-[#F3F7FF] p-0 text-slate-950 md:p-4">
+      <div className="mx-auto flex h-[100dvh] max-w-[1500px] overflow-hidden bg-white shadow-2xl shadow-blue-950/10 ring-1 ring-blue-100 md:h-[calc(100vh-2rem)] md:rounded-[30px]">
+        <NavientyRail activeFilter={activeFilter} />
 
-          <h1 className="mt-3 text-2xl font-bold">
-            {contact?.display_name || contact?.phone || 'Unknown contact'}
-          </h1>
+        <ConversationSidebar
+          conversations={filteredConversations}
+          totalCount={conversations.length}
+          activeConversationId={conversation.id}
+          searchQuery={searchQuery}
+          activeFilter={activeFilter}
+          basePath={`/admin/whatsapp/${conversation.id}`}
+          className="hidden md:flex"
+        />
 
-          <p className="mt-1 text-sm text-gray-500">
-            {contact?.phone || '—'} · {contact?.contact_type || 'unknown'} ·{' '}
-            {conversation.status}
-          </p>
-        </div>
-      </div>
-
-      <section className="rounded-2xl border bg-white p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="font-semibold">Conversation Details</h2>
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span
-                className={[
-                  'rounded-full px-3 py-1 text-xs font-medium',
-                  getConversationTypeBadgeClass(conversation.conversation_type),
-                ].join(' ')}
+        <section className="flex min-w-0 flex-1 flex-col bg-[#F8FBFF]">
+          <header className="flex min-h-[76px] items-center justify-between gap-3 border-b border-blue-100 bg-white/95 px-3 py-3 backdrop-blur md:px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <Link
+                href="/admin/whatsapp"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[#0B55FF] transition hover:bg-blue-100 md:hidden"
+                title="Back to inbox"
               >
-                {conversation.conversation_type}
-              </span>
+                <BackIcon />
+              </Link>
 
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                {conversation.status}
-              </span>
-            </div>
-          </div>
+              <div className="min-w-0">
+                <h1
+                  className="truncate text-base font-black text-slate-950 md:text-lg"
+                  dir="auto"
+                >
+                  {getContactName(contact)}
+                </h1>
 
-          <div className="text-sm text-gray-500">
-            Last activity: {formatDate(conversation.last_message_at)}
-          </div>
-        </div>
-      </section>
-
-      <MarkAsOwnerButton
-        conversationId={conversation.id}
-        isOwnerConversation={isOwnerConversation}
-      />
-
-      {relatedProperty ? (
-        <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
-                Linked Property
-              </div>
-
-              <h2 className="mt-2 text-lg font-bold text-gray-950">
-                {getPropertyTitle(relatedProperty)}
-              </h2>
-
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-                <span className="rounded-full bg-white px-3 py-1">
-                  {relatedProperty.property_id}
-                </span>
-
-                <span className="rounded-full bg-white px-3 py-1">
-                  {formatPrice(relatedProperty.price_egp)}
-                </span>
-
-                <span className="rounded-full bg-white px-3 py-1">
-                  {relatedProperty.availability_status || 'unknown'}
-                </span>
-
-                <span className="rounded-full bg-white px-3 py-1">
-                  {relatedProperty.admin_status || 'unknown'}
-                </span>
+                <p
+                  className="mt-0.5 truncate text-xs font-semibold text-slate-500 md:text-sm"
+                  dir="ltr"
+                >
+                  {getContactPhone(contact)}
+                </p>
               </div>
             </div>
 
             <Link
-              href={`/properties/${relatedProperty.property_id}`}
-              className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2 text-sm font-medium text-white"
+              href={`/admin/whatsapp/${conversation.id}`}
+              className="hidden h-10 items-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-[#0B55FF] transition hover:bg-blue-100 sm:inline-flex"
             >
-              Open property
+              <RefreshIcon />
+              Refresh
             </Link>
-          </div>
-        </section>
-      ) : (
-        <section className="rounded-2xl border border-dashed bg-white p-4">
-          <div className="text-sm text-gray-500">
-            No property linked to this conversation yet.
-          </div>
-        </section>
-      )}
+          </header>
 
-      {relatedProperty ? (
-        <CreateBookingRequestButton
-          conversationId={conversation.id}
-          existingBookingRequestId={existingBookingRequestId}
-        />
-      ) : null}
+          <div
+            className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-8 md:py-6"
+            style={navientyChatPattern}
+          >
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+              <ConversationContextCard conversation={conversation} />
 
-      <section className="rounded-2xl border bg-white p-4">
-        <div className="mb-4 border-b pb-3">
-          <h2 className="font-semibold">Messages</h2>
-          <p className="text-sm text-gray-500">
-            Last activity: {formatDate(conversation.last_message_at)}
-          </p>
-        </div>
+              <MarkAsOwnerButton
+                conversationId={conversation.id}
+                isOwnerConversation={isOwnerConversation}
+              />
 
-        <div className="flex flex-col gap-3">
-          {messages.length === 0 ? (
-            <div className="rounded-xl bg-gray-50 p-6 text-center text-sm text-gray-500">
-              No messages in this conversation yet.
-            </div>
-          ) : (
-            messages.map((message) => {
-              const isOutbound = message.direction === 'outbound'
+              {relatedProperty ? (
+                <LinkedPropertyCard property={relatedProperty} />
+              ) : (
+                <section className="rounded-[28px] border border-dashed border-blue-200 bg-white/90 p-4 text-sm font-medium text-slate-500 shadow-sm backdrop-blur">
+                  No property linked to this conversation yet.
+                </section>
+              )}
 
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    isOutbound ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm ${
-                      isOutbound
-                        ? 'bg-black text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}
-                  >
-                    <MediaPreview message={message} isOutbound={isOutbound} />
+              {relatedProperty ? (
+                <CreateBookingRequestButton
+                  conversationId={conversation.id}
+                  existingBookingRequestId={existingBookingRequestId}
+                />
+              ) : null}
 
-                    {message.body ? (
-                      <div className="whitespace-pre-wrap">{message.body}</div>
-                    ) : !message.media_url ? (
-                      <div className="whitespace-pre-wrap">
-                        [{message.message_type}]
-                      </div>
-                    ) : null}
+              <div className="my-1 flex justify-center">
+                <span className="rounded-full bg-white/90 px-4 py-1.5 text-xs font-black text-slate-500 shadow-sm ring-1 ring-blue-100 backdrop-blur">
+                  Messages · {messages.length}
+                </span>
+              </div>
 
-                    <div
-                      className={`mt-2 text-[11px] ${
-                        isOutbound ? 'text-gray-300' : 'text-gray-500'
-                      }`}
-                    >
-                      {formatDate(message.created_at)}
-                      {message.status ? ` · ${message.status}` : ''}
-                      {message.media_mime_type
-                        ? ` · ${message.media_mime_type}`
-                        : ''}
-                    </div>
-
-                    {message.error_message ? (
-                      <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
-                        {message.error_message}
-                      </div>
-                    ) : null}
+              <div className="flex flex-col gap-2.5 pb-2">
+                {messages.length === 0 ? (
+                  <div className="rounded-[28px] border border-dashed border-blue-200 bg-white/90 p-8 text-center text-sm font-medium text-slate-500 shadow-sm backdrop-blur">
+                    No messages in this conversation yet.
                   </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </section>
+                ) : (
+                  messages.map((message) => (
+                    <MessageBubble key={message.id} message={message} />
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
 
-      <ReplyBox
-        conversationId={conversation.id}
-        conversationType={conversation.conversation_type}
-      />
+          <ReplyBox
+            conversationId={conversation.id}
+            conversationType={conversation.conversation_type}
+          />
+        </section>
+      </div>
     </main>
   )
 }

@@ -30,24 +30,11 @@ type WhatsAppConversation = {
   messages: WhatsAppMessage[]
 }
 
-type WhatsAppClickIntent = {
-  id: string
-  property_id: string | null
-  property_public_id: string | null
-  property_title: string | null
-  requested_option_code: string | null
-  room_type_label: string | null
-  source: string
-  customer_name: string | null
-  customer_phone: string | null
-  customer_whatsapp: string | null
-  whatsapp_target_number: string
-  generated_message: string
-  status: 'clicked' | 'sent' | 'converted' | 'abandoned'
-  linked_conversation_id: string | null
-  linked_booking_request_id: string | null
-  created_at: string
-  updated_at: string
+type ConversationFilter = 'all' | 'unread' | 'open' | 'owners' | 'students'
+
+type SearchParams = {
+  q?: string | string[]
+  filter?: string | string[]
 }
 
 function getSupabaseAdminClient() {
@@ -64,43 +51,6 @@ function getSupabaseAdminClient() {
       autoRefreshToken: false,
     },
   })
-}
-
-async function getRecentWhatsAppClickIntents() {
-  const supabase = getSupabaseAdminClient()
-
-  const { data, error } = await supabase
-    .from('whatsapp_click_intents')
-    .select(
-      `
-      id,
-      property_id,
-      property_public_id,
-      property_title,
-      requested_option_code,
-      room_type_label,
-      source,
-      customer_name,
-      customer_phone,
-      customer_whatsapp,
-      whatsapp_target_number,
-      generated_message,
-      status,
-      linked_conversation_id,
-      linked_booking_request_id,
-      created_at,
-      updated_at
-    `
-    )
-    .order('created_at', { ascending: false })
-    .limit(20)
-
-  if (error) {
-    console.error('WHATSAPP_CLICK_INTENTS_FETCH_ERROR:', error)
-    throw new Error('Failed to fetch WhatsApp click intents')
-  }
-
-  return (data ?? []) as WhatsAppClickIntent[]
 }
 
 async function getWhatsAppConversations() {
@@ -172,266 +122,538 @@ async function getWhatsAppConversations() {
   return conversations
 }
 
-function formatDate(value: string | null) {
+function getSingleSearchParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return value ?? ''
+}
+
+function getActiveFilter(
+  value: string | string[] | undefined
+): ConversationFilter {
+  const rawValue = getSingleSearchParam(value)
+
+  if (
+    rawValue === 'unread' ||
+    rawValue === 'open' ||
+    rawValue === 'owners' ||
+    rawValue === 'students'
+  ) {
+    return rawValue
+  }
+
+  return 'all'
+}
+
+function formatListTime(value: string | null) {
   if (!value) return '—'
 
-  return new Intl.DateTimeFormat('ar-EG', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+  const date = new Date(value)
+  const now = new Date()
+
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate()
+
+  if (sameDay) {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date)
+  }
+
+  if (isYesterday) return 'Yesterday'
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date)
 }
 
-function getStatusBadgeClass(status: string) {
-  if (status === 'clicked') {
-    return 'bg-blue-50 text-blue-700'
-  }
-
-  if (status === 'sent') {
-    return 'bg-green-50 text-green-700'
-  }
-
-  if (status === 'converted') {
-    return 'bg-black text-white'
-  }
-
-  if (status === 'abandoned') {
-    return 'bg-red-50 text-red-700'
-  }
-
-  return 'bg-gray-100 text-gray-700'
+function getContactName(contact: WhatsAppContact | null) {
+  return contact?.display_name || contact?.phone || 'Unknown contact'
 }
 
-export default async function WhatsAppInboxPage() {
-  const [clickIntents, conversations] = await Promise.all([
-    getRecentWhatsAppClickIntents(),
-    getWhatsAppConversations(),
-  ])
+function getContactPhone(contact: WhatsAppContact | null) {
+  return contact?.phone || null
+}
+
+function shouldShowPhoneUnderName(contact: WhatsAppContact | null) {
+  return Boolean(contact?.display_name && contact?.phone)
+}
+
+function getLastMessagePreview(message: WhatsAppMessage | null) {
+  if (!message) return 'No messages yet'
+
+  if (message.body) {
+    return message.direction === 'outbound'
+      ? `You: ${message.body}`
+      : message.body
+  }
+
+  return `[${message.message_type}]`
+}
+
+function needsReply(conversation: WhatsAppConversation) {
+  return conversation.last_message?.direction === 'inbound'
+}
+
+function conversationMatchesSearch(
+  conversation: WhatsAppConversation,
+  searchQuery: string
+) {
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  if (!normalizedQuery) return true
+
+  const contact = conversation.contact
+  const lastMessage = conversation.last_message
+
+  const searchableText = [
+    contact?.display_name,
+    contact?.phone,
+    contact?.contact_type,
+    conversation.status,
+    conversation.conversation_type,
+    lastMessage?.body,
+    lastMessage?.status,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return searchableText.includes(normalizedQuery)
+}
+
+function filterConversations({
+  conversations,
+  searchQuery,
+  activeFilter,
+}: {
+  conversations: WhatsAppConversation[]
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
+  return conversations.filter((conversation) => {
+    if (!conversationMatchesSearch(conversation, searchQuery)) {
+      return false
+    }
+
+    const contactType = conversation.contact?.contact_type
+    const conversationType = conversation.conversation_type
+
+    if (activeFilter === 'unread') {
+      return needsReply(conversation)
+    }
+
+    if (activeFilter === 'open') {
+      return conversation.status === 'open'
+    }
+
+    if (activeFilter === 'owners') {
+      return contactType === 'owner' || conversationType === 'owner_onboarding'
+    }
+
+    if (activeFilter === 'students') {
+      return contactType === 'student' || conversationType === 'student_booking'
+    }
+
+    return true
+  })
+}
+
+function buildConversationHref({
+  conversationId,
+  searchQuery,
+  activeFilter,
+}: {
+  conversationId: string
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
+  const params = new URLSearchParams()
+
+  if (activeFilter !== 'all') {
+    params.set('filter', activeFilter)
+  }
+
+  if (searchQuery.trim()) {
+    params.set('q', searchQuery.trim())
+  }
+
+  const queryString = params.toString()
+
+  return queryString
+    ? `/admin/whatsapp/${conversationId}?${queryString}`
+    : `/admin/whatsapp/${conversationId}`
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="m21 21-4.35-4.35M10.8 18.1a7.3 7.3 0 1 1 0-14.6 7.3 7.3 0 0 1 0 14.6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function MessageIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M6.6 18.5 3.5 21V6.8A3.8 3.8 0 0 1 7.3 3h9.4a3.8 3.8 0 0 1 3.8 3.8v7.9a3.8 3.8 0 0 1-3.8 3.8H6.6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 9.2h8M8 13h5.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function StudentIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M12 12.25a4.25 4.25 0 1 0 0-8.5 4.25 4.25 0 0 0 0 8.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M4.75 20.25c.8-3.35 3.35-5.25 7.25-5.25s6.45 1.9 7.25 5.25"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8.75 5.75 12 4l3.25 1.75L12 7.5 8.75 5.75Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function OwnerIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M4 10.75 12 4l8 6.75"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.25 10.25V20h11.5v-9.75"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.5 20v-5.5h5V20"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function NavientyRail({
+  activeFilter,
+}: {
+  activeFilter: ConversationFilter
+}) {
+  const railItems = [
+    {
+      label: 'Inbox',
+      href: '/admin/whatsapp',
+      icon: <MessageIcon />,
+      active: activeFilter === 'all',
+    },
+    {
+      label: 'Students',
+      href: '/admin/whatsapp?filter=students',
+      icon: <StudentIcon />,
+      active: activeFilter === 'students',
+    },
+    {
+      label: 'Owners',
+      href: '/admin/whatsapp?filter=owners',
+      icon: <OwnerIcon />,
+      active: activeFilter === 'owners',
+    },
+  ]
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">WhatsApp Inbox</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          محادثات واتساب الخاصة بـ Navienty
-        </p>
+    <aside className="hidden w-[72px] shrink-0 flex-col items-center justify-between border-r border-blue-100 bg-[#F7FAFF] py-4 lg:flex">
+      <div className="flex flex-col items-center gap-4">
+        <Link
+          href="/admin/whatsapp"
+          className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white p-2 shadow-lg shadow-blue-500/15 ring-1 ring-blue-100 transition hover:shadow-blue-500/25"
+          title="Navienty WhatsApp Inbox"
+        >
+          <img
+            src="https://i.ibb.co/7NVrNvxd/Untitled.png"
+            alt="Navienty logo"
+            className="h-full w-full object-contain"
+            draggable={false}
+          />
+        </Link>
+
+        <div className="mt-2 flex flex-col gap-2">
+          {railItems.map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={[
+                'flex h-11 w-11 items-center justify-center rounded-2xl transition',
+                item.active
+                  ? 'bg-[#0B55FF] text-white shadow-lg shadow-blue-500/20'
+                  : 'text-slate-500 hover:bg-blue-50 hover:text-[#0B55FF]',
+              ].join(' ')}
+              title={item.label}
+            >
+              {item.icon}
+              <span className="sr-only">{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+function ConversationSidebar({
+  conversations,
+  totalCount,
+  activeConversationId,
+  searchQuery,
+  activeFilter,
+  basePath,
+  className = '',
+}: {
+  conversations: WhatsAppConversation[]
+  totalCount: number
+  activeConversationId?: string | null
+  searchQuery: string
+  activeFilter: ConversationFilter
+  basePath: string
+  className?: string
+}) {
+  return (
+    <aside
+      className={[
+        'flex h-full w-full min-w-0 flex-col border-r border-blue-100 bg-white md:w-[390px] md:shrink-0 xl:w-[420px]',
+        className,
+      ].join(' ')}
+    >
+      <div className="border-b border-blue-100 bg-white px-4 pb-4 pt-5">
+        <div className="mb-4">
+          <h1 className="text-2xl font-black tracking-tight text-slate-950">
+            Navienty WhatsApp
+          </h1>
+
+          <p className="mt-1 text-xs font-medium text-slate-500">
+            {totalCount} conversations · Admin inbox
+          </p>
+        </div>
+
+        <form action={basePath} className="relative">
+          {activeFilter !== 'all' ? (
+            <input type="hidden" name="filter" value={activeFilter} />
+          ) : null}
+
+          <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            <SearchIcon />
+          </div>
+
+          <input
+            name="q"
+            defaultValue={searchQuery}
+            placeholder="Search or start a new chat"
+            className="h-12 w-full rounded-full border border-transparent bg-[#F3F7FF] pl-12 pr-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:bg-white focus:ring-4 focus:ring-blue-50"
+          />
+        </form>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border bg-white">
-        <div className="border-b bg-gray-50 p-4">
-          <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="font-semibold">Recent WhatsApp Clicks</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                الطلاب أو الزوار الذين ضغطوا زر واتساب حتى لو لم يرسلوا الرسالة.
-              </p>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+        {conversations.length === 0 ? (
+          <div className="mx-4 mt-6 rounded-3xl border border-dashed border-blue-200 bg-blue-50/40 p-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#0B55FF] shadow-sm">
+              <MessageIcon />
             </div>
 
-            <div className="text-xs font-medium text-gray-500">
-              {clickIntents.length} recent clicks
-            </div>
+            <h2 className="font-bold text-slate-950">
+              No conversations found
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              جرّب تغيير البحث. أي رسائل جديدة من WhatsApp API هتظهر هنا.
+            </p>
           </div>
-        </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {conversations.map((conversation) => {
+              const contact = conversation.contact
+              const lastMessage = conversation.last_message
+              const isActive = conversation.id === activeConversationId
+              const hasUnreadSignal = needsReply(conversation)
+              const phone = getContactPhone(contact)
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-white text-left">
-              <tr>
-                <th className="whitespace-nowrap p-4 font-semibold">
-                  Property
-                </th>
-                <th className="whitespace-nowrap p-4 font-semibold">
-                  Room type
-                </th>
-                <th className="whitespace-nowrap p-4 font-semibold">
-                  Source
-                </th>
-                <th className="whitespace-nowrap p-4 font-semibold">
-                  Status
-                </th>
-                <th className="whitespace-nowrap p-4 font-semibold">
-                  Clicked at
-                </th>
-                <th className="whitespace-nowrap p-4 font-semibold">
-                  Action
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {clickIntents.length === 0 ? (
-                <tr>
-                  <td className="p-6 text-center text-gray-500" colSpan={6}>
-                    No WhatsApp clicks yet.
-                  </td>
-                </tr>
-              ) : (
-                clickIntents.map((intent) => {
-                  return (
-                    <tr key={intent.id} className="border-t">
-                      <td className="min-w-[260px] p-4">
-                        <div className="font-medium">
-                          {intent.property_title || 'Unknown property'}
-                        </div>
-
-                        <div className="mt-1 text-xs text-gray-500">
-                          {intent.property_public_id || '—'}
-                        </div>
-                      </td>
-
-                      <td className="p-4">
-                        <div className="text-sm">
-                          {intent.room_type_label || '—'}
-                        </div>
-
-                        <div className="mt-1 text-xs text-gray-500">
-                          {intent.requested_option_code || '—'}
-                        </div>
-                      </td>
-
-                      <td className="p-4">
-                        <span className="rounded-full bg-gray-100 px-3 py-1 text-xs">
-                          {intent.source}
-                        </span>
-                      </td>
-
-                      <td className="p-4">
-                        <span
-                          className={[
-                            'rounded-full px-3 py-1 text-xs font-medium',
-                            getStatusBadgeClass(intent.status),
-                          ].join(' ')}
+              return (
+                <Link
+                  key={conversation.id}
+                  href={buildConversationHref({
+                    conversationId: conversation.id,
+                    searchQuery,
+                    activeFilter,
+                  })}
+                  className={[
+                    'group relative block px-4 py-3 transition',
+                    isActive
+                      ? 'bg-[#EAF2FF]'
+                      : 'bg-white hover:bg-[#F8FBFF]',
+                  ].join(' ')}
+                >
+                  <div className="min-w-0">
+                    <div className="mb-1 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div
+                          className="truncate text-[15px] font-bold text-slate-950"
+                          dir="auto"
                         >
-                          {intent.status}
-                        </span>
-                      </td>
-
-                      <td className="whitespace-nowrap p-4 text-gray-600">
-                        {formatDate(intent.created_at)}
-                      </td>
-
-                      <td className="p-4">
-                        <div className="flex flex-wrap gap-2">
-                          {intent.property_public_id ? (
-                            <Link
-                              href={`/properties/${intent.property_public_id}`}
-                              className="rounded-lg border px-3 py-2 text-xs font-medium hover:bg-gray-50"
-                            >
-                              Open property
-                            </Link>
-                          ) : null}
-
-                          {intent.linked_conversation_id ? (
-                            <Link
-                              href={`/admin/whatsapp/${intent.linked_conversation_id}`}
-                              className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white"
-                            >
-                              Open chat
-                            </Link>
-                          ) : null}
+                          {getContactName(contact)}
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
-      <section className="overflow-hidden rounded-2xl border bg-white">
-        <div className="border-b bg-gray-50 p-4">
-          <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="font-semibold">Conversations</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                الرسائل الفعلية التي وصلت من واتساب أو تم إرسالها من الأدمن.
-              </p>
-            </div>
+                        {shouldShowPhoneUnderName(contact) ? (
+                          <div
+                            className="mt-0.5 truncate text-xs font-medium text-slate-500"
+                            dir="ltr"
+                          >
+                            {phone}
+                          </div>
+                        ) : null}
+                      </div>
 
-            <div className="text-xs font-medium text-gray-500">
-              {conversations.length} conversations
-            </div>
+                      <div className="shrink-0 text-xs font-semibold text-slate-400">
+                        {formatListTime(conversation.last_message_at)}
+                      </div>
+                    </div>
+
+                    <p
+                      className={[
+                        'truncate text-sm',
+                        hasUnreadSignal
+                          ? 'font-semibold text-slate-900'
+                          : 'text-slate-500',
+                      ].join(' ')}
+                      dir="auto"
+                    >
+                      {getLastMessagePreview(lastMessage)}
+                    </p>
+                  </div>
+
+                  {isActive ? (
+                    <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[#0B55FF]" />
+                  ) : null}
+                </Link>
+              )
+            })}
           </div>
-        </div>
+        )}
+      </div>
+    </aside>
+  )
+}
 
-        <table className="w-full border-collapse text-sm">
-          <thead className="bg-white text-left">
-            <tr>
-              <th className="p-4 font-semibold">Contact</th>
-              <th className="p-4 font-semibold">Type</th>
-              <th className="p-4 font-semibold">Last message</th>
-              <th className="p-4 font-semibold">Status</th>
-              <th className="p-4 font-semibold">Last activity</th>
-              <th className="p-4 font-semibold">Action</th>
-            </tr>
-          </thead>
+function EmptyRightPanel() {
+  return (
+    <section className="hidden min-w-0 flex-1 overflow-hidden bg-white md:flex">
+      <div className="flex h-full w-full items-center justify-center p-6 md:p-10">
+        <img
+          src="https://i.ibb.co/7NVrNvxd/Untitled.png"
+          alt="Navienty logo"
+          className="h-full max-h-[92%] w-full max-w-[92%] object-contain select-none"
+          draggable={false}
+        />
+      </div>
+    </section>
+  )
+}
 
-          <tbody>
-            {conversations.length === 0 ? (
-              <tr>
-                <td className="p-6 text-center text-gray-500" colSpan={6}>
-                  No WhatsApp conversations yet.
-                </td>
-              </tr>
-            ) : (
-              conversations.map((conversation) => {
-                const contact = conversation.contact
-                const lastMessage = conversation.last_message
+export default async function WhatsAppInboxPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const searchQuery = getSingleSearchParam(resolvedSearchParams.q)
+  const activeFilter = getActiveFilter(resolvedSearchParams.filter)
 
-                return (
-                  <tr key={conversation.id} className="border-t">
-                    <td className="p-4">
-                      <div className="font-medium">
-                        {contact?.display_name || contact?.phone || 'Unknown'}
-                      </div>
+  const conversations = await getWhatsAppConversations()
 
-                      <div className="text-xs text-gray-500">
-                        {contact?.phone || '—'}
-                      </div>
-                    </td>
+  const filteredConversations = filterConversations({
+    conversations,
+    searchQuery,
+    activeFilter,
+  })
 
-                    <td className="p-4">
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs">
-                        {contact?.contact_type || 'unknown'}
-                      </span>
-                    </td>
+  return (
+    <main className="min-h-screen bg-[#F3F7FF] p-0 text-slate-950 md:p-4">
+      <div className="mx-auto flex h-[100dvh] max-w-[1500px] overflow-hidden bg-white shadow-2xl shadow-blue-950/10 ring-1 ring-blue-100 md:h-[calc(100vh-2rem)] md:rounded-[30px]">
+        <NavientyRail activeFilter={activeFilter} />
 
-                    <td className="max-w-xs p-4">
-                      <div className="truncate">
-                        {lastMessage?.body || '—'}
-                      </div>
+        <ConversationSidebar
+          conversations={filteredConversations}
+          totalCount={conversations.length}
+          activeConversationId={null}
+          searchQuery={searchQuery}
+          activeFilter={activeFilter}
+          basePath="/admin/whatsapp"
+        />
 
-                      <div className="text-xs text-gray-500">
-                        {lastMessage?.direction || '—'}
-                      </div>
-                    </td>
-
-                    <td className="p-4">
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs">
-                        {conversation.status}
-                      </span>
-                    </td>
-
-                    <td className="p-4 text-gray-600">
-                      {formatDate(conversation.last_message_at)}
-                    </td>
-
-                    <td className="p-4">
-                      <Link
-                        href={`/admin/whatsapp/${conversation.id}`}
-                        className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </section>
+        <EmptyRightPanel />
+      </div>
     </main>
   )
 }
