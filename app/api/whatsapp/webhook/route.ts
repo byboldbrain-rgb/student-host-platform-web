@@ -121,10 +121,12 @@ async function markLatestClickIntentAsSent({
   linkedProperty: LinkedProperty
   conversationId: string
 }) {
+  const now = new Date().toISOString()
+
   const { data: latestIntentData, error: lookupError } = await supabase
     .from('whatsapp_click_intents')
-    .select('id')
-    .eq('property_id', linkedProperty.id)
+    .select('id, property_id, property_public_id, status, created_at')
+    .eq('property_public_id', linkedProperty.property_id)
     .eq('status', 'clicked')
     .is('linked_conversation_id', null)
     .order('created_at', { ascending: false })
@@ -136,24 +138,33 @@ async function markLatestClickIntentAsSent({
     return
   }
 
-  const latestIntent = latestIntentData as { id: string } | null
+  const latestIntent = latestIntentData as {
+    id: string
+    property_id: string | null
+    property_public_id: string | null
+    status: string
+    created_at: string
+  } | null
 
   if (!latestIntent?.id) {
     console.log('WHATSAPP_CLICK_INTENT_NO_MATCH:', {
+      propertyId: linkedProperty.id,
       propertyPublicId: linkedProperty.property_id,
       conversationId,
     })
     return
   }
 
-  const { error: updateError } = await supabase
+  const { data: updatedIntent, error: updateError } = await supabase
     .from('whatsapp_click_intents')
     .update({
       status: 'sent',
       linked_conversation_id: conversationId,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .eq('id', latestIntent.id)
+    .select('id, status, linked_conversation_id')
+    .single()
 
   if (updateError) {
     console.error('WHATSAPP_CLICK_INTENT_UPDATE_ERROR:', updateError)
@@ -162,6 +173,7 @@ async function markLatestClickIntentAsSent({
 
   console.log('WHATSAPP_CLICK_INTENT_LINKED:', {
     clickIntentId: latestIntent.id,
+    updatedIntent,
     conversationId,
     propertyPublicId: linkedProperty.property_id,
   })
