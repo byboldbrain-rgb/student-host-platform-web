@@ -71,6 +71,63 @@ function normalizeRelation<T>(relation: T | T[] | null): T | null {
   return relation
 }
 
+async function getExistingBookingRequestId({
+  supabase,
+  conversationId,
+  propertyId,
+  contactPhone,
+}: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  conversationId: string
+  propertyId: string | null
+  contactPhone: string | null
+}) {
+  const { data: linkedClickIntent, error: linkedClickIntentError } =
+    await supabase
+      .from('whatsapp_click_intents')
+      .select('linked_booking_request_id')
+      .eq('linked_conversation_id', conversationId)
+      .not('linked_booking_request_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+  if (linkedClickIntentError) {
+    console.error(
+      'WHATSAPP_EXISTING_BOOKING_CLICK_INTENT_ERROR:',
+      linkedClickIntentError
+    )
+  }
+
+  if (linkedClickIntent?.linked_booking_request_id) {
+    return linkedClickIntent.linked_booking_request_id as string
+  }
+
+  if (!propertyId || !contactPhone) {
+    return null
+  }
+
+  const { data: existingBookingRequest, error: existingBookingRequestError } =
+    await supabase
+      .from('property_booking_requests')
+      .select('id')
+      .eq('property_id', propertyId)
+      .eq('customer_whatsapp', contactPhone)
+      .in('status', ['new', 'contacted', 'in_progress', 'converted'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+  if (existingBookingRequestError) {
+    console.error(
+      'WHATSAPP_EXISTING_BOOKING_REQUEST_ERROR:',
+      existingBookingRequestError
+    )
+  }
+
+  return existingBookingRequest?.id ?? null
+}
+
 async function getConversation(conversationId: string) {
   const supabase = getSupabaseAdminClient()
 
@@ -136,6 +193,9 @@ async function getConversation(conversationId: string) {
     throw new Error('Failed to fetch WhatsApp messages')
   }
 
+  const contact = normalizeRelation(conversationData.contact)
+  const relatedProperty = normalizeRelation(conversationData.related_property)
+
   const conversation: WhatsAppConversation = {
     id: conversationData.id,
     status: conversationData.status,
@@ -143,13 +203,21 @@ async function getConversation(conversationId: string) {
     related_property_id: conversationData.related_property_id,
     last_message_at: conversationData.last_message_at,
     created_at: conversationData.created_at,
-    contact: normalizeRelation(conversationData.contact),
-    related_property: normalizeRelation(conversationData.related_property),
+    contact,
+    related_property: relatedProperty,
   }
+
+  const existingBookingRequestId = await getExistingBookingRequestId({
+    supabase,
+    conversationId: conversation.id,
+    propertyId: conversation.related_property_id,
+    contactPhone: contact?.phone ?? null,
+  })
 
   return {
     conversation,
     messages: (messagesData ?? []) as WhatsAppMessage[],
+    existingBookingRequestId,
   }
 }
 
@@ -192,7 +260,8 @@ export default async function WhatsAppConversationPage({
   params: Promise<{ conversationId: string }>
 }) {
   const { conversationId } = await params
-  const { conversation, messages } = await getConversation(conversationId)
+  const { conversation, messages, existingBookingRequestId } =
+    await getConversation(conversationId)
 
   const contact = conversation.contact
   const relatedProperty = conversation.related_property
@@ -294,7 +363,10 @@ export default async function WhatsAppConversationPage({
       )}
 
       {relatedProperty ? (
-        <CreateBookingRequestButton conversationId={conversation.id} />
+        <CreateBookingRequestButton
+          conversationId={conversation.id}
+          existingBookingRequestId={existingBookingRequestId}
+        />
       ) : null}
 
       <section className="rounded-2xl border bg-white p-4">
