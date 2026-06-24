@@ -111,7 +111,10 @@ export async function sendWhatsAppReplyAction(
       .single()
 
     if (conversationError || !conversation) {
-      console.error('WHATSAPP_REPLY_CONVERSATION_FETCH_ERROR:', conversationError)
+      console.error(
+        'WHATSAPP_REPLY_CONVERSATION_FETCH_ERROR:',
+        conversationError
+      )
 
       return {
         ok: false,
@@ -350,7 +353,8 @@ export async function createBookingRequestFromWhatsAppAction(
     if (existingBookingRequest?.id) {
       return {
         ok: false,
-        error: 'There is already an active booking request for this student and property',
+        error:
+          'There is already an active booking request for this student and property',
         bookingRequestId: existingBookingRequest.id,
       }
     }
@@ -428,6 +432,8 @@ export async function createBookingRequestFromWhatsAppAction(
         requested_option_code: requestedOptionCode,
         request_source: 'student',
         admin_internal_notes: notes,
+        whatsapp_conversation_id: conversation.id,
+        whatsapp_contact_id: contact.id,
       })
       .select('id')
       .single()
