@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import ReplyBox from './ReplyBox'
+import CreateBookingRequestButton from './CreateBookingRequestButton'
 
 type WhatsAppContact = {
   id: string
@@ -291,6 +292,10 @@ export default async function WhatsAppConversationPage({
           </div>
         </section>
       )}
+
+      {relatedProperty ? (
+        <CreateBookingRequestButton conversationId={conversation.id} />
+      ) : null}
 
       <section className="rounded-2xl border bg-white p-4">
         <div className="mb-4 border-b pb-3">
