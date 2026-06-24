@@ -576,7 +576,10 @@ export default async function WhatsAppConversationPage({
         </div>
       </section>
 
-      <ReplyBox conversationId={conversation.id} />
+      <ReplyBox
+        conversationId={conversation.id}
+        conversationType={conversation.conversation_type}
+      />
     </main>
   )
 }

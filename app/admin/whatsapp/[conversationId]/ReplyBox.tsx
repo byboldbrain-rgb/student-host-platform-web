@@ -1,11 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { FormEvent, useState, useTransition } from 'react'
+import { FormEvent, useMemo, useState, useTransition } from 'react'
 import { sendWhatsAppReplyAction } from './actions'
 
 type ReplyBoxProps = {
   conversationId: string
+  conversationType?: string | null
 }
 
 type QuickReply = {
@@ -13,7 +14,7 @@ type QuickReply = {
   body: string
 }
 
-const quickReplies: QuickReply[] = [
+const studentQuickReplies: QuickReply[] = [
   {
     label: 'طلب بيانات الطالب',
     body: `تمام، علشان نقدر نساعدك بشكل أسرع ابعتلنا البيانات دي:
@@ -80,11 +81,131 @@ const quickReplies: QuickReply[] = [
   },
 ]
 
-export default function ReplyBox({ conversationId }: ReplyBoxProps) {
+const ownerQuickReplies: QuickReply[] = [
+  {
+    label: 'طلب بيانات الشقة',
+    body: `أهلًا بحضرتك في Navienty.
+
+علشان نقدر نضيف السكن عندنا على المنصة، محتاجين البيانات دي:
+
+1. اسم حضرتك
+2. رقم واتساب للتواصل
+3. عنوان الشقة بالتفصيل
+4. الشقة مناسبة لطلبة ولا طالبات؟
+5. عدد الغرف
+6. عدد الحمامات
+7. عدد السرائر في كل غرفة
+8. سعر السرير أو الغرفة
+9. هل يوجد Wi-Fi؟
+10. هل يوجد تكييف؟
+11. هل العمارة فيها أسانسير؟
+12. هل يوجد أمن أو بواب؟`,
+  },
+  {
+    label: 'طلب الصور والفيديو',
+    body: `تمام يا فندم، محتاجين من حضرتك صور واضحة للشقة علشان نقدر نعرضها بشكل احترافي على Navienty.
+
+يفضل تبعتلنا:
+1. صورة لكل غرفة
+2. صورة للحمام
+3. صورة للمطبخ
+4. صورة للريسبشن لو موجود
+5. فيديو سريع للشقة بالكامل
+6. صورة لمدخل العمارة لو متاحة
+
+كل ما الصور تكون أوضح، فرصة الحجز بتكون أسرع.`,
+  },
+  {
+    label: 'شرح نظام Navienty للمالك',
+    body: `Navienty منصة متخصصة في سكن الطلاب.
+
+إحنا بنساعد حضرتك تعرض الشقة للطلبة الجادين فقط، والطالب بيشوف تفاصيل السكن والصور من خلال المنصة، وبعدها بيتواصل معانا علشان المعاينة والحجز.
+
+الحجز بيتم من خلال المنصة في أول شهر فقط، وبعد كده الطالب بيتعامل مع حضرتك مباشرة من الشهر التاني.`,
+  },
+  {
+    label: 'شرح العمولة',
+    body: `نظام Navienty بسيط:
+
+إحنا مش بناخد أي فلوس مقدمًا من المالك.
+
+العمولة بتكون فقط عند إتمام الحجز من خلال المنصة، وبتتخصم من أول شهر إيجار.
+
+بعد أول شهر، الطالب بيدفع لحضرتك مباشرة بدون تدخل من Navienty.`,
+  },
+  {
+    label: 'طلب اللوكيشن',
+    body: `محتاجين من حضرتك تبعتلنا اللوكيشن أو أقرب علامة مميزة للشقة.
+
+ده بيساعدنا نعرض السكن للطلبة اللي بيدوروا قريب من الجامعة أو المنطقة المناسبة ليهم.`,
+  },
+  {
+    label: 'تأكيد استلام البيانات',
+    body: `تمام يا فندم، استلمنا البيانات والصور.
+
+هنراجع التفاصيل ونجهز السكن للعرض على Navienty، ولو احتجنا أي بيانات إضافية هنبلغ حضرتك هنا على واتساب.`,
+  },
+  {
+    label: 'طلب استكمال ناقص',
+    body: `شكرًا لحضرتك، بس لسه محتاجين نستكمل بعض البيانات قبل ما نقدر ننشر السكن:
+
+1. السعر
+2. عدد الغرف والسرائر
+3. العنوان التفصيلي
+4. صور واضحة للشقة
+5. هل السكن للطلبة ولا الطالبات؟
+
+ابعتلنا البيانات الناقصة، وهنكمل إضافة السكن فورًا.`,
+  },
+]
+
+const generalQuickReplies: QuickReply[] = [
+  {
+    label: 'رسالة ترحيب',
+    body: `أهلًا بحضرتك في Navienty 👋
+
+من فضلك ابعتلنا تفاصيل طلبك، وفريقنا هيرد عليك في أقرب وقت.`,
+  },
+  {
+    label: 'طلب توضيح',
+    body: `ممكن توضحلنا حضرتك محتاج إيه بالظبط؟
+
+هل حضرتك طالب بتدور على سكن، ولا مالك وعاوز تضيف شقة على Navienty؟`,
+  },
+]
+
+function getQuickRepliesForConversation(conversationType?: string | null) {
+  if (conversationType === 'owner_onboarding') {
+    return ownerQuickReplies
+  }
+
+  if (conversationType === 'student_booking') {
+    return studentQuickReplies
+  }
+
+  return [...generalQuickReplies, ...studentQuickReplies, ...ownerQuickReplies]
+}
+
+function getSectionLabel(conversationType?: string | null) {
+  if (conversationType === 'owner_onboarding') return 'Owner quick replies'
+  if (conversationType === 'student_booking') return 'Student quick replies'
+
+  return 'Quick replies'
+}
+
+export default function ReplyBox({
+  conversationId,
+  conversationType,
+}: ReplyBoxProps) {
   const router = useRouter()
   const [message, setMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const quickReplies = useMemo(
+    () => getQuickRepliesForConversation(conversationType),
+    [conversationType]
+  )
 
   function handleQuickReplyClick(body: string) {
     setMessage(body)
@@ -120,7 +241,12 @@ export default function ReplyBox({ conversationId }: ReplyBoxProps) {
     <form onSubmit={handleSubmit} className="rounded-2xl border bg-white p-4">
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <label className="block text-sm font-medium">Reply</label>
+          <div>
+            <label className="block text-sm font-medium">Reply</label>
+            <p className="mt-1 text-xs text-gray-500">
+              {getSectionLabel(conversationType)}
+            </p>
+          </div>
 
           {message ? (
             <button
