@@ -33,6 +33,9 @@ type WhatsAppMessage = {
   media_id: string | null
   media_mime_type: string | null
   media_filename: string | null
+  media_url: string | null
+  media_storage_path: string | null
+  media_file_size: number | null
   created_at: string
 }
 
@@ -182,6 +185,9 @@ async function getConversation(conversationId: string) {
       media_id,
       media_mime_type,
       media_filename,
+      media_url,
+      media_storage_path,
+      media_file_size,
       created_at
     `
     )
@@ -236,6 +242,15 @@ function formatPrice(value: number | null) {
   return `${new Intl.NumberFormat('en-US').format(value)} EGP`
 }
 
+function formatFileSize(value: number | null) {
+  if (!value || Number.isNaN(value)) return null
+
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`
+
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
 function getPropertyTitle(property: RelatedProperty | null) {
   if (!property) return 'Unknown property'
 
@@ -252,6 +267,119 @@ function getConversationTypeBadgeClass(type: string) {
   }
 
   return 'bg-gray-100 text-gray-700'
+}
+
+function isImageMessage(message: WhatsAppMessage) {
+  return (
+    message.message_type === 'image' ||
+    Boolean(message.media_mime_type?.startsWith('image/'))
+  )
+}
+
+function isVideoMessage(message: WhatsAppMessage) {
+  return (
+    message.message_type === 'video' ||
+    Boolean(message.media_mime_type?.startsWith('video/'))
+  )
+}
+
+function isAudioMessage(message: WhatsAppMessage) {
+  return (
+    message.message_type === 'audio' ||
+    Boolean(message.media_mime_type?.startsWith('audio/'))
+  )
+}
+
+function MediaPreview({
+  message,
+  isOutbound,
+}: {
+  message: WhatsAppMessage
+  isOutbound: boolean
+}) {
+  const mediaUrl = message.media_url
+  const fileSize = formatFileSize(message.media_file_size)
+  const filename =
+    message.media_filename ||
+    message.media_mime_type ||
+    `[${message.message_type}]`
+
+  if (!mediaUrl) {
+    if (!message.media_id) return null
+
+    return (
+      <div
+        className={[
+          'mb-2 rounded-xl border p-3 text-xs',
+          isOutbound
+            ? 'border-white/20 bg-white/10 text-white'
+            : 'border-gray-200 bg-white text-gray-700',
+        ].join(' ')}
+      >
+        <div className="font-medium">{filename}</div>
+        <div className={isOutbound ? 'text-gray-300' : 'text-gray-500'}>
+          Media received but preview URL is not available.
+        </div>
+      </div>
+    )
+  }
+
+  if (isImageMessage(message)) {
+    return (
+      <a
+        href={mediaUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-2 block overflow-hidden rounded-xl"
+      >
+        <img
+          src={mediaUrl}
+          alt={filename}
+          className="max-h-[360px] w-full max-w-[360px] rounded-xl object-cover"
+        />
+      </a>
+    )
+  }
+
+  if (isVideoMessage(message)) {
+    return (
+      <div className="mb-2 overflow-hidden rounded-xl">
+        <video
+          src={mediaUrl}
+          controls
+          className="max-h-[360px] w-full max-w-[420px] rounded-xl"
+        />
+      </div>
+    )
+  }
+
+  if (isAudioMessage(message)) {
+    return (
+      <div className="mb-2">
+        <audio src={mediaUrl} controls className="w-full max-w-[360px]" />
+      </div>
+    )
+  }
+
+  return (
+    <a
+      href={mediaUrl}
+      target="_blank"
+      rel="noreferrer"
+      className={[
+        'mb-2 block rounded-xl border p-3 text-sm transition',
+        isOutbound
+          ? 'border-white/20 bg-white/10 text-white hover:bg-white/20'
+          : 'border-gray-200 bg-white text-gray-900 hover:bg-gray-50',
+      ].join(' ')}
+    >
+      <div className="font-semibold">Open file</div>
+      <div className={isOutbound ? 'text-xs text-gray-300' : 'text-xs text-gray-500'}>
+        {filename}
+        {fileSize ? ` · ${fileSize}` : ''}
+      </div>
+    </a>
+  )
 }
 
 export default async function WhatsAppConversationPage({
@@ -400,9 +528,15 @@ export default async function WhatsAppConversationPage({
                         : 'bg-gray-100 text-gray-900'
                     }`}
                   >
-                    <div className="whitespace-pre-wrap">
-                      {message.body || `[${message.message_type}]`}
-                    </div>
+                    <MediaPreview message={message} isOutbound={isOutbound} />
+
+                    {message.body ? (
+                      <div className="whitespace-pre-wrap">{message.body}</div>
+                    ) : !message.media_url ? (
+                      <div className="whitespace-pre-wrap">
+                        [{message.message_type}]
+                      </div>
+                    ) : null}
 
                     <div
                       className={`mt-2 text-[11px] ${
@@ -411,6 +545,7 @@ export default async function WhatsAppConversationPage({
                     >
                       {formatDate(message.created_at)}
                       {message.status ? ` · ${message.status}` : ''}
+                      {message.media_mime_type ? ` · ${message.media_mime_type}` : ''}
                     </div>
 
                     {message.error_message ? (
