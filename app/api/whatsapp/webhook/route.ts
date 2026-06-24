@@ -10,6 +10,16 @@ type LinkedProperty = {
   title_ar: string | null
 }
 
+type WhatsAppMediaDownloadResult = {
+  mediaId: string | null
+  mediaUrl: string | null
+  mediaStoragePath: string | null
+  mediaMimeType: string | null
+  mediaFilename: string | null
+  mediaSha256: string | null
+  mediaFileSize: number | null
+}
+
 function getSupabaseAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -66,6 +76,116 @@ function extractPropertyPublicIdFromMessage(text: string | null | undefined) {
   return null
 }
 
+function getTextBodyFromMessage(message: any, messageType: string) {
+  if (messageType === 'text') {
+    return message?.text?.body ?? null
+  }
+
+  if (messageType === 'button') {
+    return message?.button?.text ?? null
+  }
+
+  if (messageType === 'interactive') {
+    return (
+      message?.interactive?.button_reply?.title ??
+      message?.interactive?.list_reply?.title ??
+      null
+    )
+  }
+
+  if (messageType === 'image') {
+    return message?.image?.caption ?? null
+  }
+
+  if (messageType === 'video') {
+    return message?.video?.caption ?? null
+  }
+
+  if (messageType === 'document') {
+    return message?.document?.caption ?? message?.document?.filename ?? null
+  }
+
+  if (messageType === 'audio') {
+    return '[audio]'
+  }
+
+  if (messageType === 'sticker') {
+    return '[sticker]'
+  }
+
+  return null
+}
+
+function getMediaObjectFromMessage(message: any, messageType: string) {
+  if (messageType === 'image') return message?.image ?? null
+  if (messageType === 'video') return message?.video ?? null
+  if (messageType === 'document') return message?.document ?? null
+  if (messageType === 'audio') return message?.audio ?? null
+  if (messageType === 'sticker') return message?.sticker ?? null
+
+  return null
+}
+
+function getExtensionFromMimeType(mimeType: string | null | undefined) {
+  if (!mimeType) return 'bin'
+
+  const normalized = mimeType.toLowerCase()
+
+  if (normalized.includes('jpeg') || normalized.includes('jpg')) return 'jpg'
+  if (normalized.includes('png')) return 'png'
+  if (normalized.includes('webp')) return 'webp'
+  if (normalized.includes('gif')) return 'gif'
+  if (normalized.includes('mp4')) return 'mp4'
+  if (normalized.includes('mpeg')) return 'mp3'
+  if (normalized.includes('ogg')) return 'ogg'
+  if (normalized.includes('pdf')) return 'pdf'
+  if (normalized.includes('msword')) return 'doc'
+  if (normalized.includes('officedocument.wordprocessingml')) return 'docx'
+  if (normalized.includes('officedocument.spreadsheetml')) return 'xlsx'
+  if (normalized.includes('spreadsheet')) return 'xlsx'
+  if (normalized.includes('plain')) return 'txt'
+
+  const subtype = normalized.split('/')[1]?.split(';')[0]
+
+  return subtype || 'bin'
+}
+
+function sanitizeFilename(value: string | null | undefined) {
+  if (!value) return null
+
+  return value
+    .trim()
+    .replace(/[^\w.\-]+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 120)
+}
+
+function buildMediaStoragePath({
+  messageId,
+  mediaId,
+  filename,
+  mimeType,
+}: {
+  messageId: string | null
+  mediaId: string
+  filename: string | null
+  mimeType: string | null
+}) {
+  const datePart = new Date().toISOString().slice(0, 10)
+  const cleanFilename = sanitizeFilename(filename)
+  const extension = getExtensionFromMimeType(mimeType)
+  const randomPart =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  if (cleanFilename) {
+    return `${datePart}/${messageId || mediaId}-${randomPart}-${cleanFilename}`
+  }
+
+  return `${datePart}/${messageId || mediaId}-${randomPart}.${extension}`
+}
+
 async function findLinkedPropertyFromMessage({
   supabase,
   textBody,
@@ -110,6 +230,179 @@ async function findLinkedPropertyFromMessage({
   }
 
   return data as LinkedProperty
+}
+
+async function downloadAndStoreWhatsAppMedia({
+  supabase,
+  message,
+  messageType,
+}: {
+  supabase: SupabaseAdminClient
+  message: any
+  messageType: string
+}): Promise<WhatsAppMediaDownloadResult | null> {
+  const accessToken = process.env.META_WA_ACCESS_TOKEN
+  const bucketName =
+    process.env.SUPABASE_WHATSAPP_MEDIA_BUCKET || 'whatsapp-media'
+
+  if (!accessToken) {
+    console.error('WHATSAPP_MEDIA_MISSING_ACCESS_TOKEN')
+    return null
+  }
+
+  const mediaObject = getMediaObjectFromMessage(message, messageType)
+  const mediaId = mediaObject?.id ?? null
+
+  if (!mediaId) {
+    return null
+  }
+
+  const fallbackMimeType = mediaObject?.mime_type ?? null
+  const fallbackFilename =
+    mediaObject?.filename ??
+    mediaObject?.caption ??
+    `${messageType}-${mediaId}.${getExtensionFromMimeType(fallbackMimeType)}`
+
+  try {
+    const metadataRes = await fetch(
+      `https://graph.facebook.com/v25.0/${mediaId}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    )
+
+    const metadata = await metadataRes.json()
+
+    if (!metadataRes.ok) {
+      console.error('WHATSAPP_MEDIA_METADATA_FETCH_ERROR:', metadata)
+
+      return {
+        mediaId,
+        mediaUrl: null,
+        mediaStoragePath: null,
+        mediaMimeType: fallbackMimeType,
+        mediaFilename: fallbackFilename,
+        mediaSha256: mediaObject?.sha256 ?? null,
+        mediaFileSize: null,
+      }
+    }
+
+    const mediaDownloadUrl = metadata?.url ?? null
+    const mediaMimeType = metadata?.mime_type ?? fallbackMimeType
+    const mediaSha256 = metadata?.sha256 ?? mediaObject?.sha256 ?? null
+    const mediaFileSize = metadata?.file_size ? Number(metadata.file_size) : null
+    const mediaFilename =
+      fallbackFilename ||
+      `${messageType}-${mediaId}.${getExtensionFromMimeType(mediaMimeType)}`
+
+    if (!mediaDownloadUrl) {
+      console.error('WHATSAPP_MEDIA_URL_MISSING:', metadata)
+
+      return {
+        mediaId,
+        mediaUrl: null,
+        mediaStoragePath: null,
+        mediaMimeType,
+        mediaFilename,
+        mediaSha256,
+        mediaFileSize,
+      }
+    }
+
+    const fileRes = await fetch(mediaDownloadUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!fileRes.ok) {
+      const errorText = await fileRes.text().catch(() => null)
+
+      console.error('WHATSAPP_MEDIA_DOWNLOAD_ERROR:', {
+        status: fileRes.status,
+        statusText: fileRes.statusText,
+        body: errorText,
+      })
+
+      return {
+        mediaId,
+        mediaUrl: null,
+        mediaStoragePath: null,
+        mediaMimeType,
+        mediaFilename,
+        mediaSha256,
+        mediaFileSize,
+      }
+    }
+
+    const arrayBuffer = await fileRes.arrayBuffer()
+    const storagePath = buildMediaStoragePath({
+      messageId: message?.id ?? null,
+      mediaId,
+      filename: mediaFilename,
+      mimeType: mediaMimeType,
+    })
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(storagePath, arrayBuffer, {
+        contentType: mediaMimeType || 'application/octet-stream',
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error('WHATSAPP_MEDIA_STORAGE_UPLOAD_ERROR:', uploadError)
+
+      return {
+        mediaId,
+        mediaUrl: null,
+        mediaStoragePath: null,
+        mediaMimeType,
+        mediaFilename,
+        mediaSha256,
+        mediaFileSize,
+      }
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(storagePath)
+
+    const publicUrl = publicUrlData?.publicUrl ?? null
+
+    console.log('WHATSAPP_MEDIA_STORED:', {
+      mediaId,
+      storagePath,
+      publicUrl,
+      mimeType: mediaMimeType,
+    })
+
+    return {
+      mediaId,
+      mediaUrl: publicUrl,
+      mediaStoragePath: storagePath,
+      mediaMimeType,
+      mediaFilename,
+      mediaSha256,
+      mediaFileSize,
+    }
+  } catch (error) {
+    console.error('WHATSAPP_MEDIA_PROCESSING_ERROR:', error)
+
+    return {
+      mediaId,
+      mediaUrl: null,
+      mediaStoragePath: null,
+      mediaMimeType: fallbackMimeType,
+      mediaFilename: fallbackFilename,
+      mediaSha256: mediaObject?.sha256 ?? null,
+      mediaFileSize: null,
+    }
+  }
 }
 
 async function markLatestClickIntentAsSent({
@@ -231,21 +524,17 @@ export async function POST(req: NextRequest) {
 
           const displayName = contacts?.[0]?.profile?.name ?? null
           const messageType = message?.type ?? 'unknown'
-
-          const textBody =
-            messageType === 'text'
-              ? message?.text?.body ?? null
-              : messageType === 'button'
-                ? message?.button?.text ?? null
-                : messageType === 'interactive'
-                  ? message?.interactive?.button_reply?.title ??
-                    message?.interactive?.list_reply?.title ??
-                    null
-                  : null
+          const textBody = getTextBodyFromMessage(message, messageType)
 
           const linkedProperty = await findLinkedPropertyFromMessage({
             supabase,
             textBody,
+          })
+
+          const mediaResult = await downloadAndStoreWhatsAppMedia({
+            supabase,
+            message,
+            messageType,
           })
 
           const now = new Date().toISOString()
@@ -362,6 +651,15 @@ export async function POST(req: NextRequest) {
               message_type: messageType,
               body: textBody,
               status: 'received',
+
+              media_id: mediaResult?.mediaId ?? null,
+              media_mime_type: mediaResult?.mediaMimeType ?? null,
+              media_filename: mediaResult?.mediaFilename ?? null,
+              media_url: mediaResult?.mediaUrl ?? null,
+              media_storage_path: mediaResult?.mediaStoragePath ?? null,
+              media_sha256: mediaResult?.mediaSha256 ?? null,
+              media_file_size: mediaResult?.mediaFileSize ?? null,
+
               raw_payload: {
                 entry,
                 change,
@@ -369,6 +667,7 @@ export async function POST(req: NextRequest) {
                 message,
                 contact: contacts?.[0] ?? null,
                 linked_property: linkedProperty,
+                media: mediaResult,
               },
             })
 
