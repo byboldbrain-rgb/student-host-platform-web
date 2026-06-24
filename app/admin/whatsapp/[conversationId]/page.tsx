@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import ReplyBox from './ReplyBox'
 import CreateBookingRequestButton from './CreateBookingRequestButton'
+import MarkAsOwnerButton from './MarkAsOwnerButton'
 
 type WhatsAppContact = {
   id: string
@@ -374,7 +375,11 @@ function MediaPreview({
       ].join(' ')}
     >
       <div className="font-semibold">Open file</div>
-      <div className={isOutbound ? 'text-xs text-gray-300' : 'text-xs text-gray-500'}>
+      <div
+        className={
+          isOutbound ? 'text-xs text-gray-300' : 'text-xs text-gray-500'
+        }
+      >
         {filename}
         {fileSize ? ` · ${fileSize}` : ''}
       </div>
@@ -393,6 +398,9 @@ export default async function WhatsAppConversationPage({
 
   const contact = conversation.contact
   const relatedProperty = conversation.related_property
+  const isOwnerConversation =
+    conversation.conversation_type === 'owner_onboarding' ||
+    contact?.contact_type === 'owner'
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -442,6 +450,11 @@ export default async function WhatsAppConversationPage({
           </div>
         </div>
       </section>
+
+      <MarkAsOwnerButton
+        conversationId={conversation.id}
+        isOwnerConversation={isOwnerConversation}
+      />
 
       {relatedProperty ? (
         <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
@@ -545,7 +558,9 @@ export default async function WhatsAppConversationPage({
                     >
                       {formatDate(message.created_at)}
                       {message.status ? ` · ${message.status}` : ''}
-                      {message.media_mime_type ? ` · ${message.media_mime_type}` : ''}
+                      {message.media_mime_type
+                        ? ` · ${message.media_mime_type}`
+                        : ''}
                     </div>
 
                     {message.error_message ? (
