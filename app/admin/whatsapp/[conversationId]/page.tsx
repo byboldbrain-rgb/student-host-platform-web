@@ -11,6 +11,16 @@ type WhatsAppContact = {
   blocked: boolean
 }
 
+type RelatedProperty = {
+  id: string
+  property_id: string
+  title_en: string | null
+  title_ar: string | null
+  price_egp: number | null
+  admin_status: string | null
+  availability_status: string | null
+}
+
 type WhatsAppMessage = {
   id: string
   direction: 'inbound' | 'outbound'
@@ -29,9 +39,11 @@ type WhatsAppConversation = {
   id: string
   status: string
   conversation_type: string
+  related_property_id: string | null
   last_message_at: string | null
   created_at: string
   contact: WhatsAppContact | null
+  related_property: RelatedProperty | null
 }
 
 function getSupabaseAdminClient() {
@@ -68,6 +80,7 @@ async function getConversation(conversationId: string) {
       id,
       status,
       conversation_type,
+      related_property_id,
       last_message_at,
       created_at,
       contact:whatsapp_contacts (
@@ -77,6 +90,15 @@ async function getConversation(conversationId: string) {
         contact_type,
         opted_out,
         blocked
+      ),
+      related_property:properties (
+        id,
+        property_id,
+        title_en,
+        title_ar,
+        price_egp,
+        admin_status,
+        availability_status
       )
     `
     )
@@ -117,9 +139,11 @@ async function getConversation(conversationId: string) {
     id: conversationData.id,
     status: conversationData.status,
     conversation_type: conversationData.conversation_type,
+    related_property_id: conversationData.related_property_id,
     last_message_at: conversationData.last_message_at,
     created_at: conversationData.created_at,
     contact: normalizeRelation(conversationData.contact),
+    related_property: normalizeRelation(conversationData.related_property),
   }
 
   return {
@@ -137,6 +161,30 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
+function formatPrice(value: number | null) {
+  if (value === null || value === undefined) return '—'
+
+  return `${new Intl.NumberFormat('en-US').format(value)} EGP`
+}
+
+function getPropertyTitle(property: RelatedProperty | null) {
+  if (!property) return 'Unknown property'
+
+  return property.title_ar || property.title_en || property.property_id
+}
+
+function getConversationTypeBadgeClass(type: string) {
+  if (type === 'student_booking') {
+    return 'bg-blue-50 text-blue-700'
+  }
+
+  if (type === 'owner_onboarding') {
+    return 'bg-green-50 text-green-700'
+  }
+
+  return 'bg-gray-100 text-gray-700'
+}
+
 export default async function WhatsAppConversationPage({
   params,
 }: {
@@ -146,6 +194,7 @@ export default async function WhatsAppConversationPage({
   const { conversation, messages } = await getConversation(conversationId)
 
   const contact = conversation.contact
+  const relatedProperty = conversation.related_property
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -170,8 +219,82 @@ export default async function WhatsAppConversationPage({
       </div>
 
       <section className="rounded-2xl border bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-semibold">Conversation Details</h2>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span
+                className={[
+                  'rounded-full px-3 py-1 text-xs font-medium',
+                  getConversationTypeBadgeClass(conversation.conversation_type),
+                ].join(' ')}
+              >
+                {conversation.conversation_type}
+              </span>
+
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                {conversation.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="text-sm text-gray-500">
+            Last activity: {formatDate(conversation.last_message_at)}
+          </div>
+        </div>
+      </section>
+
+      {relatedProperty ? (
+        <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                Linked Property
+              </div>
+
+              <h2 className="mt-2 text-lg font-bold text-gray-950">
+                {getPropertyTitle(relatedProperty)}
+              </h2>
+
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                <span className="rounded-full bg-white px-3 py-1">
+                  {relatedProperty.property_id}
+                </span>
+
+                <span className="rounded-full bg-white px-3 py-1">
+                  {formatPrice(relatedProperty.price_egp)}
+                </span>
+
+                <span className="rounded-full bg-white px-3 py-1">
+                  {relatedProperty.availability_status || 'unknown'}
+                </span>
+
+                <span className="rounded-full bg-white px-3 py-1">
+                  {relatedProperty.admin_status || 'unknown'}
+                </span>
+              </div>
+            </div>
+
+            <Link
+              href={`/properties/${relatedProperty.property_id}`}
+              className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2 text-sm font-medium text-white"
+            >
+              Open property
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-dashed bg-white p-4">
+          <div className="text-sm text-gray-500">
+            No property linked to this conversation yet.
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-2xl border bg-white p-4">
         <div className="mb-4 border-b pb-3">
-          <h2 className="font-semibold">Conversation</h2>
+          <h2 className="font-semibold">Messages</h2>
           <p className="text-sm text-gray-500">
             Last activity: {formatDate(conversation.last_message_at)}
           </p>
@@ -225,6 +348,7 @@ export default async function WhatsAppConversationPage({
           )}
         </div>
       </section>
+
       <ReplyBox conversationId={conversation.id} />
     </main>
   )
