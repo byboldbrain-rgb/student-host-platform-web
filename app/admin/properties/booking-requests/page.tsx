@@ -38,6 +38,8 @@ type BookingRequest = {
   approved_by_admin_id: string | null
   approved_at: string | null
   admin_internal_notes: string | null
+  whatsapp_conversation_id: string | null
+  whatsapp_contact_id: string | null
   properties:
     | {
         id: string
@@ -279,13 +281,7 @@ function BuildingIcon() {
   )
 }
 
-function MobileNavIcon({
-  src,
-  alt,
-}: {
-  src: string
-  alt: string
-}) {
+function MobileNavIcon({ src, alt }: { src: string; alt: string }) {
   return <img src={src} alt={alt} className="h-[20px] w-[20px] object-contain" />
 }
 
@@ -492,7 +488,11 @@ function resolveRoomCurrentMode(params: {
   return null
 }
 
-function MobileBottomNav({ newReservationsCount }: { newReservationsCount: number }) {
+function MobileBottomNav({
+  newReservationsCount,
+}: {
+  newReservationsCount: number
+}) {
   const items = [
     {
       href: '/admin/properties/booking-requests',
@@ -551,7 +551,9 @@ function MobileBottomNav({ newReservationsCount }: { newReservationsCount: numbe
               href={item.href}
               className="flex min-w-[72px] flex-col items-center justify-center gap-1 px-1 py-2 text-center transition"
             >
-              <span className={`relative flex items-center justify-center ${activeClass}`}>
+              <span
+                className={`relative flex items-center justify-center ${activeClass}`}
+              >
                 {item.icon}
 
                 {item.badgeCount > 0 && (
@@ -604,6 +606,8 @@ export default async function PropertyBookingRequestsPage() {
       approved_by_admin_id,
       approved_at,
       admin_internal_notes,
+      whatsapp_conversation_id,
+      whatsapp_contact_id,
       properties (
         id,
         property_id,
@@ -667,103 +671,107 @@ export default async function PropertyBookingRequestsPage() {
   let propertyImagesMap: Record<string, PropertyImage[]> = {}
 
   if (propertyIds.length > 0) {
-    const [propertySellableOptionsRes, roomsRes, activeReservationsRes, imagesRes] =
-      await Promise.all([
-        supabase
-          .from('property_sellable_options')
-          .select(`
+    const [
+      propertySellableOptionsRes,
+      roomsRes,
+      activeReservationsRes,
+      imagesRes,
+    ] = await Promise.all([
+      supabase
+        .from('property_sellable_options')
+        .select(`
+          id,
+          property_id,
+          code,
+          name_en,
+          name_ar,
+          sell_mode,
+          occupancy_size,
+          price_egp,
+          rental_duration,
+          is_active,
+          sort_order,
+          pricing_mode,
+          option_code
+        `)
+        .in('property_id', propertyIds)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
+
+      supabase
+        .from('property_rooms')
+        .select(`
+          id,
+          property_id_ref,
+          room_name,
+          room_name_ar,
+          room_type,
+          status,
+          sort_order,
+          room_beds (
             id,
-            property_id,
+            room_id,
+            status,
+            is_active
+          ),
+          room_sellable_options:property_room_sellable_options (
+            id,
+            room_id,
             code,
             name_en,
             name_ar,
-            sell_mode,
             occupancy_size,
-            price_egp,
-            rental_duration,
-            is_active,
-            sort_order,
             pricing_mode,
-            option_code
-          `)
-          .in('property_id', propertyIds)
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true }),
+            price_egp,
+            consumes_beds_count,
+            is_exclusive,
+            is_active,
+            sort_order
+          )
+        `)
+        .in('property_id_ref', propertyIds)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
 
-        supabase
-          .from('property_rooms')
-          .select(`
-            id,
-            property_id_ref,
-            room_name,
-            room_name_ar,
-            room_type,
-            status,
-            sort_order,
-            room_beds (
-              id,
-              room_id,
-              status,
-              is_active
-            ),
-            room_sellable_options:property_room_sellable_options (
-              id,
-              room_id,
-              code,
-              name_en,
-              name_ar,
-              occupancy_size,
-              pricing_mode,
-              price_egp,
-              consumes_beds_count,
-              is_exclusive,
-              is_active,
-              sort_order
-            )
-          `)
-          .in('property_id_ref', propertyIds)
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true }),
+      supabase
+        .from('property_reservations')
+        .select(`
+          id,
+          property_id,
+          room_sellable_option_id,
+          sellable_option_id,
+          customer_name,
+          customer_phone,
+          customer_email,
+          customer_whatsapp,
+          start_date,
+          end_date,
+          status,
+          reservation_scope,
+          total_price_egp,
+          payment_status,
+          wallet_amount_used,
+          notes,
+          created_at
+        `)
+        .in('property_id', propertyIds)
+        .in('status', ['pending', 'reserved', 'checked_in'])
+        .order('created_at', { ascending: false }),
 
-        supabase
-          .from('property_reservations')
-          .select(`
-            id,
-            property_id,
-            room_sellable_option_id,
-            sellable_option_id,
-            customer_name,
-            customer_phone,
-            customer_email,
-            customer_whatsapp,
-            start_date,
-            end_date,
-            status,
-            reservation_scope,
-            total_price_egp,
-            payment_status,
-            wallet_amount_used,
-            notes,
-            created_at
-          `)
-          .in('property_id', propertyIds)
-          .in('status', ['pending', 'reserved', 'checked_in'])
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('property_images')
-          .select(`
-            id,
-            property_id_ref,
-            image_url,
-            is_cover,
-            sort_order,
-            created_at
-          `)
-          .in('property_id_ref', propertyIds)
-          .order('is_cover', { ascending: false })
-          .order('sort_order', { ascending: true }),
-      ])
+      supabase
+        .from('property_images')
+        .select(`
+          id,
+          property_id_ref,
+          image_url,
+          is_cover,
+          sort_order,
+          created_at
+        `)
+        .in('property_id_ref', propertyIds)
+        .order('is_cover', { ascending: false })
+        .order('sort_order', { ascending: true }),
+    ])
 
     if (propertySellableOptionsRes.error) {
       throw new Error(propertySellableOptionsRes.error.message)
@@ -808,21 +816,27 @@ export default async function PropertyBookingRequestsPage() {
       return map
     }, new Map<string, PropertyRoom[]>())
 
-    activeReservationsByPropertyId = activeReservations.reduce((map, reservation) => {
-      const current = map.get(reservation.property_id) || []
-      current.push(reservation)
-      map.set(reservation.property_id, current)
-      return map
-    }, new Map<string, ActiveReservation[]>())
+    activeReservationsByPropertyId = activeReservations.reduce(
+      (map, reservation) => {
+        const current = map.get(reservation.property_id) || []
+        current.push(reservation)
+        map.set(reservation.property_id, current)
+        return map
+      },
+      new Map<string, ActiveReservation[]>()
+    )
 
-    propertyImagesMap = images.reduce<Record<string, PropertyImage[]>>((acc, image) => {
-      if (!acc[image.property_id_ref]) {
-        acc[image.property_id_ref] = []
-      }
+    propertyImagesMap = images.reduce<Record<string, PropertyImage[]>>(
+      (acc, image) => {
+        if (!acc[image.property_id_ref]) {
+          acc[image.property_id_ref] = []
+        }
 
-      acc[image.property_id_ref].push(image)
-      return acc
-    }, {})
+        acc[image.property_id_ref].push(image)
+        return acc
+      },
+      {}
+    )
   }
 
   if (userIds.length > 0) {
@@ -836,7 +850,10 @@ export default async function PropertyBookingRequestsPage() {
     }
 
     walletBalanceByUserId = new Map(
-      (walletRows || []).map((row: any) => [row.user_id, Number(row.balance || 0)])
+      (walletRows || []).map((row: any) => [
+        row.user_id,
+        Number(row.balance || 0),
+      ])
     )
   }
 
@@ -1049,7 +1066,9 @@ export default async function PropertyBookingRequestsPage() {
             </Link>
           </div>
 
-          <AdminPropertyBookingNotifications openRequestsCount={newReservationsCount} />
+          <AdminPropertyBookingNotifications
+            openRequestsCount={newReservationsCount}
+          />
 
           {requests.length === 0 ? (
             <div className="mt-6">
@@ -1092,7 +1111,9 @@ export default async function PropertyBookingRequestsPage() {
 
                     const mappedRooms: MappedRoom[] = propertyRooms.map((room) => {
                       const roomBeds = Array.isArray(room.room_beds)
-                        ? room.room_beds.filter((bed) => bed && bed.is_active !== false)
+                        ? room.room_beds.filter(
+                            (bed) => bed && bed.is_active !== false
+                          )
                         : []
 
                       const roomOptions = Array.isArray(room.room_sellable_options)
@@ -1101,15 +1122,21 @@ export default async function PropertyBookingRequestsPage() {
                           )
                         : []
 
-                      const roomOptionIds = new Set(roomOptions.map((option) => option.id))
+                      const roomOptionIds = new Set(
+                        roomOptions.map((option) => option.id)
+                      )
 
-                      const roomReservations = activeReservations.filter((reservation) => {
-                        if (!reservation.room_sellable_option_id) {
-                          return false
+                      const roomReservations = activeReservations.filter(
+                        (reservation) => {
+                          if (!reservation.room_sellable_option_id) {
+                            return false
+                          }
+
+                          return roomOptionIds.has(
+                            reservation.room_sellable_option_id
+                          )
                         }
-
-                        return roomOptionIds.has(reservation.room_sellable_option_id)
-                      })
+                      )
 
                       return {
                         ...room,
@@ -1132,7 +1159,8 @@ export default async function PropertyBookingRequestsPage() {
                       : 0
 
                     const requestedOptionCode =
-                      (request.requested_option_code as RequestedOptionCode) ?? null
+                      (request.requested_option_code as RequestedOptionCode) ??
+                      null
 
                     return (
                       <div
@@ -1170,6 +1198,12 @@ export default async function PropertyBookingRequestsPage() {
                             ) : (
                               <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
                                 Student request
+                              </span>
+                            )}
+
+                            {request.whatsapp_conversation_id && (
+                              <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[11px] font-bold text-green-700">
+                                WhatsApp linked
                               </span>
                             )}
 
@@ -1213,6 +1247,17 @@ export default async function PropertyBookingRequestsPage() {
                               </div>
                             )}
                           </div>
+
+                          {request.whatsapp_conversation_id && (
+                            <div className="mt-4">
+                              <Link
+                                href={`/admin/whatsapp/${request.whatsapp_conversation_id}`}
+                                className="inline-flex w-full items-center justify-center rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-700 transition hover:border-green-300 hover:bg-green-100"
+                              >
+                                Open WhatsApp Chat
+                              </Link>
+                            </div>
+                          )}
 
                           <div className="mt-5 border-t border-slate-200 pt-5">
                             <BookingRequestActionsPanel
