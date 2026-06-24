@@ -30,6 +30,11 @@ type CreateBookingRequestResult = {
   error?: string
 }
 
+type MarkAsOwnerResult = {
+  ok: boolean
+  error?: string
+}
+
 type RequestedOptionCode =
   | 'single_room'
   | 'double_room'
@@ -237,6 +242,115 @@ export async function sendWhatsAppReplyAction(
     }
   } catch (error) {
     console.error('WHATSAPP_REPLY_ACTION_ERROR:', error)
+
+    return {
+      ok: false,
+      error: 'Unexpected error',
+    }
+  }
+}
+
+export async function markWhatsAppConversationAsOwnerAction(
+  conversationId: string
+): Promise<MarkAsOwnerResult> {
+  try {
+    if (!conversationId) {
+      return {
+        ok: false,
+        error: 'Missing conversation ID',
+      }
+    }
+
+    const supabase = getSupabaseAdminClient()
+
+    const { data: conversation, error: conversationError } = await supabase
+      .from('whatsapp_conversations')
+      .select(
+        `
+        id,
+        contact_id,
+        contact:whatsapp_contacts (
+          id,
+          phone,
+          display_name
+        )
+      `
+      )
+      .eq('id', conversationId)
+      .single()
+
+    if (conversationError || !conversation) {
+      console.error(
+        'WHATSAPP_MARK_OWNER_CONVERSATION_FETCH_ERROR:',
+        conversationError
+      )
+
+      return {
+        ok: false,
+        error: 'Conversation not found',
+      }
+    }
+
+    const contact = normalizeRelation(conversation.contact)
+    const contactId = contact?.id || conversation.contact_id
+
+    if (!contactId) {
+      return {
+        ok: false,
+        error: 'Conversation has no contact',
+      }
+    }
+
+    const now = new Date().toISOString()
+
+    const { error: contactUpdateError } = await supabase
+      .from('whatsapp_contacts')
+      .update({
+        contact_type: 'owner',
+        updated_at: now,
+      })
+      .eq('id', contactId)
+
+    if (contactUpdateError) {
+      console.error(
+        'WHATSAPP_MARK_OWNER_CONTACT_UPDATE_ERROR:',
+        contactUpdateError
+      )
+
+      return {
+        ok: false,
+        error: 'Failed to mark contact as owner',
+      }
+    }
+
+    const { error: conversationUpdateError } = await supabase
+      .from('whatsapp_conversations')
+      .update({
+        conversation_type: 'owner_onboarding',
+        updated_at: now,
+      })
+      .eq('id', conversation.id)
+
+    if (conversationUpdateError) {
+      console.error(
+        'WHATSAPP_MARK_OWNER_CONVERSATION_UPDATE_ERROR:',
+        conversationUpdateError
+      )
+
+      return {
+        ok: false,
+        error: 'Failed to update conversation type',
+      }
+    }
+
+    revalidatePath(`/admin/whatsapp/${conversation.id}`)
+    revalidatePath('/admin/whatsapp')
+
+    return {
+      ok: true,
+    }
+  } catch (error) {
+    console.error('WHATSAPP_MARK_OWNER_ACTION_ERROR:', error)
 
     return {
       ok: false,
