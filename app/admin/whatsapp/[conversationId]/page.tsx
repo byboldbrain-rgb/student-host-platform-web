@@ -26,6 +26,14 @@ type RelatedProperty = {
   availability_status: string | null
 }
 
+type WhatsAppQuotedMessage = {
+  id: string
+  direction: 'inbound' | 'outbound'
+  message_type: string
+  body: string | null
+  media_filename: string | null
+}
+
 type WhatsAppMessage = {
   id: string
   direction: 'inbound' | 'outbound'
@@ -40,6 +48,9 @@ type WhatsAppMessage = {
   media_url: string | null
   media_storage_path: string | null
   media_file_size: number | null
+  reply_to_message_id: string | null
+  reply_to_meta_message_id: string | null
+  reply_to_message?: WhatsAppQuotedMessage | null
   created_at: string
 }
 
@@ -79,6 +90,7 @@ type ConversationFilter = 'all' | 'unread' | 'open' | 'owners' | 'students'
 type SearchParams = {
   q?: string | string[]
   filter?: string | string[]
+  replyTo?: string | string[]
 }
 
 const navientyChatPattern = {
@@ -297,6 +309,8 @@ async function getConversation(conversationId: string) {
       media_url,
       media_storage_path,
       media_file_size,
+      reply_to_message_id,
+      reply_to_meta_message_id,
       created_at
     `
     )
@@ -329,9 +343,21 @@ async function getConversation(conversationId: string) {
     contactPhone: contact?.phone ?? null,
   })
 
+  const rawMessages = (messagesData ?? []) as WhatsAppMessage[]
+  const messageById = new Map(
+    rawMessages.map((message) => [message.id, message])
+  )
+
+  const messages = rawMessages.map((message) => ({
+    ...message,
+    reply_to_message: message.reply_to_message_id
+      ? messageById.get(message.reply_to_message_id) ?? null
+      : null,
+  }))
+
   return {
     conversation,
-    messages: (messagesData ?? []) as WhatsAppMessage[],
+    messages,
     existingBookingRequestId,
   }
 }
@@ -555,6 +581,59 @@ function buildConversationHref({
   return queryString
     ? `/admin/whatsapp/${conversationId}?${queryString}`
     : `/admin/whatsapp/${conversationId}`
+}
+
+
+function buildReplyHref({
+  conversationId,
+  messageId,
+  searchQuery,
+  activeFilter,
+}: {
+  conversationId: string
+  messageId: string
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
+  const params = new URLSearchParams()
+
+  if (activeFilter !== 'all') {
+    params.set('filter', activeFilter)
+  }
+
+  if (searchQuery.trim()) {
+    params.set('q', searchQuery.trim())
+  }
+
+  params.set('replyTo', messageId)
+
+  return `/admin/whatsapp/${conversationId}?${params.toString()}`
+}
+
+function buildCancelReplyHref({
+  conversationId,
+  searchQuery,
+  activeFilter,
+}: {
+  conversationId: string
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
+  return buildConversationHref({
+    conversationId,
+    searchQuery,
+    activeFilter,
+  })
+}
+
+function getQuotedMessagePreview(message: WhatsAppQuotedMessage | null | undefined) {
+  if (!message) return ''
+
+  return (
+    message.body ||
+    message.media_filename ||
+    `[${message.message_type}]`
+  )
 }
 
 function isImageMessage(message: WhatsAppMessage) {
@@ -1095,8 +1174,19 @@ function LinkedPropertyCard({
   )
 }
 
-function MessageBubble({ message }: { message: WhatsAppMessage }) {
+function MessageBubble({
+  message,
+  conversationId,
+  searchQuery,
+  activeFilter,
+}: {
+  message: WhatsAppMessage
+  conversationId: string
+  searchQuery: string
+  activeFilter: ConversationFilter
+}) {
   const isOutbound = message.direction === 'outbound'
+  const quotedMessage = message.reply_to_message
 
   return (
     <div
@@ -1113,6 +1203,25 @@ function MessageBubble({ message }: { message: WhatsAppMessage }) {
             : 'rounded-bl-md border-white bg-white text-slate-950 shadow-blue-950/5',
         ].join(' ')}
       >
+        {quotedMessage ? (
+          <div
+            className={[
+              'mb-2 rounded-2xl border-l-4 px-3 py-2 text-xs leading-5',
+              isOutbound
+                ? 'border-[#0B55FF] bg-white/60 text-slate-700'
+                : 'border-slate-400 bg-slate-50 text-slate-700',
+            ].join(' ')}
+          >
+            <div className="mb-0.5 font-black text-slate-900">
+              {quotedMessage.direction === 'outbound' ? 'You' : 'Customer'}
+            </div>
+
+            <div className="line-clamp-2 break-words" dir="auto">
+              {getQuotedMessagePreview(quotedMessage)}
+            </div>
+          </div>
+        ) : null}
+
         <MediaPreview message={message} isOutbound={isOutbound} />
 
         {message.body ? (
@@ -1153,6 +1262,20 @@ function MessageBubble({ message }: { message: WhatsAppMessage }) {
             {message.error_message}
           </div>
         ) : null}
+
+        <div className="mt-1 flex justify-end">
+          <Link
+            href={buildReplyHref({
+              conversationId,
+              messageId: message.id,
+              searchQuery,
+              activeFilter,
+            })}
+            className="text-[11px] font-black text-slate-400 transition hover:text-[#0B55FF]"
+          >
+            Reply
+          </Link>
+        </div>
       </div>
     </div>
   )
@@ -1169,6 +1292,7 @@ export default async function WhatsAppConversationPage({
   const resolvedSearchParams = searchParams ? await searchParams : {}
   const searchQuery = getSingleSearchParam(resolvedSearchParams.q)
   const activeFilter = getActiveFilter(resolvedSearchParams.filter)
+  const replyToMessageId = getSingleSearchParam(resolvedSearchParams.replyTo)
 
   const [{ conversation, messages, existingBookingRequestId }, conversations] =
     await Promise.all([
@@ -1184,6 +1308,14 @@ export default async function WhatsAppConversationPage({
 
   const contact = conversation.contact
   const relatedProperty = conversation.related_property
+  const replyToMessage = replyToMessageId
+    ? messages.find((message) => message.id === replyToMessageId) ?? null
+    : null
+  const cancelReplyHref = buildCancelReplyHref({
+    conversationId: conversation.id,
+    searchQuery,
+    activeFilter,
+  })
   const isOwnerConversation =
     conversation.conversation_type === 'owner_onboarding' ||
     contact?.contact_type === 'owner'
@@ -1282,7 +1414,13 @@ export default async function WhatsAppConversationPage({
                   </div>
                 ) : (
                   messages.map((message) => (
-                    <MessageBubble key={message.id} message={message} />
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      conversationId={conversation.id}
+                      searchQuery={searchQuery}
+                      activeFilter={activeFilter}
+                    />
                   ))
                 )}
               </div>
@@ -1292,6 +1430,8 @@ export default async function WhatsAppConversationPage({
           <ReplyBox
             conversationId={conversation.id}
             conversationType={conversation.conversation_type}
+            replyToMessage={replyToMessage}
+            cancelReplyHref={cancelReplyHref}
           />
         </section>
       </div>

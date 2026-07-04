@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChangeEvent, FormEvent, useMemo, useRef, useState, useTransition } from 'react'
 import {
@@ -8,9 +9,19 @@ import {
   sendWhatsAppReplyAction,
 } from './actions'
 
+type ReplyTarget = {
+  id: string
+  direction: 'inbound' | 'outbound'
+  message_type: string
+  body: string | null
+  media_filename: string | null
+}
+
 type ReplyBoxProps = {
   conversationId: string
   conversationType?: string | null
+  replyToMessage?: ReplyTarget | null
+  cancelReplyHref?: string
 }
 
 type QuickReply = {
@@ -1235,9 +1246,20 @@ function AttachmentMenuIcon({ icon }: { icon: string }) {
     </span>
   )
 }
+
+
+function getReplyTargetPreview(replyToMessage: ReplyTarget) {
+  return (
+    replyToMessage.body ||
+    replyToMessage.media_filename ||
+    `[${replyToMessage.message_type}]`
+  )
+}
 export default function ReplyBox({
   conversationId,
   conversationType,
+  replyToMessage = null,
+  cancelReplyHref,
 }: ReplyBoxProps) {
   const router = useRouter()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -1402,6 +1424,10 @@ export default function ReplyBox({
           formData.append('caption', caption)
         }
 
+        if (replyToMessage?.id) {
+          formData.append('reply_to_message_id', replyToMessage.id)
+        }
+
         const result = await sendWhatsAppMediaReplyAction(
           conversationId,
           formData
@@ -1431,7 +1457,11 @@ export default function ReplyBox({
     setError(null)
 
     startTransition(async () => {
-      const result = await sendWhatsAppReplyAction(conversationId, body)
+      const result = await sendWhatsAppReplyAction(
+        conversationId,
+        body,
+        replyToMessage?.id ?? null
+      )
 
       if (!result.ok) {
         setError(result.error || 'فشل إرسال الرسالة.')
@@ -1747,6 +1777,27 @@ export default function ReplyBox({
             </div>
 
             <div className="absolute bottom-[-9px] left-[30px] h-4 w-4 rotate-45 border-b border-r border-blue-100 bg-white" />
+          </div>
+        ) : null}
+
+        {replyToMessage ? (
+          <div className="mb-2 flex items-start justify-between gap-3 rounded-2xl border-l-4 border-[#0B55FF] bg-blue-50 px-4 py-3 text-sm ring-1 ring-blue-100">
+            <div className="min-w-0">
+              <div className="text-xs font-black text-[#0B55FF]">
+                Replying to {replyToMessage.direction === 'outbound' ? 'your message' : 'customer'}
+              </div>
+
+              <div className="mt-1 truncate font-medium text-slate-700" dir="auto">
+                {getReplyTargetPreview(replyToMessage)}
+              </div>
+            </div>
+
+            <Link
+              href={cancelReplyHref || `/admin/whatsapp/${conversationId}`}
+              className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 shadow-sm transition hover:text-red-600"
+            >
+              Cancel
+            </Link>
           </div>
         ) : null}
 

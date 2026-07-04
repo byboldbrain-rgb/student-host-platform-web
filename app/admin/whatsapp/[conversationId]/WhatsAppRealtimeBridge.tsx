@@ -21,43 +21,21 @@ export default function WhatsAppRealtimeBridge({ conversationId }: Props) {
   }
 
   useEffect(() => {
-    console.log('[NAVIENTY_REALTIME_BRIDGE] mounted', {
-      conversationId,
-      version: '2026-07-04-v2',
-    })
-
     const supabase = supabaseRef.current
 
-    if (!supabase) {
-      console.error('[NAVIENTY_REALTIME_BRIDGE] Supabase client missing')
-      return
-    }
-
-    function refreshNow(reason: string) {
-      console.log('[NAVIENTY_REALTIME_BRIDGE] refreshing:', reason)
-      router.refresh()
-    }
+    if (!supabase) return
 
     function scheduleRefresh(reason: string) {
+      console.log('[NAVIENTY_WHATSAPP_REALTIME] refresh:', reason)
+
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current)
       }
 
       refreshTimerRef.current = setTimeout(() => {
-        refreshNow(reason)
+        router.refresh()
       }, 250)
     }
-
-    supabase.auth.getSession().then(({ data, error }) => {
-      console.log('[NAVIENTY_REALTIME_BRIDGE] session:', {
-        hasSession: Boolean(data.session),
-        userId: data.session?.user?.id ?? null,
-      })
-
-      if (error) {
-        console.error('[NAVIENTY_REALTIME_BRIDGE] session error:', error)
-      }
-    })
 
     const channel = supabase
       .channel(`admin-whatsapp-conversation-${conversationId}`)
@@ -69,10 +47,7 @@ export default function WhatsAppRealtimeBridge({ conversationId }: Props) {
           table: 'whatsapp_messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
-          console.log('[NAVIENTY_REALTIME_BRIDGE] message change:', payload)
-          scheduleRefresh('whatsapp_messages changed')
-        }
+        () => scheduleRefresh('whatsapp_messages changed')
       )
       .on(
         'postgres_changes',
@@ -82,34 +57,24 @@ export default function WhatsAppRealtimeBridge({ conversationId }: Props) {
           table: 'whatsapp_conversations',
           filter: `id=eq.${conversationId}`,
         },
-        (payload) => {
-          console.log(
-            '[NAVIENTY_REALTIME_BRIDGE] conversation change:',
-            payload
-          )
-          scheduleRefresh('whatsapp_conversations changed')
-        }
+        () => scheduleRefresh('whatsapp_conversations changed')
       )
       .subscribe((status, error) => {
-        console.log('[NAVIENTY_REALTIME_BRIDGE] status:', status)
+        console.log('[NAVIENTY_WHATSAPP_REALTIME] status:', status)
 
         if (error) {
-          console.error('[NAVIENTY_REALTIME_BRIDGE] subscribe error:', error)
+          console.error('[NAVIENTY_WHATSAPP_REALTIME] error:', error)
         }
       })
 
-    // Guaranteed fallback:
-    // حتى لو Supabase Realtime فيه مشكلة RLS أو permissions،
-    // الصفحة هتعمل refresh تلقائي كل 3 ثواني من غير ما تضغط Refresh.
+    // Fallback polling so the inbox still updates even if Realtime policies fail.
     fallbackIntervalRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        refreshNow('fallback polling')
+        router.refresh()
       }
     }, 3000)
 
     return () => {
-      console.log('[NAVIENTY_REALTIME_BRIDGE] unmounted')
-
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current)
       }

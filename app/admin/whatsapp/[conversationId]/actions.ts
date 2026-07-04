@@ -227,9 +227,111 @@ async function updateWhatsAppConversationActivity({
   revalidatePath('/admin/whatsapp')
 }
 
+
+type WhatsAppReplyContext = {
+  replyToMessageId: string | null
+  replyToMetaMessageId: string | null
+}
+
+async function getWhatsAppReplyContext({
+  supabase,
+  conversationId,
+  replyToMessageId,
+}: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  conversationId: string
+  replyToMessageId?: string | null
+}): Promise<WhatsAppReplyContext | null> {
+  if (!replyToMessageId) return null
+
+  const { data: quotedMessage, error: quotedMessageError } = await supabase
+    .from('whatsapp_messages')
+    .select('id, wamid, meta_message_id')
+    .eq('id', replyToMessageId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle()
+
+  if (quotedMessageError) {
+    console.error('WHATSAPP_REPLY_QUOTED_MESSAGE_FETCH_ERROR:', quotedMessageError)
+    return null
+  }
+
+  const quotedMetaMessageId =
+    quotedMessage?.wamid || quotedMessage?.meta_message_id || null
+
+  if (!quotedMessage?.id || !quotedMetaMessageId) return null
+
+  return {
+    replyToMessageId: quotedMessage.id,
+    replyToMetaMessageId: quotedMetaMessageId,
+  }
+}
+
+function sanitizeStorageFilename(value: string | null | undefined) {
+  const fallback = 'attachment'
+
+  return (value || fallback)
+    .trim()
+    .replace(/[^\w.\-]+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 120) || fallback
+}
+
+async function uploadOutboundWhatsAppMediaPreview({
+  supabase,
+  conversationId,
+  file,
+}: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  conversationId: string
+  file: File
+}) {
+  const bucketName = process.env.SUPABASE_WHATSAPP_MEDIA_BUCKET || 'whatsapp-media'
+  const safeFilename = sanitizeStorageFilename(file.name)
+  const randomPart =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const storagePath = `outbound/${conversationId}/${Date.now()}-${randomPart}-${safeFilename}`
+  const arrayBuffer = await file.arrayBuffer()
+
+  const { error: storageUploadError } = await supabase.storage
+    .from(bucketName)
+    .upload(storagePath, arrayBuffer, {
+      contentType: file.type || 'application/octet-stream',
+      upsert: false,
+    })
+
+  if (storageUploadError) {
+    console.error(
+      'WHATSAPP_OUTBOUND_MEDIA_STORAGE_UPLOAD_ERROR:',
+      storageUploadError
+    )
+
+    return {
+      ok: false as const,
+      error: 'فشل حفظ الملف في Supabase Storage. تأكد إن bucket whatsapp-media موجود.',
+      mediaUrl: null,
+      storagePath: null,
+    }
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(bucketName)
+    .getPublicUrl(storagePath)
+
+  return {
+    ok: true as const,
+    error: null,
+    mediaUrl: publicUrlData?.publicUrl ?? null,
+    storagePath,
+  }
+}
+
 export async function sendWhatsAppReplyAction(
   conversationId: string,
-  messageBody: string
+  messageBody: string,
+  replyToMessageId?: string | null
 ): Promise<SendWhatsAppReplyResult> {
   try {
     const body = messageBody.trim()
@@ -269,6 +371,28 @@ export async function sendWhatsAppReplyAction(
 
     const { supabase, conversation, contact } = conversationResult
 
+    const replyContext = await getWhatsAppReplyContext({
+      supabase,
+      conversationId: conversation.id,
+      replyToMessageId,
+    })
+
+    const sendPayload: Record<string, unknown> = {
+      messaging_product: 'whatsapp',
+      to: contact.phone,
+      type: 'text',
+      text: {
+        preview_url: false,
+        body,
+      },
+    }
+
+    if (replyContext?.replyToMetaMessageId) {
+      sendPayload.context = {
+        message_id: replyContext.replyToMetaMessageId,
+      }
+    }
+
     const res = await fetch(
       `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
       {
@@ -277,15 +401,7 @@ export async function sendWhatsAppReplyAction(
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: contact.phone,
-          type: 'text',
-          text: {
-            preview_url: false,
-            body,
-          },
-        }),
+        body: JSON.stringify(sendPayload),
       }
     )
 
@@ -316,12 +432,10 @@ export async function sendWhatsAppReplyAction(
         message_type: 'text',
         body,
         status: 'sent',
+        reply_to_message_id: replyContext?.replyToMessageId ?? null,
+        reply_to_meta_message_id: replyContext?.replyToMetaMessageId ?? null,
         raw_payload: {
-          request: {
-            to: contact.phone,
-            type: 'text',
-            body,
-          },
+          request: sendPayload,
           response: data,
         },
       })
@@ -379,6 +493,11 @@ export async function sendWhatsAppMediaReplyAction(
 
     const file = fileValue
     const caption = typeof captionValue === 'string' ? captionValue.trim() : ''
+    const replyToMessageIdValue = formData.get('reply_to_message_id')
+    const replyToMessageId =
+      typeof replyToMessageIdValue === 'string' && replyToMessageIdValue.trim()
+        ? replyToMessageIdValue.trim()
+        : null
 
     if (file.size <= 0) {
       return {
@@ -416,6 +535,25 @@ export async function sendWhatsAppMediaReplyAction(
     }
 
     const { supabase, conversation, contact } = conversationResult
+
+    const replyContext = await getWhatsAppReplyContext({
+      supabase,
+      conversationId: conversation.id,
+      replyToMessageId,
+    })
+
+    const previewUpload = await uploadOutboundWhatsAppMediaPreview({
+      supabase,
+      conversationId: conversation.id,
+      file,
+    })
+
+    if (!previewUpload.ok) {
+      return {
+        ok: false,
+        error: previewUpload.error,
+      }
+    }
 
     const uploadFormData = new FormData()
     uploadFormData.append('messaging_product', 'whatsapp')
@@ -472,11 +610,17 @@ export async function sendWhatsAppMediaReplyAction(
       mediaObject.filename = file.name
     }
 
-    const sendPayload = {
+    const sendPayload: Record<string, unknown> = {
       messaging_product: 'whatsapp',
       to: contact.phone,
       type: mediaType,
       [mediaType]: mediaObject,
+    }
+
+    if (replyContext?.replyToMetaMessageId) {
+      sendPayload.context = {
+        message_id: replyContext.replyToMetaMessageId,
+      }
     }
 
     const sendRes = await fetch(
@@ -521,7 +665,11 @@ export async function sendWhatsAppMediaReplyAction(
         media_id: mediaId,
         media_mime_type: file.type || null,
         media_filename: file.name || null,
+        media_url: previewUpload.mediaUrl,
+        media_storage_path: previewUpload.storagePath,
         media_file_size: file.size,
+        reply_to_message_id: replyContext?.replyToMessageId ?? null,
+        reply_to_meta_message_id: replyContext?.replyToMetaMessageId ?? null,
         raw_payload: {
           upload_response: uploadData,
           send_request: sendPayload,
