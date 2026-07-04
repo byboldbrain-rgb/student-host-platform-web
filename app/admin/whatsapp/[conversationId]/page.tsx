@@ -3,6 +3,9 @@ import Link from 'next/link'
 import ReplyBox from './ReplyBox'
 import CreateBookingRequestButton from './CreateBookingRequestButton'
 import MarkAsOwnerButton from './MarkAsOwnerButton'
+import WhatsAppRealtimeBridge from './WhatsAppRealtimeBridge'
+
+export const dynamic = 'force-dynamic'
 
 type WhatsAppContact = {
   id: string
@@ -1187,6 +1190,8 @@ export default async function WhatsAppConversationPage({
 
   return (
     <main className="min-h-screen bg-[#F3F7FF] p-0 text-slate-950 md:p-4">
+      <WhatsAppRealtimeBridge conversationId={conversation.id} />
+
       <div className="mx-auto flex h-[100dvh] max-w-[1500px] overflow-hidden bg-white shadow-2xl shadow-blue-950/10 ring-1 ring-blue-100 md:h-[calc(100vh-2rem)] md:rounded-[30px]">
         <NavientyRail activeFilter={activeFilter} />
 
