@@ -28,6 +28,12 @@ export async function POST(req: NextRequest) {
     const auth = body?.keys?.auth
 
     if (!endpoint || !p256dh || !auth) {
+      console.error('ADMIN_WHATSAPP_PUSH_INVALID_SUBSCRIPTION:', {
+        hasEndpoint: Boolean(endpoint),
+        hasP256dh: Boolean(p256dh),
+        hasAuth: Boolean(auth),
+      })
+
       return NextResponse.json(
         {
           ok: false,
@@ -39,6 +45,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdminClient()
     const userAgent = req.headers.get('user-agent')
+    const now = new Date().toISOString()
 
     const { error } = await supabase
       .from('admin_push_subscriptions')
@@ -49,7 +56,7 @@ export async function POST(req: NextRequest) {
           auth,
           user_agent: userAgent,
           is_active: true,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         },
         {
           onConflict: 'endpoint',
@@ -57,16 +64,35 @@ export async function POST(req: NextRequest) {
       )
 
     if (error) {
-      console.error('ADMIN_WHATSAPP_PUSH_SUBSCRIBE_ERROR:', error)
+      console.error('ADMIN_WHATSAPP_PUSH_SUBSCRIBE_ERROR:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
 
       return NextResponse.json(
         {
           ok: false,
           error: 'Failed to save push subscription.',
+          debug:
+            process.env.NODE_ENV === 'production'
+              ? undefined
+              : {
+                  code: error.code,
+                  message: error.message,
+                  details: error.details,
+                  hint: error.hint,
+                },
         },
         { status: 500 }
       )
     }
+
+    console.log('ADMIN_WHATSAPP_PUSH_SUBSCRIPTION_SAVED:', {
+      endpointStart: String(endpoint).slice(0, 40),
+      userAgent,
+    })
 
     return NextResponse.json({
       ok: true,
