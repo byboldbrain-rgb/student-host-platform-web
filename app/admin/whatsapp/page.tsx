@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import EnableWhatsappNotificationsButton from './EnableWhatsappNotificationsButton'
+
+export const dynamic = 'force-dynamic'
 
 type WhatsAppContact = {
   id: string
@@ -488,14 +491,17 @@ function ConversationSidebar({
       ].join(' ')}
     >
       <div className="border-b border-blue-100 bg-white px-4 pb-4 pt-5">
-        <div className="mb-4">
-          <h1 className="text-2xl font-black tracking-tight text-slate-950">
-            Navienty WhatsApp
-          </h1>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-950">
+              Navienty WhatsApp
+            </h1>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              {totalCount} conversations · Admin inbox
+            </p>
+          </div>
 
-          <p className="mt-1 text-xs font-medium text-slate-500">
-            {totalCount} conversations · Admin inbox
-          </p>
+          <EnableWhatsappNotificationsButton />
         </div>
 
         <form action={basePath} className="relative">
@@ -559,7 +565,7 @@ function ConversationSidebar({
                     <div className="mb-1 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div
-                          className="truncate text-[15px] font-bold text-slate-950"
+                          className="truncate text-[15px] font-black text-slate-950"
                           dir="auto"
                         >
                           {getContactName(contact)}
@@ -567,7 +573,7 @@ function ConversationSidebar({
 
                         {shouldShowPhoneUnderName(contact) ? (
                           <div
-                            className="mt-0.5 truncate text-xs font-medium text-slate-500"
+                            className="mt-0.5 truncate text-xs font-semibold text-slate-500"
                             dir="ltr"
                           >
                             {phone}
@@ -608,14 +614,24 @@ function ConversationSidebar({
 
 function EmptyRightPanel() {
   return (
-    <section className="hidden min-w-0 flex-1 overflow-hidden bg-white md:flex">
-      <div className="flex h-full w-full items-center justify-center p-6 md:p-10">
-        <img
-          src="https://i.ibb.co/7NVrNvxd/Untitled.png"
-          alt="Navienty logo"
-          className="h-full max-h-[92%] w-full max-w-[92%] object-contain select-none"
-          draggable={false}
-        />
+    <section className="hidden min-w-0 flex-1 items-center justify-center bg-[#F8FBFF] p-8 md:flex">
+      <div className="max-w-md text-center">
+        <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] bg-white p-4 shadow-xl shadow-blue-500/10 ring-1 ring-blue-100">
+          <img
+            src="https://i.ibb.co/7NVrNvxd/Untitled.png"
+            alt="Navienty logo"
+            className="h-full w-full object-contain"
+            draggable={false}
+          />
+        </div>
+
+        <h2 className="text-2xl font-black text-slate-950">
+          Select a conversation
+        </h2>
+
+        <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
+          اختار محادثة من القائمة علشان ترد على الطلاب أو الملاك من WhatsApp API.
+        </p>
       </div>
     </section>
   )
@@ -631,7 +647,6 @@ export default async function WhatsAppInboxPage({
   const activeFilter = getActiveFilter(resolvedSearchParams.filter)
 
   const conversations = await getWhatsAppConversations()
-
   const filteredConversations = filterConversations({
     conversations,
     searchQuery,

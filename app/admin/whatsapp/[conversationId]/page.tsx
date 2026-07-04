@@ -584,6 +584,7 @@ function buildConversationHref({
     : `/admin/whatsapp/${conversationId}`
 }
 
+
 function buildReplyHref({
   conversationId,
   messageId,
@@ -626,12 +627,14 @@ function buildCancelReplyHref({
   })
 }
 
-function getQuotedMessagePreview(
-  message: WhatsAppQuotedMessage | null | undefined
-) {
+function getQuotedMessagePreview(message: WhatsAppQuotedMessage | null | undefined) {
   if (!message) return ''
 
-  return message.body || message.media_filename || `[${message.message_type}]`
+  return (
+    message.body ||
+    message.media_filename ||
+    `[${message.message_type}]`
+  )
 }
 
 function isImageMessage(message: WhatsAppMessage) {
@@ -1188,30 +1191,27 @@ function MessageBubble({
 
   return (
     <div
-      id={`message-${message.id}`}
       className={[
-        'message-anchor flex w-full scroll-mt-32',
+        'flex w-full',
         isOutbound ? 'justify-end' : 'justify-start',
       ].join(' ')}
     >
       <div
         className={[
-          'message-bubble-content max-w-[85%] rounded-3xl border px-3.5 py-2.5 text-[15px] leading-7 shadow-sm transition-all duration-300 md:max-w-[75%]',
+          'max-w-[85%] rounded-3xl border px-3.5 py-2.5 text-[15px] leading-7 shadow-sm md:max-w-[75%]',
           isOutbound
             ? 'rounded-br-md border-blue-100 bg-[#DCEBFF] text-slate-950'
             : 'rounded-bl-md border-white bg-white text-slate-950 shadow-blue-950/5',
         ].join(' ')}
       >
         {quotedMessage ? (
-          <a
-            href={`#message-${quotedMessage.id}`}
+          <div
             className={[
-              'mb-2 block cursor-pointer rounded-2xl border-l-4 px-3 py-2 text-left text-xs leading-5 transition hover:scale-[1.01]',
+              'mb-2 rounded-2xl border-l-4 px-3 py-2 text-xs leading-5',
               isOutbound
-                ? 'border-[#0B55FF] bg-white/60 text-slate-700 hover:bg-white'
-                : 'border-slate-400 bg-slate-50 text-slate-700 hover:bg-blue-50',
+                ? 'border-[#0B55FF] bg-white/60 text-slate-700'
+                : 'border-slate-400 bg-slate-50 text-slate-700',
             ].join(' ')}
-            title="Go to original message"
           >
             <div className="mb-0.5 font-black text-slate-900">
               {quotedMessage.direction === 'outbound' ? 'You' : 'Customer'}
@@ -1220,7 +1220,7 @@ function MessageBubble({
             <div className="line-clamp-2 break-words" dir="auto">
               {getQuotedMessagePreview(quotedMessage)}
             </div>
-          </a>
+          </div>
         ) : null}
 
         <MediaPreview message={message} isOutbound={isOutbound} />
@@ -1323,38 +1323,6 @@ export default async function WhatsAppConversationPage({
 
   return (
     <main className="min-h-screen bg-[#F3F7FF] p-0 text-slate-950 md:p-4">
-      <style>
-        {`
-          html {
-            scroll-behavior: smooth;
-          }
-
-          .message-anchor:target .message-bubble-content {
-            animation: navientyMessageHighlight 1.8s ease-in-out;
-          }
-
-          @keyframes navientyMessageHighlight {
-            0% {
-              box-shadow: 0 0 0 0 rgba(11, 85, 255, 0.75);
-              outline: 0 solid rgba(11, 85, 255, 0);
-              transform: scale(1);
-            }
-
-            35% {
-              box-shadow: 0 0 0 8px rgba(11, 85, 255, 0.22);
-              outline: 3px solid rgba(11, 85, 255, 0.35);
-              transform: scale(1.015);
-            }
-
-            100% {
-              box-shadow: 0 0 0 0 rgba(11, 85, 255, 0);
-              outline: 0 solid rgba(11, 85, 255, 0);
-              transform: scale(1);
-            }
-          }
-        `}
-      </style>
-
       <WhatsAppRealtimeBridge conversationId={conversation.id} />
 
       <div className="mx-auto flex h-[100dvh] max-w-[1500px] overflow-hidden bg-white shadow-2xl shadow-blue-950/10 ring-1 ring-blue-100 md:h-[calc(100vh-2rem)] md:rounded-[30px]">
@@ -1398,12 +1366,12 @@ export default async function WhatsAppConversationPage({
               </div>
             </div>
 
-            <div className="hidden items-center gap-2 sm:flex">
+            <div className="flex shrink-0 items-center gap-2">
               <EnableWhatsappNotificationsButton />
 
               <Link
                 href={`/admin/whatsapp/${conversation.id}`}
-                className="inline-flex h-10 items-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-[#0B55FF] transition hover:bg-blue-100"
+                className="hidden h-10 items-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-[#0B55FF] transition hover:bg-blue-100 sm:inline-flex"
               >
                 <RefreshIcon />
                 Refresh
@@ -1412,7 +1380,7 @@ export default async function WhatsAppConversationPage({
           </header>
 
           <div
-            className="min-h-0 flex-1 scroll-smooth overflow-y-auto px-3 py-4 md:px-8 md:py-6"
+            className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-8 md:py-6"
             style={navientyChatPattern}
           >
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">

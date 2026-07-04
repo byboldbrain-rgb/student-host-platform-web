@@ -27,28 +27,56 @@ function isPushSupported() {
   )
 }
 
+function BellIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M18 8.75a6 6 0 0 0-12 0c0 7-3 7.75-3 7.75h18s-3-.75-3-7.75Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14.1 20a2.25 2.25 0 0 1-4.2 0"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export default function EnableWhatsappNotificationsButton() {
   const [isSupported, setIsSupported] = useState(false)
-  const [permission, setPermission] =
-    useState<NotificationPermission>('default')
+  const [hasCheckedSupport, setHasCheckedSupport] = useState(false)
+  const [permission, setPermission] = useState<NotificationPermission>('default')
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    if (!isPushSupported()) {
-      setIsSupported(false)
-      return
-    }
+    const supported = isPushSupported()
 
-    setIsSupported(true)
-    setPermission(Notification.permission)
+    setIsSupported(supported)
+    setHasCheckedSupport(true)
+
+    if (supported) {
+      setPermission(Notification.permission)
+    }
   }, [])
 
   async function enableNotifications() {
     setMessage(null)
 
     if (!isPushSupported()) {
-      setMessage('المتصفح ده مش بيدعم Push Notifications.')
+      setMessage(
+        'المتصفح ده مش بيدعم Push Notifications. على iPhone افتح Navienty من Home Screen بعد Add to Home Screen.'
+      )
       return
     }
 
@@ -62,8 +90,8 @@ export default function EnableWhatsappNotificationsButton() {
     startTransition(async () => {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js')
-
         const nextPermission = await Notification.requestPermission()
+
         setPermission(nextPermission)
 
         if (nextPermission !== 'granted') {
@@ -80,7 +108,7 @@ export default function EnableWhatsappNotificationsButton() {
           })
         }
 
-        const response = await fetch('/api/admin/whatsapp/push/subscribe', {
+        const response = await fetch('/api/whatsapp/push/subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -113,31 +141,46 @@ export default function EnableWhatsappNotificationsButton() {
     })
   }
 
-  if (!isSupported) {
-    return null
-  }
+  const isDisabled = isPending || (hasCheckedSupport && !isSupported)
+  const label = isPending
+    ? 'Activating...'
+    : permission === 'granted'
+      ? 'Notifications On'
+      : hasCheckedSupport && !isSupported
+        ? 'Notifications unavailable'
+        : 'Enable Notifications'
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="relative">
       <button
         type="button"
         onClick={enableNotifications}
-        disabled={isPending}
+        disabled={isDisabled}
         className={[
-          'hidden h-10 items-center gap-2 rounded-full px-4 text-sm font-bold shadow-sm transition sm:inline-flex',
+          'inline-flex h-10 items-center gap-2 rounded-full px-3 text-xs font-black transition sm:px-4 sm:text-sm',
           permission === 'granted'
             ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100'
-            : 'bg-[#0B55FF] text-white shadow-blue-500/20 hover:bg-[#0048DB]',
-          isPending ? 'cursor-not-allowed opacity-60' : '',
+            : 'bg-blue-50 text-[#0B55FF] ring-1 ring-blue-100 hover:bg-blue-100',
+          isDisabled ? 'cursor-not-allowed opacity-70' : '',
         ].join(' ')}
+        title={label}
       >
-        {isPending ? 'Activating...' : permission === 'granted' ? 'Notifications On' : 'Enable Notifications'}
+        {isPending ? (
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
+        ) : (
+          <BellIcon />
+        )}
+
+        <span className="hidden sm:inline">{label}</span>
+        <span className="sm:hidden">
+          {permission === 'granted' ? 'On' : 'Notify'}
+        </span>
       </button>
 
       {message ? (
-        <p className="hidden max-w-[280px] text-right text-[11px] font-semibold text-slate-500 sm:block">
+        <div className="absolute right-0 top-12 z-50 w-[280px] rounded-2xl border border-blue-100 bg-white p-3 text-xs font-bold leading-5 text-slate-700 shadow-2xl shadow-slate-950/15">
           {message}
-        </p>
+        </div>
       ) : null}
     </div>
   )
