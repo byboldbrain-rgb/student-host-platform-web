@@ -40,6 +40,7 @@ type SupabaseAdminClient = ReturnType<typeof getSupabaseAdminClient>
 
 function normalizeWhatsAppPhone(phone: string | null | undefined) {
   if (!phone) return null
+
   return phone.replace(/[^\d]/g, '')
 }
 
@@ -242,8 +243,7 @@ async function downloadAndStoreWhatsAppMedia({
   messageType: string
 }): Promise<WhatsAppMediaDownloadResult | null> {
   const accessToken = process.env.META_WA_ACCESS_TOKEN
-  const bucketName =
-    process.env.SUPABASE_WHATSAPP_MEDIA_BUCKET || 'whatsapp-media'
+  const bucketName = process.env.SUPABASE_WHATSAPP_MEDIA_BUCKET || 'whatsapp-media'
 
   if (!accessToken) {
     console.error('WHATSAPP_MEDIA_MISSING_ACCESS_TOKEN')
@@ -264,15 +264,12 @@ async function downloadAndStoreWhatsAppMedia({
     `${messageType}-${mediaId}.${getExtensionFromMimeType(fallbackMimeType)}`
 
   try {
-    const metadataRes = await fetch(
-      `https://graph.facebook.com/v25.0/${mediaId}`,
-      {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    )
+    const metadataRes = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
 
     const metadata = await metadataRes.json()
 
@@ -405,6 +402,34 @@ async function downloadAndStoreWhatsAppMedia({
   }
 }
 
+async function findQuotedMessageId({
+  supabase,
+  conversationId,
+  replyToMetaMessageId,
+}: {
+  supabase: SupabaseAdminClient
+  conversationId: string | null
+  replyToMetaMessageId: string | null
+}) {
+  if (!conversationId || !replyToMetaMessageId) return null
+
+  const { data: quotedMessage, error: quotedMessageError } = await supabase
+    .from('whatsapp_messages')
+    .select('id')
+    .eq('conversation_id', conversationId)
+    .or(`wamid.eq.${replyToMetaMessageId},meta_message_id.eq.${replyToMetaMessageId}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (quotedMessageError) {
+    console.error('WHATSAPP_QUOTED_MESSAGE_LOOKUP_ERROR:', quotedMessageError)
+    return null
+  }
+
+  return quotedMessage?.id ?? null
+}
+
 async function markLatestClickIntentAsSent({
   supabase,
   linkedProperty,
@@ -445,6 +470,7 @@ async function markLatestClickIntentAsSent({
       propertyPublicId: linkedProperty.property_id,
       conversationId,
     })
+
     return
   }
 
@@ -474,11 +500,9 @@ async function markLatestClickIntentAsSent({
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
-
   const mode = searchParams.get('hub.mode')
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
-
   const verifyToken = process.env.META_WA_VERIFY_TOKEN
 
   if (mode === 'subscribe' && token === verifyToken && challenge) {
@@ -500,7 +524,6 @@ export async function POST(req: NextRequest) {
     console.log('WHATSAPP_WEBHOOK_PAYLOAD:', JSON.stringify(body, null, 2))
 
     const supabase = getSupabaseAdminClient()
-
     const entries = body?.entry ?? []
 
     for (const entry of entries) {
@@ -525,6 +548,7 @@ export async function POST(req: NextRequest) {
           const displayName = contacts?.[0]?.profile?.name ?? null
           const messageType = message?.type ?? 'unknown'
           const textBody = getTextBodyFromMessage(message, messageType)
+          const replyToMetaMessageId = message?.context?.id ?? null
 
           const linkedProperty = await findLinkedPropertyFromMessage({
             supabase,
@@ -640,6 +664,12 @@ export async function POST(req: NextRequest) {
             conversationId = newConversation.id
           }
 
+          const replyToMessageId = await findQuotedMessageId({
+            supabase,
+            conversationId,
+            replyToMetaMessageId,
+          })
+
           const { error: messageInsertError } = await supabase
             .from('whatsapp_messages')
             .insert({
@@ -651,7 +681,6 @@ export async function POST(req: NextRequest) {
               message_type: messageType,
               body: textBody,
               status: 'received',
-
               media_id: mediaResult?.mediaId ?? null,
               media_mime_type: mediaResult?.mediaMimeType ?? null,
               media_filename: mediaResult?.mediaFilename ?? null,
@@ -659,7 +688,8 @@ export async function POST(req: NextRequest) {
               media_storage_path: mediaResult?.mediaStoragePath ?? null,
               media_sha256: mediaResult?.mediaSha256 ?? null,
               media_file_size: mediaResult?.mediaFileSize ?? null,
-
+              reply_to_message_id: replyToMessageId,
+              reply_to_meta_message_id: replyToMetaMessageId,
               raw_payload: {
                 entry,
                 change,
@@ -668,6 +698,8 @@ export async function POST(req: NextRequest) {
                 contact: contacts?.[0] ?? null,
                 linked_property: linkedProperty,
                 media: mediaResult,
+                reply_to_meta_message_id: replyToMetaMessageId,
+                reply_to_message_id: replyToMessageId,
               },
             })
 
@@ -726,6 +758,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('WHATSAPP_WEBHOOK_ERROR:', error)
+
     return NextResponse.json({ ok: false }, { status: 500 })
   }
 }
