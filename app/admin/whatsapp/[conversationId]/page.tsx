@@ -4,6 +4,7 @@ import ReplyBox from './ReplyBox'
 import CreateBookingRequestButton from './CreateBookingRequestButton'
 import MarkAsOwnerButton from './MarkAsOwnerButton'
 import WhatsAppRealtimeBridge from './WhatsAppRealtimeBridge'
+import EnableWhatsappNotificationsButton from '../EnableWhatsappNotificationsButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -1397,13 +1398,17 @@ export default async function WhatsAppConversationPage({
               </div>
             </div>
 
-            <Link
-              href={`/admin/whatsapp/${conversation.id}`}
-              className="hidden h-10 items-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-[#0B55FF] transition hover:bg-blue-100 sm:inline-flex"
-            >
-              <RefreshIcon />
-              Refresh
-            </Link>
+            <div className="hidden items-center gap-2 sm:flex">
+              <EnableWhatsappNotificationsButton />
+
+              <Link
+                href={`/admin/whatsapp/${conversation.id}`}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-blue-50 px-4 text-sm font-bold text-[#0B55FF] transition hover:bg-blue-100"
+              >
+                <RefreshIcon />
+                Refresh
+              </Link>
+            </div>
           </header>
 
           <div

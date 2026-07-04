@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { sendAdminWhatsAppPushNotification } from '@/src/lib/admin-whatsapp-push'
 
 export const runtime = 'nodejs'
 
@@ -243,7 +244,8 @@ async function downloadAndStoreWhatsAppMedia({
   messageType: string
 }): Promise<WhatsAppMediaDownloadResult | null> {
   const accessToken = process.env.META_WA_ACCESS_TOKEN
-  const bucketName = process.env.SUPABASE_WHATSAPP_MEDIA_BUCKET || 'whatsapp-media'
+  const bucketName =
+    process.env.SUPABASE_WHATSAPP_MEDIA_BUCKET || 'whatsapp-media'
 
   if (!accessToken) {
     console.error('WHATSAPP_MEDIA_MISSING_ACCESS_TOKEN')
@@ -264,12 +266,15 @@ async function downloadAndStoreWhatsAppMedia({
     `${messageType}-${mediaId}.${getExtensionFromMimeType(fallbackMimeType)}`
 
   try {
-    const metadataRes = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
+    const metadataRes = await fetch(
+      `https://graph.facebook.com/v25.0/${mediaId}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    )
 
     const metadata = await metadataRes.json()
 
@@ -417,7 +422,9 @@ async function findQuotedMessageId({
     .from('whatsapp_messages')
     .select('id')
     .eq('conversation_id', conversationId)
-    .or(`wamid.eq.${replyToMetaMessageId},meta_message_id.eq.${replyToMetaMessageId}`)
+    .or(
+      `wamid.eq.${replyToMetaMessageId},meta_message_id.eq.${replyToMetaMessageId}`
+    )
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -705,6 +712,18 @@ export async function POST(req: NextRequest) {
 
           if (messageInsertError) {
             console.error('WHATSAPP_MESSAGE_INSERT_ERROR:', messageInsertError)
+          } else if (conversationId) {
+            try {
+              await sendAdminWhatsAppPushNotification({
+                conversationId,
+                contactName: displayName,
+                contactPhone: waId,
+                messageBody: textBody,
+                messageType,
+              })
+            } catch (pushError) {
+              console.error('WHATSAPP_ADMIN_PUSH_NOTIFICATION_ERROR:', pushError)
+            }
           }
 
           if (linkedProperty && conversationId) {

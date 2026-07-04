@@ -68,7 +68,6 @@ self.addEventListener('push', function (event) {
   }
 
   const badgeCount = parseBadgeCount(data.badgeCount)
-
   const title = data.title || 'Navienty'
   const url = normalizeNotificationUrl(data.url)
 
@@ -84,6 +83,8 @@ self.addEventListener('push', function (event) {
       propertyId: data.propertyId || null,
       alertRequestId: data.alertRequestId || null,
       notificationId: data.notificationId || null,
+      conversationId: data.conversationId || null,
+      notificationType: data.notificationType || null,
     },
     vibrate: [120, 60, 120],
     requireInteraction: data.requireInteraction !== false,
@@ -101,9 +102,7 @@ self.addEventListener('notificationclick', function (event) {
   event.notification.close()
 
   const urlToOpen = normalizeNotificationUrl(
-    event.notification &&
-      event.notification.data &&
-      event.notification.data.url
+    event.notification && event.notification.data && event.notification.data.url
       ? event.notification.data.url
       : '/properties'
   )
@@ -153,9 +152,7 @@ self.addEventListener('notificationclick', function (event) {
 
 self.addEventListener('notificationclose', function (event) {
   const badgeCount =
-    event.notification &&
-    event.notification.data &&
-    event.notification.data.badgeCount
+    event.notification && event.notification.data && event.notification.data.badgeCount
       ? parseBadgeCount(event.notification.data.badgeCount)
       : 0
 
