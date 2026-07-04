@@ -29,12 +29,7 @@ function isPushSupported() {
 
 function BellIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
+    <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none">
       <path
         d="M18 8.75a6 6 0 0 0-12 0c0 7-3 7.75-3 7.75h18s-3-.75-3-7.75Z"
         stroke="currentColor"
@@ -55,9 +50,18 @@ function BellIcon() {
 export default function EnableWhatsappNotificationsButton() {
   const [isSupported, setIsSupported] = useState(false)
   const [hasCheckedSupport, setHasCheckedSupport] = useState(false)
-  const [permission, setPermission] = useState<NotificationPermission>('default')
+  const [permission, setPermission] =
+    useState<NotificationPermission>('default')
   const [message, setMessage] = useState<string | null>(null)
+  const [debugLines, setDebugLines] = useState<string[]>([])
   const [isPending, startTransition] = useTransition()
+
+  function addDebug(line: string) {
+    setDebugLines((current) => [
+      `${new Date().toLocaleTimeString()} - ${line}`,
+      ...current,
+    ].slice(0, 12))
+  }
 
   useEffect(() => {
     const supported = isPushSupported()
@@ -65,78 +69,123 @@ export default function EnableWhatsappNotificationsButton() {
     setIsSupported(supported)
     setHasCheckedSupport(true)
 
+    addDebug(`support=${supported ? 'yes' : 'no'}`)
+
+    if (typeof window !== 'undefined') {
+      addDebug(`displayModeStandalone=${window.matchMedia('(display-mode: standalone)').matches ? 'yes' : 'no'}`)
+      addDebug(`navigatorStandalone=${(navigator as any).standalone ? 'yes' : 'no'}`)
+    }
+
     if (supported) {
       setPermission(Notification.permission)
+      addDebug(`permission=${Notification.permission}`)
     }
   }, [])
 
   async function enableNotifications() {
     setMessage(null)
+    addDebug('button clicked')
 
     if (!isPushSupported()) {
       setMessage(
-        'المتصفح ده مش بيدعم Push Notifications. على iPhone افتح Navienty من Home Screen بعد Add to Home Screen.'
+        'المتصفح ده مش بيدعم Push Notifications. لازم تفتح من Home Screen على iPhone.'
       )
+      addDebug('stopped: push not supported')
       return
     }
 
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
     if (!vapidPublicKey) {
-      setMessage('VAPID public key مش موجود في env.')
+      setMessage('NEXT_PUBLIC_VAPID_PUBLIC_KEY مش موجود في Vercel env.')
+      addDebug('stopped: missing public VAPID key')
       return
     }
 
+    addDebug(`publicKeyLength=${vapidPublicKey.length}`)
+
     startTransition(async () => {
       try {
+        addDebug('registering service worker')
         const registration = await navigator.serviceWorker.register('/sw.js')
+
+        addDebug(`serviceWorkerScope=${registration.scope}`)
+
+        const readyRegistration = await navigator.serviceWorker.ready
+        addDebug(`serviceWorkerReady=${readyRegistration.scope}`)
+
+        addDebug('requesting notification permission')
         const nextPermission = await Notification.requestPermission()
 
         setPermission(nextPermission)
+        addDebug(`permissionResult=${nextPermission}`)
 
         if (nextPermission !== 'granted') {
-          setMessage('لازم تعمل Allow للإشعارات علشان توصلك على التليفون.')
+          setMessage('الإشعارات مرفوضة أو لم يتم السماح بها من iPhone.')
+          addDebug('stopped: permission not granted')
           return
         }
 
-        let subscription = await registration.pushManager.getSubscription()
+        let subscription = await readyRegistration.pushManager.getSubscription()
+
+        addDebug(`existingSubscription=${subscription ? 'yes' : 'no'}`)
 
         if (!subscription) {
-          subscription = await registration.pushManager.subscribe({
+          addDebug('creating push subscription')
+
+          subscription = await readyRegistration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
           })
+
+          addDebug('subscription created')
         }
+
+        const subscriptionJson = subscription.toJSON()
+
+        addDebug(`endpointExists=${subscriptionJson.endpoint ? 'yes' : 'no'}`)
+        addDebug(`p256dhExists=${subscriptionJson.keys?.p256dh ? 'yes' : 'no'}`)
+        addDebug(`authExists=${subscriptionJson.keys?.auth ? 'yes' : 'no'}`)
+
+        addDebug('posting subscription to server')
 
         const response = await fetch('/api/whatsapp/push/subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(subscription),
+          body: JSON.stringify(subscriptionJson),
         })
 
         const result = await response.json().catch(() => null)
 
+        addDebug(`serverStatus=${response.status}`)
+        addDebug(`serverOk=${result?.ok ? 'yes' : 'no'}`)
+
         if (!response.ok || !result?.ok) {
           setMessage(result?.error || 'فشل حفظ الجهاز للإشعارات.')
+          addDebug(`serverError=${result?.error || 'unknown'}`)
           return
         }
 
-        setMessage('تم تفعيل إشعارات رسائل واتساب على الجهاز ده ✅')
+        setMessage('تم تفعيل الإشعارات وحفظ الجهاز في الداتابيز ✅')
+        addDebug('done: subscription saved')
 
-        if (registration.active) {
-          registration.active.postMessage({
+        if (readyRegistration.active) {
+          readyRegistration.active.postMessage({
             type: 'NAVIENTY_TEST_NOTIFICATION',
             title: 'Navienty WhatsApp',
             body: 'تم تفعيل إشعارات رسائل واتساب بنجاح ✅',
             url: '/admin/whatsapp',
             badgeCount: 1,
           })
+
+          addDebug('test notification sent to service worker')
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('ENABLE_WHATSAPP_NOTIFICATIONS_ERROR:', error)
-        setMessage('حصل خطأ أثناء تفعيل الإشعارات.')
+        setMessage(error?.message || 'حصل خطأ أثناء تفعيل الإشعارات.')
+        addDebug(`catchError=${error?.name || 'Error'}: ${error?.message || 'unknown'}`)
       }
     })
   }
@@ -177,9 +226,15 @@ export default function EnableWhatsappNotificationsButton() {
         </span>
       </button>
 
-      {message ? (
-        <div className="absolute right-0 top-12 z-50 w-[280px] rounded-2xl border border-blue-100 bg-white p-3 text-xs font-bold leading-5 text-slate-700 shadow-2xl shadow-slate-950/15">
-          {message}
+      {message || debugLines.length > 0 ? (
+        <div className="absolute right-0 top-12 z-50 w-[340px] max-w-[calc(100vw-24px)] rounded-2xl border border-blue-100 bg-white p-3 text-xs font-bold leading-5 text-slate-700 shadow-2xl shadow-slate-950/15">
+          {message ? <div className="mb-2 text-[#0B55FF]">{message}</div> : null}
+
+          <div className="max-h-56 overflow-y-auto rounded-xl bg-slate-50 p-2 font-mono text-[11px] font-semibold text-slate-600">
+            {debugLines.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

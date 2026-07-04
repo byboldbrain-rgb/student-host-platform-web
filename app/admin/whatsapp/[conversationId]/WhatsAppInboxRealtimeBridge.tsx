@@ -2,18 +2,24 @@
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { createClient } from '@/src/lib/supabase/client'
 
 export default function WhatsAppInboxRealtimeBridge() {
   const router = useRouter()
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  )
+
+  if (!supabaseRef.current) {
+    supabaseRef.current = createClient()
+  }
 
   useEffect(() => {
+    const supabase = supabaseRef.current
+    if (!supabase) return
+
     function scheduleRefresh() {
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current)
@@ -21,11 +27,11 @@ export default function WhatsAppInboxRealtimeBridge() {
 
       refreshTimerRef.current = setTimeout(() => {
         router.refresh()
-      }, 500)
+      }, 300)
     }
 
     const channel = supabase
-      .channel('admin-whatsapp-inbox')
+      .channel('admin-whatsapp-inbox-realtime')
       .on(
         'postgres_changes',
         {
@@ -46,11 +52,15 @@ export default function WhatsAppInboxRealtimeBridge() {
       )
       .subscribe()
 
-    return () => {
-      if (refreshTimerRef.current) {
-        clearTimeout(refreshTimerRef.current)
+    fallbackIntervalRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        router.refresh()
       }
+    }, 3000)
 
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      if (fallbackIntervalRef.current) clearInterval(fallbackIntervalRef.current)
       supabase.removeChannel(channel)
     }
   }, [router])
