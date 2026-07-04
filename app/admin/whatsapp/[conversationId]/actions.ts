@@ -24,6 +24,16 @@ type SendWhatsAppReplyResult = {
   error?: string
 }
 
+type SendWhatsAppMediaReplyResult = {
+  ok: boolean
+  error?: string
+}
+
+type SendWhatsAppContactReplyResult = {
+  ok: boolean
+  error?: string
+}
+
 type CreateBookingRequestResult = {
   ok: boolean
   bookingRequestId?: string
@@ -41,6 +51,16 @@ type RequestedOptionCode =
   | 'triple_room'
   | 'full_apartment'
   | null
+
+type WhatsAppMediaType = 'image' | 'video' | 'audio' | 'document' | 'sticker'
+
+type WhatsAppContactRelation = {
+  id: string
+  phone: string | null
+  display_name?: string | null
+  opted_out?: boolean | null
+  blocked?: boolean | null
+}
 
 function normalizeRelation<T>(relation: T | T[] | null | undefined): T | null {
   if (Array.isArray(relation)) {
@@ -63,6 +83,148 @@ function normalizeRequestedOptionCode(
   }
 
   return null
+}
+
+function normalizeMediaHint(value: FormDataEntryValue | null) {
+  if (
+    value === 'document' ||
+    value === 'photos' ||
+    value === 'camera' ||
+    value === 'audio' ||
+    value === 'sticker'
+  ) {
+    return value
+  }
+
+  return null
+}
+
+function getWhatsAppMediaType(
+  file: File,
+  hint: ReturnType<typeof normalizeMediaHint>
+): WhatsAppMediaType {
+  const mimeType = file.type || ''
+
+  if (hint === 'document') return 'document'
+  if (hint === 'audio') return 'audio'
+  if (hint === 'sticker') return 'sticker'
+
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
+  if (mimeType.startsWith('audio/')) return 'audio'
+
+  return 'document'
+}
+
+function normalizeWhatsAppPhoneForContact(phone: string) {
+  return phone.replace(/[^0-9]/g, '')
+}
+
+async function getConversationContact(conversationId: string) {
+  const supabase = getSupabaseAdminClient()
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from('whatsapp_conversations')
+    .select(
+      `
+      id,
+      status,
+      contact:whatsapp_contacts (
+        id,
+        phone,
+        display_name,
+        opted_out,
+        blocked
+      )
+    `
+    )
+    .eq('id', conversationId)
+    .single()
+
+  if (conversationError || !conversation) {
+    console.error('WHATSAPP_CONVERSATION_FETCH_ERROR:', conversationError)
+
+    return {
+      ok: false as const,
+      error: 'Conversation not found',
+      supabase,
+      conversation: null,
+      contact: null,
+    }
+  }
+
+  const contact = normalizeRelation(
+    conversation.contact as WhatsAppContactRelation | WhatsAppContactRelation[] | null
+  )
+
+  if (!contact?.phone) {
+    return {
+      ok: false as const,
+      error: 'Conversation contact has no phone',
+      supabase,
+      conversation,
+      contact,
+    }
+  }
+
+  if (contact.blocked) {
+    return {
+      ok: false as const,
+      error: 'Contact is blocked',
+      supabase,
+      conversation,
+      contact,
+    }
+  }
+
+  if (contact.opted_out) {
+    return {
+      ok: false as const,
+      error: 'Contact opted out',
+      supabase,
+      conversation,
+      contact,
+    }
+  }
+
+  return {
+    ok: true as const,
+    supabase,
+    conversation,
+    contact,
+  }
+}
+
+async function updateWhatsAppConversationActivity({
+  supabase,
+  conversationId,
+  contactId,
+}: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>
+  conversationId: string
+  contactId: string
+}) {
+  const now = new Date().toISOString()
+
+  await supabase
+    .from('whatsapp_contacts')
+    .update({
+      last_outbound_at: now,
+      last_message_at: now,
+      updated_at: now,
+    })
+    .eq('id', contactId)
+
+  await supabase
+    .from('whatsapp_conversations')
+    .update({
+      last_message_at: now,
+      updated_at: now,
+    })
+    .eq('id', conversationId)
+
+  revalidatePath(`/admin/whatsapp/${conversationId}`)
+  revalidatePath('/admin/whatsapp')
 }
 
 export async function sendWhatsAppReplyAction(
@@ -96,59 +258,16 @@ export async function sendWhatsAppReplyAction(
       }
     }
 
-    const supabase = getSupabaseAdminClient()
+    const conversationResult = await getConversationContact(conversationId)
 
-    const { data: conversation, error: conversationError } = await supabase
-      .from('whatsapp_conversations')
-      .select(
-        `
-        id,
-        status,
-        contact:whatsapp_contacts (
-          id,
-          phone,
-          opted_out,
-          blocked
-        )
-      `
-      )
-      .eq('id', conversationId)
-      .single()
-
-    if (conversationError || !conversation) {
-      console.error(
-        'WHATSAPP_REPLY_CONVERSATION_FETCH_ERROR:',
-        conversationError
-      )
-
+    if (!conversationResult.ok) {
       return {
         ok: false,
-        error: 'Conversation not found',
+        error: conversationResult.error,
       }
     }
 
-    const contact = normalizeRelation(conversation.contact)
-
-    if (!contact?.phone) {
-      return {
-        ok: false,
-        error: 'Conversation contact has no phone',
-      }
-    }
-
-    if (contact.blocked) {
-      return {
-        ok: false,
-        error: 'Contact is blocked',
-      }
-    }
-
-    if (contact.opted_out) {
-      return {
-        ok: false,
-        error: 'Contact opted out',
-      }
-    }
+    const { supabase, conversation, contact } = conversationResult
 
     const res = await fetch(
       `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
@@ -170,7 +289,7 @@ export async function sendWhatsAppReplyAction(
       }
     )
 
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
 
     if (!res.ok) {
       console.error('WHATSAPP_REPLY_SEND_ERROR:', data)
@@ -184,7 +303,6 @@ export async function sendWhatsAppReplyAction(
       }
     }
 
-    const now = new Date().toISOString()
     const metaMessageId = data?.messages?.[0]?.id ?? null
 
     const { error: messageInsertError } = await supabase
@@ -217,31 +335,363 @@ export async function sendWhatsAppReplyAction(
       }
     }
 
-    await supabase
-      .from('whatsapp_contacts')
-      .update({
-        last_outbound_at: now,
-        last_message_at: now,
-        updated_at: now,
-      })
-      .eq('id', contact.id)
-
-    await supabase
-      .from('whatsapp_conversations')
-      .update({
-        last_message_at: now,
-        updated_at: now,
-      })
-      .eq('id', conversation.id)
-
-    revalidatePath(`/admin/whatsapp/${conversation.id}`)
-    revalidatePath('/admin/whatsapp')
+    await updateWhatsAppConversationActivity({
+      supabase,
+      conversationId: conversation.id,
+      contactId: contact.id,
+    })
 
     return {
       ok: true,
     }
   } catch (error) {
     console.error('WHATSAPP_REPLY_ACTION_ERROR:', error)
+
+    return {
+      ok: false,
+      error: 'Unexpected error',
+    }
+  }
+}
+
+export async function sendWhatsAppMediaReplyAction(
+  conversationId: string,
+  formData: FormData
+): Promise<SendWhatsAppMediaReplyResult> {
+  try {
+    if (!conversationId) {
+      return {
+        ok: false,
+        error: 'Missing conversation ID',
+      }
+    }
+
+    const fileValue = formData.get('file')
+    const captionValue = formData.get('caption')
+    const mediaHint = normalizeMediaHint(formData.get('media_type_hint'))
+
+    if (!(fileValue instanceof File)) {
+      return {
+        ok: false,
+        error: 'اختار ملف الأول.',
+      }
+    }
+
+    const file = fileValue
+    const caption = typeof captionValue === 'string' ? captionValue.trim() : ''
+
+    if (file.size <= 0) {
+      return {
+        ok: false,
+        error: 'الملف فاضي.',
+      }
+    }
+
+    const mediaType = getWhatsAppMediaType(file, mediaHint)
+
+    if (mediaType === 'sticker' && file.type !== 'image/webp') {
+      return {
+        ok: false,
+        error: 'الاستيكر لازم يكون بصيغة WebP.',
+      }
+    }
+
+    const accessToken = process.env.META_WA_ACCESS_TOKEN
+    const phoneNumberId = process.env.META_WA_PHONE_NUMBER_ID
+
+    if (!accessToken || !phoneNumberId) {
+      return {
+        ok: false,
+        error: 'Missing WhatsApp environment variables',
+      }
+    }
+
+    const conversationResult = await getConversationContact(conversationId)
+
+    if (!conversationResult.ok) {
+      return {
+        ok: false,
+        error: conversationResult.error,
+      }
+    }
+
+    const { supabase, conversation, contact } = conversationResult
+
+    const uploadFormData = new FormData()
+    uploadFormData.append('messaging_product', 'whatsapp')
+    uploadFormData.append('file', file, file.name || 'attachment')
+
+    const uploadRes = await fetch(
+      `https://graph.facebook.com/v25.0/${phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: uploadFormData,
+      }
+    )
+
+    const uploadData = await uploadRes.json().catch(() => ({}))
+
+    if (!uploadRes.ok) {
+      console.error('WHATSAPP_MEDIA_UPLOAD_ERROR:', uploadData)
+
+      return {
+        ok: false,
+        error:
+          uploadData?.error?.message ||
+          uploadData?.error?.error_user_msg ||
+          'فشل رفع الملف إلى WhatsApp.',
+      }
+    }
+
+    const mediaId = uploadData?.id
+
+    if (!mediaId) {
+      return {
+        ok: false,
+        error: 'WhatsApp did not return media ID.',
+      }
+    }
+
+    const mediaObject: Record<string, unknown> = {
+      id: mediaId,
+    }
+
+    if (
+      caption &&
+      (mediaType === 'image' ||
+        mediaType === 'video' ||
+        mediaType === 'document')
+    ) {
+      mediaObject.caption = caption
+    }
+
+    if (mediaType === 'document' && file.name) {
+      mediaObject.filename = file.name
+    }
+
+    const sendPayload = {
+      messaging_product: 'whatsapp',
+      to: contact.phone,
+      type: mediaType,
+      [mediaType]: mediaObject,
+    }
+
+    const sendRes = await fetch(
+      `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sendPayload),
+      }
+    )
+
+    const sendData = await sendRes.json().catch(() => ({}))
+
+    if (!sendRes.ok) {
+      console.error('WHATSAPP_MEDIA_SEND_ERROR:', sendData)
+
+      return {
+        ok: false,
+        error:
+          sendData?.error?.message ||
+          sendData?.error?.error_user_msg ||
+          'فشل إرسال الملف على WhatsApp.',
+      }
+    }
+
+    const metaMessageId = sendData?.messages?.[0]?.id ?? null
+
+    const { error: messageInsertError } = await supabase
+      .from('whatsapp_messages')
+      .insert({
+        conversation_id: conversation.id,
+        contact_id: contact.id,
+        direction: 'outbound',
+        meta_message_id: metaMessageId,
+        wamid: metaMessageId,
+        message_type: mediaType,
+        body: caption || null,
+        status: 'sent',
+        media_id: mediaId,
+        media_mime_type: file.type || null,
+        media_filename: file.name || null,
+        media_file_size: file.size,
+        raw_payload: {
+          upload_response: uploadData,
+          send_request: sendPayload,
+          send_response: sendData,
+        },
+      })
+
+    if (messageInsertError) {
+      console.error('WHATSAPP_MEDIA_MESSAGE_INSERT_ERROR:', messageInsertError)
+
+      return {
+        ok: false,
+        error: 'Media sent but failed to save in database',
+      }
+    }
+
+    await updateWhatsAppConversationActivity({
+      supabase,
+      conversationId: conversation.id,
+      contactId: contact.id,
+    })
+
+    return {
+      ok: true,
+    }
+  } catch (error) {
+    console.error('WHATSAPP_MEDIA_REPLY_ACTION_ERROR:', error)
+
+    return {
+      ok: false,
+      error: 'Unexpected error',
+    }
+  }
+}
+
+export async function sendWhatsAppContactReplyAction(
+  conversationId: string,
+  contactName: string,
+  contactPhone: string
+): Promise<SendWhatsAppContactReplyResult> {
+  try {
+    const name = contactName.trim()
+    const phone = contactPhone.trim()
+    const waId = normalizeWhatsAppPhoneForContact(phone)
+
+    if (!conversationId) {
+      return {
+        ok: false,
+        error: 'Missing conversation ID',
+      }
+    }
+
+    if (!name || !phone || !waId) {
+      return {
+        ok: false,
+        error: 'اكتب اسم ورقم جهة الاتصال.',
+      }
+    }
+
+    const accessToken = process.env.META_WA_ACCESS_TOKEN
+    const phoneNumberId = process.env.META_WA_PHONE_NUMBER_ID
+
+    if (!accessToken || !phoneNumberId) {
+      return {
+        ok: false,
+        error: 'Missing WhatsApp environment variables',
+      }
+    }
+
+    const conversationResult = await getConversationContact(conversationId)
+
+    if (!conversationResult.ok) {
+      return {
+        ok: false,
+        error: conversationResult.error,
+      }
+    }
+
+    const { supabase, conversation, contact } = conversationResult
+
+    const sendPayload = {
+      messaging_product: 'whatsapp',
+      to: contact.phone,
+      type: 'contacts',
+      contacts: [
+        {
+          name: {
+            formatted_name: name,
+            first_name: name,
+          },
+          phones: [
+            {
+              phone,
+              wa_id: waId,
+              type: 'CELL',
+            },
+          ],
+        },
+      ],
+    }
+
+    const sendRes = await fetch(
+      `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sendPayload),
+      }
+    )
+
+    const sendData = await sendRes.json().catch(() => ({}))
+
+    if (!sendRes.ok) {
+      console.error('WHATSAPP_CONTACT_SEND_ERROR:', sendData)
+
+      return {
+        ok: false,
+        error:
+          sendData?.error?.message ||
+          sendData?.error?.error_user_msg ||
+          'فشل إرسال جهة الاتصال على WhatsApp.',
+      }
+    }
+
+    const metaMessageId = sendData?.messages?.[0]?.id ?? null
+    const body = `Contact: ${name} - ${phone}`
+
+    const { error: messageInsertError } = await supabase
+      .from('whatsapp_messages')
+      .insert({
+        conversation_id: conversation.id,
+        contact_id: contact.id,
+        direction: 'outbound',
+        meta_message_id: metaMessageId,
+        wamid: metaMessageId,
+        message_type: 'contacts',
+        body,
+        status: 'sent',
+        raw_payload: {
+          send_request: sendPayload,
+          send_response: sendData,
+        },
+      })
+
+    if (messageInsertError) {
+      console.error(
+        'WHATSAPP_CONTACT_MESSAGE_INSERT_ERROR:',
+        messageInsertError
+      )
+
+      return {
+        ok: false,
+        error: 'Contact sent but failed to save in database',
+      }
+    }
+
+    await updateWhatsAppConversationActivity({
+      supabase,
+      conversationId: conversation.id,
+      contactId: contact.id,
+    })
+
+    return {
+      ok: true,
+    }
+  } catch (error) {
+    console.error('WHATSAPP_CONTACT_REPLY_ACTION_ERROR:', error)
 
     return {
       ok: false,
@@ -291,7 +741,12 @@ export async function markWhatsAppConversationAsOwnerAction(
       }
     }
 
-    const contact = normalizeRelation(conversation.contact)
+    const contact = normalizeRelation(
+      conversation.contact as
+        | { id: string; phone: string | null; display_name: string | null }
+        | { id: string; phone: string | null; display_name: string | null }[]
+        | null
+    )
     const contactId = contact?.id || conversation.contact_id
 
     if (!contactId) {
@@ -402,7 +857,12 @@ export async function createBookingRequestFromWhatsAppAction(
       }
     }
 
-    const contact = normalizeRelation(conversation.contact)
+    const contact = normalizeRelation(
+      conversation.contact as
+        | { id: string; phone: string | null; display_name: string | null }
+        | { id: string; phone: string | null; display_name: string | null }[]
+        | null
+    )
 
     if (!conversation.related_property_id) {
       return {
@@ -484,10 +944,7 @@ export async function createBookingRequestFromWhatsAppAction(
         .maybeSingle()
 
     if (messageLookupError) {
-      console.error(
-        'WHATSAPP_BOOKING_MESSAGE_LOOKUP_ERROR:',
-        messageLookupError
-      )
+      console.error('WHATSAPP_BOOKING_MESSAGE_LOOKUP_ERROR:', messageLookupError)
     }
 
     const { data: latestClickIntent, error: clickIntentLookupError } =
@@ -510,12 +967,8 @@ export async function createBookingRequestFromWhatsAppAction(
       latestClickIntent?.requested_option_code
     )
 
-    const customerName =
-      contact.display_name?.trim() || `WhatsApp ${contact.phone}`
-
-    const propertyTitle =
-      property.title_ar || property.title_en || property.property_id
-
+    const customerName = contact.display_name?.trim() || `WhatsApp ${contact.phone}`
+    const propertyTitle = property.title_ar || property.title_en || property.property_id
     const notes = [
       'Created automatically from WhatsApp conversation.',
       '',

@@ -1,8 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { FormEvent, useMemo, useRef, useState, useTransition } from 'react'
-import { sendWhatsAppReplyAction } from './actions'
+import { ChangeEvent, FormEvent, useMemo, useRef, useState, useTransition } from 'react'
+import {
+  sendWhatsAppContactReplyAction,
+  sendWhatsAppMediaReplyAction,
+  sendWhatsAppReplyAction,
+} from './actions'
 
 type ReplyBoxProps = {
   conversationId: string
@@ -14,7 +18,7 @@ type QuickReply = {
   body: string
 }
 
-type ActivePanel = 'emojis' | 'quickReplies' | null
+type ActivePanel = 'attachments' | 'emojis' | 'quickReplies' | null
 
 type EmojiCategoryKey =
   | 'smileys'
@@ -1197,12 +1201,51 @@ function CloseIcon() {
   )
 }
 
+
+
+function PlusIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-6 w-6"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+type AttachmentPickerKind =
+  | 'document'
+  | 'photos'
+  | 'camera'
+  | 'audio'
+  | 'sticker'
+
+function AttachmentMenuIcon({ icon }: { icon: string }) {
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-lg">
+      {icon}
+    </span>
+  )
+}
 export default function ReplyBox({
   conversationId,
   conversationType,
 }: ReplyBoxProps) {
   const router = useRouter()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const documentInputRef = useRef<HTMLInputElement | null>(null)
+  const photosInputRef = useRef<HTMLInputElement | null>(null)
+  const cameraInputRef = useRef<HTMLInputElement | null>(null)
+  const audioInputRef = useRef<HTMLInputElement | null>(null)
+  const stickerInputRef = useRef<HTMLInputElement | null>(null)
 
   const [message, setMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -1288,6 +1331,93 @@ export default function ReplyBox({
     })
   }
 
+
+  function openAttachmentPicker(kind: AttachmentPickerKind) {
+    setError(null)
+    setActivePanel(null)
+
+    if (kind === 'document') documentInputRef.current?.click()
+    if (kind === 'photos') photosInputRef.current?.click()
+    if (kind === 'camera') cameraInputRef.current?.click()
+    if (kind === 'audio') audioInputRef.current?.click()
+    if (kind === 'sticker') stickerInputRef.current?.click()
+  }
+
+  function handleContactClick() {
+    setError(null)
+    setActivePanel(null)
+
+    const contactName = window.prompt('Contact name')?.trim()
+
+    if (!contactName) return
+
+    const contactPhone = window.prompt('Contact phone number')?.trim()
+
+    if (!contactPhone) return
+
+    startTransition(async () => {
+      const result = await sendWhatsAppContactReplyAction(
+        conversationId,
+        contactName,
+        contactPhone
+      )
+
+      if (!result.ok) {
+        setError(result.error || 'فشل إرسال جهة الاتصال.')
+        return
+      }
+
+      router.refresh()
+    })
+  }
+
+  function handleUnsupportedAttachment(label: string) {
+    setError(
+      `${label} محتاج implementation منفصل في WhatsApp Cloud API، مش مجرد file upload.`
+    )
+    setActivePanel(null)
+  }
+
+  function handleFileInputChange(
+    event: ChangeEvent<HTMLInputElement>,
+    kind: AttachmentPickerKind
+  ) {
+    const files = Array.from(event.currentTarget.files ?? []) as File[]
+    event.target.value = ''
+
+    if (files.length === 0) return
+
+    const caption = message.trim()
+
+    setError(null)
+    setActivePanel(null)
+
+    startTransition(async () => {
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('media_type_hint', kind)
+
+        if (caption) {
+          formData.append('caption', caption)
+        }
+
+        const result = await sendWhatsAppMediaReplyAction(
+          conversationId,
+          formData
+        )
+
+        if (!result.ok) {
+          setError(result.error || 'فشل إرسال الملف.')
+          return
+        }
+      }
+
+      setMessage('')
+      router.refresh()
+    })
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -1320,6 +1450,171 @@ export default function ReplyBox({
       className="relative shrink-0 border-t border-blue-100 bg-white/95 px-3 py-3 backdrop-blur md:px-5"
     >
       <div className="mx-auto w-full max-w-4xl">
+        <input
+          ref={documentInputRef}
+          type="file"
+          className="hidden"
+          onChange={(event) => handleFileInputChange(event, 'document')}
+          disabled={isPending}
+        />
+
+        <input
+          ref={photosInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={(event) => handleFileInputChange(event, 'photos')}
+          disabled={isPending}
+        />
+
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(event) => handleFileInputChange(event, 'camera')}
+          disabled={isPending}
+        />
+
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={(event) => handleFileInputChange(event, 'audio')}
+          disabled={isPending}
+        />
+
+        <input
+          ref={stickerInputRef}
+          type="file"
+          accept="image/webp"
+          className="hidden"
+          onChange={(event) => handleFileInputChange(event, 'sticker')}
+          disabled={isPending}
+        />
+
+        {activePanel === 'attachments' ? (
+          <div className="absolute bottom-[76px] left-3 z-50 w-[calc(100vw-24px)] max-w-[260px] overflow-hidden rounded-[24px] border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-950/20 md:left-5">
+            <div className="grid gap-1">
+              <button
+                type="button"
+                onClick={() => openAttachmentPicker('document')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="📄" />
+                <span>Document</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openAttachmentPicker('photos')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="🖼️" />
+                <span>Photos & videos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openAttachmentPicker('camera')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="📷" />
+                <span>Camera</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openAttachmentPicker('audio')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="🎧" />
+                <span>Audio</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleContactClick}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="👤" />
+                <span>Contact</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUnsupportedAttachment('Poll')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-400 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="📊" />
+                <span>Poll</span>
+                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-400">
+                  Soon
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUnsupportedAttachment('Event')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-400 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="🗓️" />
+                <span>Event</span>
+                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-400">
+                  Soon
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openAttachmentPicker('sticker')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="➕" />
+                <span>New sticker</span>
+              </button>
+
+              <div className="my-1 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={() => handleUnsupportedAttachment('Catalogue')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-400 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="🏪" />
+                <span>Catalogue</span>
+                <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-400">
+                  Soon
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActivePanel('quickReplies')}
+                disabled={isPending}
+                className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                <AttachmentMenuIcon icon="⚡" />
+                <span>Quick replies</span>
+              </button>
+            </div>
+
+            <div className="absolute bottom-[-9px] left-[30px] h-4 w-4 rotate-45 border-b border-r border-slate-200 bg-white" />
+          </div>
+        ) : null}
+
         {activePanel === 'emojis' ? (
           <div className="absolute bottom-[76px] left-3 z-50 w-[calc(100vw-24px)] max-w-[430px] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-950/20 md:left-5">
             <div className="p-3 pb-2">
@@ -1458,17 +1753,17 @@ export default function ReplyBox({
         <div className="flex items-end gap-2">
           <button
             type="button"
-            onClick={() => togglePanel('quickReplies')}
+            onClick={() => togglePanel('attachments')}
             disabled={isPending}
             className={[
               'flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition disabled:opacity-50',
-              activePanel === 'quickReplies'
+              activePanel === 'attachments'
                 ? 'bg-[#0B55FF] text-white shadow-lg shadow-blue-500/20'
                 : 'bg-[#F3F7FF] text-slate-500 hover:bg-blue-50 hover:text-[#0B55FF]',
             ].join(' ')}
-            title="Quick replies"
+            title="Attachments"
           >
-            <PaperclipIcon />
+            <PlusIcon />
           </button>
 
           <button
