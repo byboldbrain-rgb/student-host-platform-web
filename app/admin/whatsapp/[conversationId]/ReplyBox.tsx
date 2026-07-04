@@ -1212,8 +1212,6 @@ function CloseIcon() {
   )
 }
 
-
-
 function PlusIcon() {
   return (
     <svg
@@ -1247,7 +1245,6 @@ function AttachmentMenuIcon({ icon }: { icon: string }) {
   )
 }
 
-
 function getReplyTargetPreview(replyToMessage: ReplyTarget) {
   return (
     replyToMessage.body ||
@@ -1255,6 +1252,7 @@ function getReplyTargetPreview(replyToMessage: ReplyTarget) {
     `[${replyToMessage.message_type}]`
   )
 }
+
 export default function ReplyBox({
   conversationId,
   conversationType,
@@ -1308,6 +1306,38 @@ export default function ReplyBox({
       .filter((category) => category.emojis.length > 0)
   }, [activeEmojiCategory, emojiSearch])
 
+  function scrollToOriginalReplyMessage(messageId: string) {
+    const target = document.getElementById(`message-${messageId}`)
+
+    if (!target) {
+      window.location.hash = `message-${messageId}`
+      return
+    }
+
+    target.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+
+    const bubble = target.querySelector('.message-bubble-content')
+
+    bubble?.classList.add(
+      'ring-4',
+      'ring-blue-300',
+      'shadow-2xl',
+      'shadow-blue-500/30'
+    )
+
+    window.setTimeout(() => {
+      bubble?.classList.remove(
+        'ring-4',
+        'ring-blue-300',
+        'shadow-2xl',
+        'shadow-blue-500/30'
+      )
+    }, 1800)
+  }
+
   function togglePanel(panel: Exclude<ActivePanel, null>) {
     setError(null)
     setActivePanel((currentPanel) => (currentPanel === panel ? null : panel))
@@ -1352,7 +1382,6 @@ export default function ReplyBox({
       textareaRef.current?.focus()
     })
   }
-
 
   function openAttachmentPicker(kind: AttachmentPickerKind) {
     setError(null)
@@ -1782,7 +1811,12 @@ export default function ReplyBox({
 
         {replyToMessage ? (
           <div className="mb-2 flex items-start justify-between gap-3 rounded-2xl border-l-4 border-[#0B55FF] bg-blue-50 px-4 py-3 text-sm ring-1 ring-blue-100">
-            <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => scrollToOriginalReplyMessage(replyToMessage.id)}
+              className="min-w-0 flex-1 text-left"
+              title="Go to original message"
+            >
               <div className="text-xs font-black text-[#0B55FF]">
                 Replying to {replyToMessage.direction === 'outbound' ? 'your message' : 'customer'}
               </div>
@@ -1790,7 +1824,7 @@ export default function ReplyBox({
               <div className="mt-1 truncate font-medium text-slate-700" dir="auto">
                 {getReplyTargetPreview(replyToMessage)}
               </div>
-            </div>
+            </button>
 
             <Link
               href={cancelReplyHref || `/admin/whatsapp/${conversationId}`}
