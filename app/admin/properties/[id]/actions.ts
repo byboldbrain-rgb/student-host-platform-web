@@ -2249,5 +2249,7 @@ export async function updatePropertyAction(formData: FormData) {
   revalidatePath('/admin/properties/reservations')
   revalidatePath('/admin/owners')
   revalidatePath('/admin/finance/owner-settlements')
+  revalidatePath('/properties')
+  revalidatePath('/properties/search')
   revalidatePath(`/properties/${property_id}`)
 }

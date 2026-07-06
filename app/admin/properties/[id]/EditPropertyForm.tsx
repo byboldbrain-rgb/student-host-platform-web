@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import mapboxgl from 'mapbox-gl'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
@@ -63,6 +64,13 @@ type BillType = {
   icon_url?: string | null
   sort_order?: number
   is_active?: boolean
+}
+
+type MapboxAddressSuggestion = {
+  id: string
+  place_name: string
+  text?: string
+  center: [number, number]
 }
 
 type PropertyImage = {
@@ -735,6 +743,9 @@ export default function EditPropertyForm({
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const mapContainerRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<mapboxgl.Map | null>(null)
+  const markerRef = useRef<mapboxgl.Marker | null>(null)
 
   const [errorMessage, setErrorMessage] = useState('')
   const [stepError, setStepError] = useState('')
@@ -783,8 +794,19 @@ export default function EditPropertyForm({
   const [smokingPolicy] = useState(property.smoking_policy || '')
   const [airbnbPriceMin] = useState(String(property.airbnb_price_min ?? ''))
   const [airbnbPriceMax] = useState(String(property.airbnb_price_max ?? ''))
-  const [latitude] = useState(String(property.latitude ?? ''))
-  const [longitude] = useState(String(property.longitude ?? ''))
+  const [addressSearch, setAddressSearch] = useState('')
+  const [addressSuggestions, setAddressSuggestions] = useState<MapboxAddressSuggestion[]>([])
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false)
+  const [addressSearchError, setAddressSearchError] = useState('')
+  const [selectedLatitude, setSelectedLatitude] = useState(String(property.latitude ?? ''))
+  const [selectedLongitude, setSelectedLongitude] = useState(String(property.longitude ?? ''))
+  const [selectedMapLocationLabel, setSelectedMapLocationLabel] = useState(
+    property.latitude != null && property.longitude != null
+      ? `${property.latitude}, ${property.longitude}`
+      : ''
+  )
+
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''
 
   const safeImages = Array.isArray(images) ? images : []
   const safeRooms = Array.isArray(rooms) ? rooms : []
@@ -865,6 +887,10 @@ export default function EditPropertyForm({
   const selectedUniversity = useMemo(() => {
     return universities.find((university) => university.id === universityId) || null
   }, [universities, universityId])
+
+  const selectedCity = useMemo(() => {
+    return cities.find((city) => city.id === cityId) || null
+  }, [cities, cityId])
 
   const activeOwners = useMemo(() => {
     return [...owners]
@@ -1031,6 +1057,247 @@ export default function EditPropertyForm({
     }
   }, [ownerId, cityId, universityId, eligibleOwners, property.owner_id])
 
+  const setSelectedMapLocation = useCallback(
+    (longitudeValue: number, latitudeValue: number, label: string) => {
+      if (!Number.isFinite(longitudeValue) || !Number.isFinite(latitudeValue)) return
+
+      const normalizedLongitude = Number(longitudeValue.toFixed(7))
+      const normalizedLatitude = Number(latitudeValue.toFixed(7))
+      const fallbackLabel = `${normalizedLatitude}, ${normalizedLongitude}`
+
+      setSelectedLongitude(String(normalizedLongitude))
+      setSelectedLatitude(String(normalizedLatitude))
+      setSelectedMapLocationLabel(label || fallbackLabel)
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (!mapboxToken || !mapContainerRef.current || mapRef.current) return
+
+    mapboxgl.accessToken = mapboxToken
+
+    const initialLongitude = Number(selectedLongitude)
+    const initialLatitude = Number(selectedLatitude)
+    const hasInitialLocation =
+      Number.isFinite(initialLongitude) && Number.isFinite(initialLatitude)
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: hasInitialLocation
+        ? [initialLongitude, initialLatitude]
+        : [31.1837, 27.1809],
+      zoom: hasInitialLocation ? 15 : 12,
+    })
+
+    map.addControl(
+      new mapboxgl.NavigationControl({
+        showCompass: false,
+        showZoom: true,
+        visualizePitch: false,
+      }),
+      'bottom-right'
+    )
+
+    map.on('load', () => {
+      window.setTimeout(() => map.resize(), 100)
+    })
+
+    map.on('click', (event) => {
+      const { lng, lat } = event.lngLat
+      setSelectedMapLocation(lng, lat, 'Pinned location on map')
+      setAddressSuggestions([])
+      setAddressSearchError('')
+    })
+
+    mapRef.current = map
+
+    return () => {
+      markerRef.current?.remove()
+      markerRef.current = null
+      map.remove()
+      mapRef.current = null
+    }
+  }, [mapboxToken, setSelectedMapLocation])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const latitude = Number(selectedLatitude)
+    const longitude = Number(selectedLongitude)
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      markerRef.current?.remove()
+      markerRef.current = null
+      return
+    }
+
+    if (!markerRef.current) {
+      const marker = new mapboxgl.Marker({
+        color: '#054aff',
+        draggable: true,
+      })
+        .setLngLat([longitude, latitude])
+        .addTo(map)
+
+      marker.on('dragend', () => {
+        const lngLat = marker.getLngLat()
+        setSelectedMapLocation(lngLat.lng, lngLat.lat, 'Pinned location on map')
+        setAddressSuggestions([])
+        setAddressSearchError('')
+      })
+
+      markerRef.current = marker
+    } else {
+      markerRef.current.setLngLat([longitude, latitude])
+    }
+
+    const moveMap = () => {
+      map.easeTo({
+        center: [longitude, latitude],
+        zoom: Math.max(map.getZoom(), 15),
+        duration: 650,
+      })
+    }
+
+    if (map.loaded()) {
+      moveMap()
+    } else {
+      map.once('load', moveMap)
+    }
+  }, [selectedLatitude, selectedLongitude, setSelectedMapLocation])
+
+  useEffect(() => {
+    const searchTerm = addressSearch.trim()
+
+    if (searchTerm.length < 3) {
+      setAddressSuggestions([])
+      setIsSearchingAddress(false)
+      setAddressSearchError('')
+      return
+    }
+
+    if (
+      selectedLatitude &&
+      selectedLongitude &&
+      selectedMapLocationLabel &&
+      searchTerm === selectedMapLocationLabel.trim()
+    ) {
+      setAddressSuggestions([])
+      setIsSearchingAddress(false)
+      setAddressSearchError('')
+      return
+    }
+
+    if (!mapboxToken) {
+      setAddressSuggestions([])
+      setIsSearchingAddress(false)
+      setAddressSearchError('Mapbox token is missing. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to .env.local.')
+      return
+    }
+
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearchingAddress(true)
+      setAddressSearchError('')
+
+      try {
+        const queryParts = [
+          searchTerm,
+          selectedUniversity?.name_en,
+          selectedCity?.name_en,
+          'Egypt',
+        ].filter(Boolean)
+
+        const encodedQuery = encodeURIComponent(queryParts.join(', '))
+        const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${encodeURIComponent(
+          mapboxToken
+        )}&country=EG&language=en,ar&limit=6&types=address,poi,place,locality,neighborhood`
+
+        const response = await fetch(endpoint, { signal: controller.signal })
+
+        if (!response.ok) {
+          throw new Error('Mapbox request failed')
+        }
+
+        const data = await response.json()
+        const features = Array.isArray(data?.features)
+          ? (data.features
+              .map((feature: any) => {
+                const center = feature?.center
+                const longitude = Number(center?.[0])
+                const latitude = Number(center?.[1])
+
+                if (
+                  !feature?.id ||
+                  !feature?.place_name ||
+                  !Number.isFinite(latitude) ||
+                  !Number.isFinite(longitude)
+                ) {
+                  return null
+                }
+
+                return {
+                  id: String(feature.id),
+                  place_name: String(feature.place_name),
+                  text: feature.text ? String(feature.text) : undefined,
+                  center: [longitude, latitude] as [number, number],
+                }
+              })
+              .filter(Boolean) as MapboxAddressSuggestion[])
+          : []
+
+        setAddressSuggestions(features)
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return
+        setAddressSuggestions([])
+        setAddressSearchError('Could not load address results. Try a more specific address.')
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearchingAddress(false)
+        }
+      }
+    }, 450)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [
+    addressSearch,
+    mapboxToken,
+    selectedCity?.name_en,
+    selectedLatitude,
+    selectedLongitude,
+    selectedMapLocationLabel,
+    selectedUniversity?.name_en,
+  ])
+
+  const handleAddressSearchInputChange = (value: string) => {
+    setAddressSearch(value)
+  }
+
+  const handleSelectAddressSuggestion = (suggestion: MapboxAddressSuggestion) => {
+    const [longitude, latitude] = suggestion.center
+    const fullAddress = suggestion.place_name
+
+    setAddressSearch(fullAddress)
+    setSelectedMapLocation(longitude, latitude, fullAddress)
+    setAddressSuggestions([])
+    setAddressSearchError('')
+  }
+
+  const clearSelectedMapLocation = () => {
+    setSelectedLatitude('')
+    setSelectedLongitude('')
+    setSelectedMapLocationLabel('')
+    setAddressSearch('')
+    setAddressSuggestions([])
+    setAddressSearchError('')
+  }
+
   const handleCityChange = (value: string) => {
     setCityId(value)
 
@@ -1182,9 +1449,11 @@ export default function EditPropertyForm({
           !titleEn.trim() ||
           !titleAr.trim() ||
           !addressEn.trim() ||
-          !addressAr.trim()
+          !addressAr.trim() ||
+          !selectedLatitude.trim() ||
+          !selectedLongitude.trim()
         ) {
-          return 'Please complete Property Code, Title EN, Title AR, Address EN, and Address AR.'
+          return 'Please complete Property Code, Title EN, Title AR, Address EN, Address AR, and Map Location.'
         }
         return ''
 
@@ -1341,8 +1610,8 @@ export default function EditPropertyForm({
     formData.set('smoking_policy', smokingPolicy)
     formData.set('airbnb_price_min', normalizeNumberString(airbnbPriceMin))
     formData.set('airbnb_price_max', normalizeNumberString(airbnbPriceMax))
-    formData.set('latitude', normalizeNumberString(latitude))
-    formData.set('longitude', normalizeNumberString(longitude))
+    formData.set('latitude', normalizeNumberString(selectedLatitude))
+    formData.set('longitude', normalizeNumberString(selectedLongitude))
 
     if (!canChangeBroker) {
       formData.set('broker_id', property.broker_id)
@@ -1597,6 +1866,8 @@ export default function EditPropertyForm({
       `}</style>
 
       <input type="hidden" name="property_db_id" value={property.id} />
+      <input type="hidden" name="latitude" value={selectedLatitude} />
+      <input type="hidden" name="longitude" value={selectedLongitude} />
       {!canChangeBroker && <input type="hidden" name="broker_id" value={property.broker_id} />}
       {!canChangeAdminStatus && (
         <input type="hidden" name="admin_status" value={property.admin_status} />
@@ -1700,6 +1971,91 @@ export default function EditPropertyForm({
                     className={inputClass}
                     dir="rtl"
                   />
+                </div>
+
+                <div className="relative md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+                    Search map location
+                  </label>
+                  <input
+                    value={addressSearch}
+                    onChange={(e) => handleAddressSearchInputChange(e.target.value)}
+                    placeholder="Search the map location only — this will not change Address EN/AR"
+                    className={inputClass}
+                    autoComplete="off"
+                  />
+
+                  {isSearchingAddress && (
+                    <p className="mt-2 text-xs font-medium text-[#6b7280]">
+                      Searching Mapbox...
+                    </p>
+                  )}
+
+                  {addressSearchError && (
+                    <p className="mt-2 text-xs font-medium text-[#b42318]">
+                      {addressSearchError}
+                    </p>
+                  )}
+
+                  {addressSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-[74px] z-50 overflow-hidden rounded-xl border border-[#dbe4f0] bg-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+                      {addressSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.id}
+                          type="button"
+                          onClick={() => handleSelectAddressSuggestion(suggestion)}
+                          className="block w-full border-b border-[#edf2f7] px-4 py-3 text-left transition last:border-b-0 hover:bg-[#f5f9ff]"
+                        >
+                          <span className="block text-sm font-semibold text-[#162033]">
+                            {suggestion.text || suggestion.place_name}
+                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-[#687385]">
+                            {suggestion.place_name}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedLatitude && selectedLongitude ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-[#ecfdf3] px-3 py-1.5 text-xs font-semibold text-[#027a48]">
+                        <span>✓ Map location selected</span>
+                        <button
+                          type="button"
+                          onClick={clearSelectedMapLocation}
+                          className="rounded-full bg-white/70 px-2 py-0.5 text-[#027a48]"
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      <span className="text-xs font-medium text-[#687385]">
+                        {selectedLatitude}, {selectedLongitude}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-[#6b7280]">
+                      Search and select a result, or click on the map and drag the pin to the exact location. This does not change Address EN or Address AR.
+                    </p>
+                  )}
+
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-[#dbe4f0] bg-[#eef4fb] shadow-sm">
+                    {mapboxToken ? (
+                      <div ref={mapContainerRef} className="h-[340px] w-full" />
+                    ) : (
+                      <div className="flex h-[240px] items-center justify-center px-6 text-center text-sm font-medium text-[#b42318]">
+                        Mapbox token is missing. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to .env.local.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-3 rounded-2xl border border-dashed border-[#bdd7f4] bg-[#f5f9ff] px-4 py-3 text-sm text-[#35506b]">
+                    <p className="font-semibold text-[#162033]">Map location only</p>
+                    <p className="mt-1 leading-6">
+                      Use search to get near the property, then click the map or drag the pin to the exact building/area. Address EN and Address AR stay separate and are only the written address shown to students.
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -2528,6 +2884,22 @@ export default function EditPropertyForm({
                       Address AR
                     </p>
                     <p className="mt-1 font-semibold">{addressAr || '-'}</p>
+                  </div>
+
+                  <div className="rounded-md border border-[#ececec] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
+                      Map Location
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {selectedLatitude && selectedLongitude
+                        ? selectedMapLocationLabel || `${selectedLatitude}, ${selectedLongitude}`
+                        : '-'}
+                    </p>
+                    {selectedLatitude && selectedLongitude ? (
+                      <p className="mt-1 text-xs text-[#6b7280]">
+                        {selectedLatitude}, {selectedLongitude}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="rounded-md border border-[#ececec] p-3">

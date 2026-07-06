@@ -6,7 +6,11 @@ import PropertiesHeader from '../PropertiesHeader'
 import SortDropdown from './SortDropdown'
 import PropertyImageSlider from './PropertyImageSlider'
 import PropertyAlertRequestCard from '../../sakan/[...slug]/PropertyAlertRequestCard'
+import PropertiesMap from './PropertiesMap'
+import MobileSearchMapSheet from './MobileSearchMapSheet'
+import MobileBottomNavScrollController from './MobileBottomNavScrollController'
 import { Squada_One } from 'next/font/google'
+
 
 export const metadata: Metadata = {
   title: 'بحث سكن الطلاب | Navienty',
@@ -138,6 +142,8 @@ type Property = {
   city_id?: string | number | null
   university_id?: string | number | null
   area_id?: string | number | null
+  latitude?: number | string | null
+  longitude?: number | string | null
   property_universities?: PropertyUniversityLink[] | null
   property_images?: PropertyImage[] | null
   property_sellable_options?: PropertySellableOption[] | null
@@ -244,7 +250,7 @@ const TRANSLATIONS = {
     close: 'Close',
     backToProperties: 'Back to properties',
     login: 'Log in or sign up',
-    join: 'Community',
+    join: 'Guide',
     facebook: 'Facebook',
     instagram: 'Instagram',
     linkedIn: 'LinkedIn',
@@ -256,9 +262,12 @@ const TRANSLATIONS = {
     contactUs: 'Contact Us',
     footerEmail: 'info@navienty.com',
     explore: 'Search',
-    community: 'Community',
+    community: 'Guide',
     account: 'Account',
     mobileLogin: 'Log in',
+    language: 'Language',
+    english: 'English',
+    arabic: 'العربية',
     copyright: `© ${new Date().getFullYear()} Navienty | All rights reserved.`,
   },
   ar: {
@@ -304,7 +313,7 @@ const TRANSLATIONS = {
     close: 'إغلاق',
     backToProperties: 'الرجوع إلى العقارات',
     login: 'سجّل الدخول أو أنشئ حسابًا',
-    join: 'انضم إلى مجتمعنا',
+    join: 'الدليل',
     facebook: 'فيسبوك',
     instagram: 'إنستجرام',
     linkedIn: 'لينكدإن',
@@ -316,9 +325,12 @@ const TRANSLATIONS = {
     contactUs: 'تواصل معنا',
     footerEmail: 'info@navienty.com',
     explore: 'استكشاف',
-    community: 'المجتمع',
+    community: 'الدليل',
     account: 'الحساب',
     mobileLogin: 'تسجيل الدخول',
+    language: 'اللغة',
+    english: 'English',
+    arabic: 'العربية',
     copyright: `© ${new Date().getFullYear()} نافينتي | جميع الحقوق محفوظة.`,
   },
 } as const
@@ -856,6 +868,8 @@ export default async function SearchResultsPage({
       city_id,
       university_id,
       area_id,
+      latitude,
+      longitude,
       property_universities!inner(
         university_id
       ),
@@ -940,6 +954,13 @@ export default async function SearchResultsPage({
   const count = allSortedProperties.length
   const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 0
   const visiblePages = buildVisiblePages(currentPage, totalPages)
+  const formattedHomesCount = new Intl.NumberFormat(
+    selectedLanguage === 'ar' ? 'ar-EG' : 'en-US'
+  ).format(count)
+  const mobileMapHomesLabel =
+    selectedLanguage === 'ar'
+      ? `أكثر من ${formattedHomesCount} سكن`
+      : `Over ${formattedHomesCount} homes`
 
   const buildPropertiesPageLink = () => {
     const p = new URLSearchParams()
@@ -980,6 +1001,27 @@ export default async function SearchResultsPage({
     }
 
     p.set('page', pageNumber.toString())
+
+    return `/properties/search?${p.toString()}`
+  }
+
+  const buildSearchPageLink = (updates: Partial<SearchParams> = {}) => {
+    const p = new URLSearchParams()
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) p.set(key, value)
+    })
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) {
+        p.set(key, value)
+      } else {
+        p.delete(key)
+      }
+    })
+
+    p.set('lang', updates.lang ?? selectedLanguage)
+    p.set('currency', updates.currency ?? selectedCurrency)
 
     return `/properties/search?${p.toString()}`
   }
@@ -1163,11 +1205,13 @@ export default async function SearchResultsPage({
       : undefined
 
 
-  const mobileAccountHref = isLoggedIn
-    ? buildSimpleNavLink('/account')
-    : buildSimpleNavLink('/login')
-
-  const mobileAccountLabel = isLoggedIn ? t.account : t.mobileLogin
+  const nextMobileLanguage: SupportedLanguage = selectedLanguage === 'ar' ? 'en' : 'ar'
+  const mobileLanguageHref = buildSearchPageLink({ lang: nextMobileLanguage })
+  const mobileLanguageLabel = selectedLanguage === 'ar' ? t.english : t.arabic
+  const mobileLanguageAriaLabel =
+    selectedLanguage === 'ar'
+      ? 'Switch language to English'
+      : 'تغيير اللغة إلى العربية'
 
   const getPropertyImages = (property: Property) => {
     const validImages =
@@ -1199,6 +1243,50 @@ export default async function SearchResultsPage({
       .map((item) => item.imageUrl)
       .slice(0, MAX_CARD_IMAGES)
   }
+
+    const mapProperties = allSortedProperties
+    .map((property) => {
+      const hasLatitude =
+        property.latitude !== null &&
+        property.latitude !== undefined &&
+        String(property.latitude).trim() !== ''
+
+      const hasLongitude =
+        property.longitude !== null &&
+        property.longitude !== undefined &&
+        String(property.longitude).trim() !== ''
+
+      if (!hasLatitude || !hasLongitude) {
+        return null
+      }
+
+      const latitude = Number(property.latitude)
+      const longitude = Number(property.longitude)
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return null
+      }
+
+      const displayPriceEgp = getDisplayPriceEgp(property)
+
+      return {
+        id: String(property.id),
+        propertyId: property.property_id,
+        title: isArabic ? property.title_ar : property.title_en,
+        href: buildPropertyHref(property.property_id),
+        priceLabel: formatPrice(
+          displayPriceEgp,
+          selectedCurrency,
+          selectedLanguage,
+          currencyRate
+        ),
+        latitude,
+        longitude,
+        imageUrl: getPropertyImages(property)[0] ?? null,
+        imageUrls: getPropertyImages(property),
+      }
+    })
+    .filter((property): property is NonNullable<typeof property> => Boolean(property))
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
     const images = getPropertyImages(property)
@@ -1291,6 +1379,96 @@ export default async function SearchResultsPage({
     )
   }
 
+  const renderPagination = (className = '') => {
+    if (totalPages <= 1) return null
+
+    const previousPageDisabled = currentPage === 1
+    const nextPageDisabled = currentPage === totalPages
+
+    return (
+      <div
+        className={`mt-10 flex items-center justify-center gap-24 py-4 md:mt-16 md:gap-2 ${className}`}
+        dir="ltr"
+      >
+        <Link
+          href={buildPageLink(currentPage - 1)}
+          aria-disabled={previousPageDisabled}
+          className={`flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-[#111827] shadow-[0_8px_24px_rgba(15,23,42,0.14)] transition md:h-10 md:w-10 md:border-0 md:bg-transparent md:text-[#054aff] md:shadow-none ${
+            previousPageDisabled
+              ? 'pointer-events-none opacity-30 hover:bg-transparent'
+              : 'hover:bg-slate-50 md:hover:bg-[#054aff]/10'
+          }`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2.2}
+            stroke="currentColor"
+            className="h-5 w-5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15.75 19.5 8.25 12l7.5-7.5"
+            />
+          </svg>
+        </Link>
+
+        <div className="hidden items-center gap-2 md:flex md:gap-3">
+          {visiblePages.map((item, index) =>
+            item === 'dots' ? (
+              <span
+                key={`dots-${index}`}
+                className="flex h-10 min-w-[24px] items-center justify-center text-[18px] font-semibold text-[#054aff]"
+              >
+                ...
+              </span>
+            ) : (
+              <Link
+                key={item}
+                href={buildPageLink(item)}
+                className={`flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold transition ${
+                  currentPage === item
+                    ? 'bg-[#054aff] text-white'
+                    : 'text-[#054aff] hover:bg-[#054aff]/10'
+                }`}
+              >
+                {item}
+              </Link>
+            )
+          )}
+        </div>
+
+        <Link
+          href={buildPageLink(currentPage + 1)}
+          aria-disabled={nextPageDisabled}
+          className={`flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-[#111827] shadow-[0_8px_24px_rgba(15,23,42,0.14)] transition md:h-10 md:w-10 md:border-0 md:bg-transparent md:text-[#054aff] md:shadow-none ${
+            nextPageDisabled
+              ? 'pointer-events-none opacity-30 hover:bg-transparent'
+              : 'hover:bg-slate-50 md:hover:bg-[#054aff]/10'
+          }`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2.2}
+            stroke="currentColor"
+            className="h-5 w-5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m8.25 4.5 7.5 7.5-7.5 7.5"
+            />
+          </svg>
+        </Link>
+      </div>
+    )
+  }
+
+
   return (
     <main
       dir={isArabic ? 'rtl' : 'ltr'}
@@ -1303,12 +1481,85 @@ export default async function SearchResultsPage({
         aria-hidden="true"
       />
 
+      <MobileBottomNavScrollController />
+
       <style>{`
         :root {
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
         }
+
+        .mobile-inline-map {
+          display: none;
+        }
+
+        .mobile-inline-map__canvas {
+          position: relative;
+          height: min(52vh, 360px);
+          min-height: 292px;
+          overflow: hidden;
+          border-radius: 0;
+          background: #e5edf7;
+        }
+
+        .mobile-inline-map__sheet {
+          position: relative;
+          z-index: 2;
+          margin-top: -22px;
+          border-radius: 28px 28px 0 0;
+          background: #ffffff;
+          padding: 9px 18px 18px;
+          box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .mobile-inline-map__grabber {
+          display: block;
+          width: 46px;
+          height: 4px;
+          margin: 0 auto 18px;
+          border-radius: 999px;
+          background: #d1d5db;
+        }
+
+        .mobile-inline-map__fee {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          color: #1f2937;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+        }
+
+        .mobile-inline-map__fee-icon {
+          display: inline-flex;
+          height: 24px;
+          width: 24px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: #fff1f2;
+          font-size: 17px;
+          line-height: 1;
+        }
+
+        @media (max-width: 1023px) {
+          .mobile-inline-map {
+            display: block;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            margin-top: -32px;
+          }
+        }
+
+        @media (min-width: 1024px) {
+          .mobile-inline-map {
+            display: none;
+          }
+        }
+
 
         .navienty-logo {
           display: inline-flex;
@@ -1876,6 +2127,19 @@ export default async function SearchResultsPage({
             inset 0 -1px 0 rgba(255, 255, 255, 0.45);
           backdrop-filter: blur(22px) saturate(1.45);
           -webkit-backdrop-filter: blur(22px) saturate(1.45);
+          transform: translate3d(0, 0, 0);
+          opacity: 1;
+          transition:
+            transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+            opacity 0.2s ease;
+          will-change: transform, opacity;
+        }
+
+        .mobile-bottom-nav.mobile-bottom-nav--hidden,
+        body.mobile-map-sheet--map-expanded .mobile-bottom-nav {
+          transform: translate3d(0, calc(100% + 44px), 0);
+          opacity: 0;
+          pointer-events: none;
         }
 
         .mobile-bottom-nav::before {
@@ -2284,6 +2548,19 @@ export default async function SearchResultsPage({
 
 
         @media (prefers-color-scheme: dark) {
+          .mobile-inline-map__sheet {
+            background: #050816;
+            box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.28);
+          }
+
+          .mobile-inline-map__grabber {
+            background: rgba(148, 163, 184, 0.45);
+          }
+
+          .mobile-inline-map__fee {
+            color: #f8fafc;
+          }
+
           .menu-trigger-lines span {
             background: #f8fafc;
           }
@@ -2488,121 +2765,56 @@ export default async function SearchResultsPage({
           />
         </div>
 
-        <PropertyAlertRequestCard
-          action={createPropertyAlertRequest}
-          cities={(cities as City[]) ?? []}
-          universities={(universities as University[]) ?? []}
-          areas={(areas as PropertyArea[]) ?? []}
-          universityAreas={(universityAreas as UniversityArea[]) ?? []}
-          initialCityId=""
-          initialUniversityId=""
-          initialAreaId=""
-          language={selectedLanguage}
-          currency={selectedCurrency}
-          currentPath={buildAlertReturnTo()}
-          resultCount={count}
-          alertStatus={alertStatus}
-        />
+        <div className="hidden lg:block">
+          <PropertyAlertRequestCard
+            action={createPropertyAlertRequest}
+            cities={(cities as City[]) ?? []}
+            universities={(universities as University[]) ?? []}
+            areas={(areas as PropertyArea[]) ?? []}
+            universityAreas={(universityAreas as UniversityArea[]) ?? []}
+            initialCityId=""
+            initialUniversityId=""
+            initialAreaId=""
+            language={selectedLanguage}
+            currency={selectedCurrency}
+            currentPath={buildAlertReturnTo()}
+            resultCount={count}
+            alertStatus={alertStatus}
+          />
+        </div>
 
         {sortedProperties.length > 0 ? (
           <>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {sortedProperties.map((property) => renderPropertyCard(property))}
-            </div>
-
-            {totalPages > 1 && (
-              <div
-                className="mt-14 flex items-center justify-center gap-2 py-4 md:mt-16"
-                dir="ltr"
-              >
-                <Link
-                  href={buildPageLink(currentPage - 1)}
-                  aria-disabled={currentPage === 1}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                    currentPage === 1
-                      ? 'pointer-events-none hover:bg-transparent'
-                      : 'hover:bg-[#054aff]/10'
-                  }`}
-                  style={{
-                    color:
-                      currentPage === 1 ? 'rgba(5, 74, 255, 0.3)' : '#054aff',
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2.2}
-                    stroke="currentColor"
-                    className="h-5 w-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15.75 19.5 8.25 12l7.5-7.5"
-                    />
-                  </svg>
-                </Link>
-
-                <div className="flex items-center gap-2 md:gap-3">
-                  {visiblePages.map((item, index) =>
-                    item === 'dots' ? (
-                      <span
-                        key={`dots-${index}`}
-                        className="flex h-10 min-w-[24px] items-center justify-center text-[18px] font-semibold"
-                        style={{ color: '#054aff' }}
-                      >
-                        ...
-                      </span>
-                    ) : (
-                      <Link
-                        key={item}
-                        href={buildPageLink(item)}
-                        className={`flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold transition ${
-                          currentPage === item
-                            ? 'bg-[#054aff]'
-                            : 'hover:bg-[#054aff]/10'
-                        }`}
-                        style={{ color: currentPage === item ? '#ffffff' : '#054aff' }}
-                      >
-                        {item}
-                      </Link>
-                    )
-                  )}
+            <MobileSearchMapSheet
+              properties={mapProperties}
+              feeLabel={isArabic ? 'الأسعار تشمل كل الرسوم' : 'Prices include all fees'}
+              homesLabel={mobileMapHomesLabel}
+            >
+              <div dir={isArabic ? 'rtl' : 'ltr'}>
+                <div className="grid grid-cols-1 gap-6">
+                  {sortedProperties.map((property) => renderPropertyCard(property))}
                 </div>
 
-                <Link
-                  href={buildPageLink(currentPage + 1)}
-                  aria-disabled={currentPage === totalPages}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                    currentPage === totalPages
-                      ? 'pointer-events-none hover:bg-transparent'
-                      : 'hover:bg-[#054aff]/10'
-                  }`}
-                  style={{
-                    color:
-                      currentPage === totalPages
-                        ? 'rgba(5, 74, 255, 0.3)'
-                        : '#054aff',
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2.2}
-                    stroke="currentColor"
-                    className="h-5 w-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m8.25 4.5 7.5 7.5-7.5 7.5"
-                    />
-                  </svg>
-                </Link>
+                {renderPagination('pb-[calc(env(safe-area-inset-bottom,0px)+128px)]')}
               </div>
-            )}
+            </MobileSearchMapSheet>
+
+            <div
+              className="hidden grid-cols-1 gap-8 lg:grid lg:grid-cols-[minmax(0,52%)_minmax(420px,48%)]"
+              dir="ltr"
+            >
+              <div dir={isArabic ? 'rtl' : 'ltr'}>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  {sortedProperties.map((property) => renderPropertyCard(property))}
+                </div>
+
+                {renderPagination()}
+              </div>
+
+              <aside className="sticky top-28 hidden h-[calc(100vh-8rem)] overflow-hidden rounded-[28px] border border-[#e5e7eb] bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1220] lg:block">
+                <PropertiesMap properties={mapProperties} />
+              </aside>
+            </div>
           </>
         ) : (
           <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-10 text-center dark:border-white/10 dark:bg-[#0b1220]">
@@ -2612,6 +2824,8 @@ export default async function SearchResultsPage({
           </div>
         )}
       </section>
+
+
 
       <footer className="footer-esaf">
         <div className="footer-esaf-container">
@@ -2651,7 +2865,11 @@ export default async function SearchResultsPage({
         </div>
       </footer>
 
-      <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+      <nav
+        id="mobile-bottom-nav"
+        className="mobile-bottom-nav"
+        aria-label="Mobile bottom navigation"
+      >
         <div className="mobile-bottom-nav__inner">
           <Link
             href={buildPropertiesPageLink()}
@@ -2681,13 +2899,17 @@ export default async function SearchResultsPage({
           >
             <img
               src="https://i.ibb.co/fzNcyyxw/community-3010762.png"
-              alt="Community"
+              alt={t.community}
               className="mobile-bottom-nav__icon mobile-bottom-nav__icon--image"
             />
             <span className="mobile-bottom-nav__label">{t.community}</span>
           </Link>
 
-          <Link href={mobileAccountHref} className="mobile-bottom-nav__item">
+          <Link
+            href={mobileLanguageHref}
+            className="mobile-bottom-nav__item"
+            aria-label={mobileLanguageAriaLabel}
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -2699,16 +2921,16 @@ export default async function SearchResultsPage({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z"
               />
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M4.5 19.125a7.5 7.5 0 0 1 15 0"
+                d="M3.75 9h16.5M3.75 15h16.5M12 3c2.25 2.45 3.35 5.35 3.35 9S14.25 18.55 12 21M12 3C9.75 5.45 8.65 8.35 8.65 12S9.75 18.55 12 21"
               />
             </svg>
             <span className="mobile-bottom-nav__label">
-              {mobileAccountLabel}
+              {mobileLanguageLabel}
             </span>
           </Link>
         </div>

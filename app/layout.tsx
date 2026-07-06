@@ -2,6 +2,7 @@ import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import SplashScreen from '@/components/SplashScreen'
 import PushNotificationInitializer from './PushNotificationInitializer'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
 const SITE_URL = 'https://navienty.com'
 const SITE_NAME = 'Navienty'

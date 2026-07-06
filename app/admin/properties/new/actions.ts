@@ -20,6 +20,14 @@ function toNumberOrDefault(value: FormDataEntryValue | null, defaultValue = 0) {
   return Number.isNaN(num) ? defaultValue : num
 }
 
+function isValidLatitude(value: number | null) {
+  return value !== null && Number.isFinite(value) && value >= -90 && value <= 90
+}
+
+function isValidLongitude(value: number | null) {
+  return value !== null && Number.isFinite(value) && value >= -180 && value <= 180
+}
+
 function toBoolean(value: string) {
   return value === 'true'
 }
@@ -628,9 +636,23 @@ export async function createPropertyAction(formData: FormData) {
 
   const price_egp = toNullableNumber(formData.get('price_egp'))
   const floor_number = toNumberOrDefault(formData.get('floor_number'), 0)
+  const latitude = toNullableNumber(formData.get('latitude'))
+  const longitude = toNullableNumber(formData.get('longitude'))
 
   if (floor_number < 0) {
     throw new Error('Floor number must be 0 or greater')
+  }
+
+  if (latitude !== null && !isValidLatitude(latitude)) {
+    throw new Error('Latitude must be between -90 and 90')
+  }
+
+  if (longitude !== null && !isValidLongitude(longitude)) {
+    throw new Error('Longitude must be between -180 and 180')
+  }
+
+  if ((latitude === null && longitude !== null) || (latitude !== null && longitude === null)) {
+    throw new Error('Please select a complete map location')
   }
 
   const uploadedImages = formData
@@ -819,6 +841,10 @@ export async function createPropertyAction(formData: FormData) {
       throw new Error('Arabic address is required')
     }
 
+    if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+      throw new Error('Please search and select the property map location from the map results')
+    }
+
     if (!city_id) throw new Error('City is required')
 
     if (university_ids.length === 0) {
@@ -878,6 +904,8 @@ export async function createPropertyAction(formData: FormData) {
     availability_status: 'available',
     address_en,
     address_ar,
+    latitude,
+    longitude,
     bedrooms_count: finalBedroomsCount,
     bathrooms_count: toNumberOrDefault(formData.get('bathrooms_count'), 0),
     beds_count: finalBedsCount,
@@ -1181,6 +1209,8 @@ export async function createPropertyAction(formData: FormData) {
       university_id: primary_university_id,
       university_ids,
       area_id,
+      latitude,
+      longitude,
       floor_number,
       admin_status,
       rental_duration,
@@ -1191,5 +1221,7 @@ export async function createPropertyAction(formData: FormData) {
   revalidatePath('/admin/properties/review')
   revalidatePath('/admin/owners')
   revalidatePath('/admin/finance/owner-settlements')
+  revalidatePath('/properties')
+  revalidatePath('/properties/search')
   revalidatePath(`/properties/${property_id}`)
 }

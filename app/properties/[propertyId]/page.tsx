@@ -134,6 +134,8 @@ type Property = {
   city_id?: string | null
   university_id?: string | null
   area_id?: string | null
+  latitude?: number | string | null
+  longitude?: number | string | null
   price_egp?: number | string | null
   floor_number?: number | string | null
   rental_duration?: 'daily' | 'monthly' | null
@@ -274,6 +276,8 @@ const TRANSLATIONS = {
     bath: 'bath',
     baths: 'baths',
     whatThisPlaceOffers: 'What this place offers',
+    whereYoullBe: 'Where you’ll be',
+    openLocationInMaps: 'Open location in Google Maps',
     showAllAmenities: 'Show all amenities',
     roomStatusAvailable: 'Available',
     roomStatusPartial: 'Partially reserved',
@@ -385,6 +389,8 @@ const TRANSLATIONS = {
     bath: 'حمام',
     baths: 'حمامات',
     whatThisPlaceOffers: 'ما الذي يقدمه هذا المكان',
+    whereYoullBe: 'مكان السكن',
+    openLocationInMaps: 'فتح الموقع على خرائط Google',
     showAllAmenities: 'عرض كل المرافق',
     roomStatusAvailable: 'متاحة',
     roomStatusPartial: 'محجوزة جزئيًا',
@@ -533,6 +539,22 @@ function getAbsoluteUrl(url?: string | null) {
   if (value.startsWith('/')) return `${SITE_URL}${value}`
 
   return value
+}
+
+function getPropertyMapQuery({
+  latitude,
+  longitude,
+  address,
+}: {
+  latitude?: number | null
+  longitude?: number | null
+  address?: string | null
+}) {
+  if (latitude !== null && latitude !== undefined && longitude !== null && longitude !== undefined) {
+    return `${latitude},${longitude}`
+  }
+
+  return address?.trim() || null
 }
 
 function getSortedSeoImages(images?: Array<Partial<PropertyImage>> | null) {
@@ -1003,6 +1025,87 @@ function PropertyAddress({
   )
 }
 
+function PropertyLocationMap({
+  isArabic,
+  title,
+  address,
+  mapEmbedUrl,
+  mapExternalUrl,
+  openMapLabel,
+  sectionClassName = '',
+  mapClassName = 'h-[300px] sm:h-[360px]',
+}: {
+  isArabic: boolean
+  title: string
+  address: string
+  mapEmbedUrl: string | null
+  mapExternalUrl: string | null
+  openMapLabel: string
+  sectionClassName?: string
+  mapClassName?: string
+}) {
+  if (!mapEmbedUrl) return null
+
+  return (
+    <section className={sectionClassName}>
+      <h2 className="text-[24px] font-bold tracking-tight text-slate-950 dark:text-slate-100 md:text-[26px]">
+        {title}
+      </h2>
+
+      {address && (
+        <p
+          className={`mt-3 text-[15px] leading-6 text-slate-700 dark:text-slate-300 md:text-[16px] ${
+            isArabic ? 'text-right' : 'text-left'
+          }`}
+        >
+          {address}
+        </p>
+      )}
+
+      <div
+        className={`relative mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-100 shadow-[0_10px_26px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-slate-900 dark:shadow-[0_18px_42px_rgba(0,0,0,0.30)] ${mapClassName}`}
+      >
+        <iframe
+          src={mapEmbedUrl}
+          title={address ? `${title} - ${address}` : title}
+          className="h-full w-full border-0"
+          loading="lazy"
+          allowFullScreen
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+
+        {mapExternalUrl && (
+          <a
+            href={mapExternalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={openMapLabel}
+            title={openMapLabel}
+            className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.16)] transition hover:scale-105 hover:bg-slate-50 dark:bg-[#0b1220] dark:text-slate-100 dark:hover:bg-[#111827]"
+            dir="ltr"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2.2}
+              stroke="currentColor"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M7.5 3.75H3.75V7.5m16.5 0V3.75H16.5m0 16.5h3.75V16.5m-16.5 0v3.75H7.5"
+              />
+            </svg>
+          </a>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function GenderMeta({
   gender,
   language,
@@ -1206,6 +1309,8 @@ export default async function PropertyPage({
       city_id,
       university_id,
       area_id,
+      latitude,
+      longitude,
       price_egp,
       floor_number,
       rental_duration,
@@ -1750,6 +1855,23 @@ export default async function PropertyPage({
     ? typedProperty.address_ar || typedProperty.address_en || ''
     : typedProperty.address_en || typedProperty.address_ar || ''
 
+  const mapLatitude = toNumber(typedProperty.latitude)
+  const mapLongitude = toNumber(typedProperty.longitude)
+  const propertyMapQuery = getPropertyMapQuery({
+    latitude: mapLatitude,
+    longitude: mapLongitude,
+    address: addressText,
+  })
+  const encodedPropertyMapQuery = propertyMapQuery
+    ? encodeURIComponent(propertyMapQuery)
+    : null
+  const propertyMapEmbedUrl = encodedPropertyMapQuery
+    ? `https://maps.google.com/maps?q=${encodedPropertyMapQuery}&z=15&output=embed&hl=${selectedLanguage}`
+    : null
+  const propertyMapExternalUrl = encodedPropertyMapQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodedPropertyMapQuery}`
+    : null
+
   const propertyTitle = isArabic
     ? typedProperty.title_ar || typedProperty.title_en || 'Untitled Property'
     : typedProperty.title_en || typedProperty.title_ar || 'Untitled Property'
@@ -2223,9 +2345,30 @@ export default async function PropertyPage({
             isArabic={isArabic}
           />
 
-          <div
-            className={`absolute top-4 z-30 ${isArabic ? 'left-4' : 'right-4'}`}
+          <Link
+            href={buildSearchResultsLink()}
+            aria-label={isArabic ? 'الرجوع لنتائج البحث' : 'Back to search results'}
+            className="absolute left-4 top-4 z-30 flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#dddddd] bg-white text-[#111827] shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition hover:bg-[#f8fafc] dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:shadow-[0_8px_20px_rgba(0,0,0,0.28)] dark:hover:bg-[#111827]"
+            dir="ltr"
           >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2.2}
+              stroke="currentColor"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.75 19.5 8.25 12l7.5-7.5"
+              />
+            </svg>
+          </Link>
+
+          <div className="absolute right-4 top-4 z-30" dir="ltr">
             <PropertyShareButton
               url={canonicalUrl}
               title={propertyTitle}
@@ -2287,6 +2430,17 @@ export default async function PropertyPage({
               items={offers}
               sectionClassName="mt-6 border-b border-slate-200 pb-8 px-1 sm:px-2 dark:border-white/10"
               showAllButtonClassName="inline-flex h-11 items-center justify-center rounded-[18px] bg-[#054aff] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#043be0]"
+            />
+
+            <PropertyLocationMap
+              isArabic={isArabic}
+              title={t.whereYoullBe}
+              address={addressText}
+              mapEmbedUrl={propertyMapEmbedUrl}
+              mapExternalUrl={propertyMapExternalUrl}
+              openMapLabel={t.openLocationInMaps}
+              sectionClassName="border-b border-slate-200 px-1 pb-8 pt-6 sm:px-2 dark:border-white/10"
+              mapClassName="h-[300px]"
             />
 
             {similarProperties.length > 0 && (
@@ -2503,6 +2657,17 @@ export default async function PropertyPage({
               </section>
             </div>
           </section>
+
+          <PropertyLocationMap
+            isArabic={isArabic}
+            title={t.whereYoullBe}
+            address={addressText}
+            mapEmbedUrl={propertyMapEmbedUrl}
+            mapExternalUrl={propertyMapExternalUrl}
+            openMapLabel={t.openLocationInMaps}
+            sectionClassName="mt-8 rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.05)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_18px_42px_rgba(0,0,0,0.32)]"
+            mapClassName="h-[380px] lg:h-[430px]"
+          />
 
           <section className="mt-8">
             <div className="mb-4 flex items-center justify-between gap-4">
