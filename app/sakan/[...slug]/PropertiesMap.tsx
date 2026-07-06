@@ -464,7 +464,10 @@ export default function PropertiesMap({
     return () => {
       window.removeEventListener('resize', syncNavigationControls)
       window.removeEventListener('mobile-map-sheet-state-change', resizeMap)
-      window.removeEventListener('navienty:mobile-map-marker-selected', resizeMap)
+      window.removeEventListener(
+        'navienty:mobile-map-marker-selected',
+        resizeMap
+      )
       map.off('click', handleMapClick)
 
       emitMobilePreviewState(false)
@@ -528,7 +531,10 @@ export default function PropertiesMap({
       markerElement.style.transformOrigin = 'center center'
       markerElement.style.transition =
         'background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease'
-      markerElement.style.WebkitTapHighlightColor = 'transparent'
+      markerElement.style.setProperty(
+        '-webkit-tap-highlight-color',
+        'transparent'
+      )
 
       applyMarkerStyle(markerElement, false)
 
