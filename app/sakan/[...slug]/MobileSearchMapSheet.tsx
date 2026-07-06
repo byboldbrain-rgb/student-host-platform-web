@@ -237,13 +237,16 @@ export default function MobileSearchMapSheet({
     return true
   }
 
-  const decideDragMode = (dragState: DragState, deltaX: number, deltaY: number) => {
+  const decideDragMode = (
+    dragState: DragState,
+    deltaX: number,
+    deltaY: number
+  ): DragMode => {
     const absX = Math.abs(deltaX)
     const absY = Math.abs(deltaY)
 
     if (Math.max(absX, absY) < 7) return null
 
-    // Horizontal gestures belong to the image slider. The sheet should never steal them.
     if (absX > absY * 1.12) {
       return 'ignore'
     }
@@ -254,15 +257,10 @@ export default function MobileSearchMapSheet({
     const draggingUp = deltaY < 0
     const startedAtListExpanded = dragState.startSheetY <= snapPoints.listExpanded + 10
 
-    // Full map: only the compact return sheet should control the map state.
     if (dragState.startSheetY >= snapPoints.mapExpanded - 12) {
       return dragState.startedFromCompactReturn ? 'sheet' : 'ignore'
     }
 
-    // When the list is fully expanded:
-    // - Swiping up must scroll the list normally.
-    // - Swiping down scrolls the list back to the top first.
-    // - Only when the list is already at the top, swiping down moves the sheet to the middle state.
     if (startedAtListExpanded) {
       if (draggingUp) return 'ignore'
 
@@ -271,15 +269,12 @@ export default function MobileSearchMapSheet({
       }
     }
 
-    // Middle state: any vertical movement from the white sheet controls the sheet.
     return 'sheet'
   }
 
   const getVisualSheetY = (dragState: DragState, deltaY: number) => {
     const startedAtListExpanded = dragState.startSheetY <= snapPoints.listExpanded + 10
 
-    // From full list, one pull down should only return to the 50/50 state.
-    // A second pull down from 50/50 opens the full map.
     if (startedAtListExpanded && deltaY > 0) {
       return clamp(
         dragState.startSheetY + deltaY,
@@ -452,9 +447,10 @@ export default function MobileSearchMapSheet({
 
   useEffect(() => {
     const panel = panelRef.current
-    const compactReturn = rootRef.current?.querySelector(
-      '.mobile-search-map-sheet__compact-return'
-    )
+    const compactReturn =
+      rootRef.current?.querySelector<HTMLElement>(
+        '.mobile-search-map-sheet__compact-return'
+      ) ?? null
 
     if (!panel) return
 
@@ -468,11 +464,13 @@ export default function MobileSearchMapSheet({
       return null
     }
 
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) return
+    const handleTouchStart: EventListener = (event) => {
+      const touchEvent = event as TouchEvent
 
-      const touch = event.touches[0]
-      const target = event.target as HTMLElement | null
+      if (touchEvent.touches.length !== 1) return
+
+      const touch = touchEvent.touches[0]
+      const target = touchEvent.target as HTMLElement | null
 
       activeTouchIdRef.current = touch.identifier
 
@@ -486,19 +484,21 @@ export default function MobileSearchMapSheet({
       })
     }
 
-    const handleTouchMove = (event: TouchEvent) => {
-      const touch = getTouchById(event)
+    const handleTouchMove: EventListener = (event) => {
+      const touchEvent = event as TouchEvent
+      const touch = getTouchById(touchEvent)
+
       if (!touch) return
 
       updateDrag({
         clientX: touch.clientX,
         clientY: touch.clientY,
-        preventDefault: () => event.preventDefault(),
-        stopPropagation: () => event.stopPropagation(),
+        preventDefault: () => touchEvent.preventDefault(),
+        stopPropagation: () => touchEvent.stopPropagation(),
       })
     }
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd: EventListener = () => {
       activeTouchIdRef.current = null
       endDrag()
     }
