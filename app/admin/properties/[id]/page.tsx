@@ -55,7 +55,6 @@ export default async function EditPropertyPage({ params }: PageProps) {
   const { id } = await params
   const supabase = await createClient()
   const admin = adminContext.admin
-
   const propertyRes = await supabase
     .from('properties')
     .select(`
@@ -86,7 +85,12 @@ export default async function EditPropertyPage({ params }: PageProps) {
       smoking_policy,
       admin_status,
       is_active,
-      floor_number
+      floor_number,
+      is_featured,
+      featured_rank,
+      featured_until,
+      featured_at,
+      featured_by_admin_id
     `)
     .eq('id', id)
     .maybeSingle()

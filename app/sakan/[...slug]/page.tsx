@@ -236,6 +236,10 @@ type Property = {
   area_id?: string | number | null
   latitude?: number | string | null
   longitude?: number | string | null
+  created_at?: string | null
+  is_featured?: boolean | null
+  featured_rank?: number | null
+  featured_until?: string | null
   property_universities?: PropertyUniversityLink[] | null
   property_images?: PropertyImage[] | null
   property_sellable_options?: PropertySellableOption[] | null
@@ -304,6 +308,7 @@ const TRANSLATIONS = {
     stay: 'stay',
     night: 'night',
     month: 'month',
+    featured: 'Elite',
     city: 'City',
     university: 'University',
     area: 'Area',
@@ -366,6 +371,7 @@ const TRANSLATIONS = {
     stay: 'إقامة',
     night: 'ليلة',
     month: 'شهر',
+    featured: 'إيليت',
     city: 'المدينة',
     university: 'الجامعة',
     area: 'المنطقة',
@@ -525,6 +531,48 @@ function getAvailabilityRank(status?: string) {
   if (normalized === 'reserved') return 1
   if (normalized === 'unavailable') return 2
   return 3
+}
+
+function isTruthyFeaturedFlag(value: unknown) {
+  if (value === true) return true
+
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+
+  return (
+    normalized === 'true' ||
+    normalized === 't' ||
+    normalized === '1' ||
+    normalized === 'yes' ||
+    normalized === 'y'
+  )
+}
+
+function isPropertyFeatured(property: Property) {
+  const featuredRank = Number(property.featured_rank ?? 0)
+  const hasFeaturedRank = Number.isFinite(featuredRank) && featuredRank > 0
+  const isFeaturedFlagEnabled = isTruthyFeaturedFlag(property.is_featured)
+
+  if (!isFeaturedFlagEnabled && !hasFeaturedRank) return false
+
+  if (!property.featured_until) return true
+
+  const featuredUntilTime = new Date(property.featured_until).getTime()
+
+  // If the property is marked as featured but the date is malformed, keep showing
+  // it instead of silently falling back to the old availability ribbon.
+  if (!Number.isFinite(featuredUntilTime)) return true
+
+  return featuredUntilTime > Date.now()
+}
+
+function getCreatedAtTime(value?: string | null) {
+  if (!value) return 0
+
+  const time = new Date(value).getTime()
+
+  return Number.isFinite(time) ? time : 0
 }
 
 function normalizeOptionCode(value?: string | null) {
@@ -1054,6 +1102,10 @@ export default async function SakanSeoPage({
       area_id,
       latitude,
       longitude,
+      created_at,
+      is_featured,
+      featured_rank,
+      featured_until,
       property_universities!inner(
         university_id
       ),
@@ -1113,6 +1165,20 @@ export default async function SakanSeoPage({
 
   const allSortedProperties = (((properties as Property[]) ?? []).sort(
     (a, b) => {
+      const aFeatured = isPropertyFeatured(a)
+      const bFeatured = isPropertyFeatured(b)
+
+      if (aFeatured !== bFeatured) {
+        return aFeatured ? -1 : 1
+      }
+
+      if (aFeatured && bFeatured) {
+        const featuredRankDiff =
+          Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0)
+
+        if (featuredRankDiff !== 0) return featuredRankDiff
+      }
+
       const availabilityDiff =
         getAvailabilityRank(a.availability_status) -
         getAvailabilityRank(b.availability_status)
@@ -1130,7 +1196,7 @@ export default async function SakanSeoPage({
         return bDisplayPrice - aDisplayPrice
       }
 
-      return 0
+      return getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at)
     }
   ))
 
@@ -1478,8 +1544,8 @@ export default async function SakanSeoPage({
     )
 
     const isReserved = normalizedStatus === 'reserved'
-    const isAvailable = normalizedStatus === 'available'
     const propertyTitle = isArabic ? property.title_ar : property.title_en
+    const propertyIsFeatured = isPropertyFeatured(property)
 
     return (
       <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_6px_18px_rgba(15,23,42,0.08)] dark:bg-slate-800 dark:shadow-[0_10px_30px_rgba(0,0,0,0.35)] md:rounded-[28px] md:shadow-[0_10px_30px_rgba(15,23,42,0.10)]">
@@ -1491,18 +1557,28 @@ export default async function SakanSeoPage({
 
         <div className="property-media-gradient pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/14 via-black/4 to-transparent md:h-20" />
 
-        {(isAvailable || isReserved) && (
-          <div
-            className={`status-ribbon ${
-              isReserved ? 'status-ribbon--reserved' : 'status-ribbon--available'
-            }`}
-          >
+        {propertyIsFeatured && (
+          <div className="featured-badge">
+            <span className="featured-badge__icon" aria-hidden="true">
+              <img
+                src="/icons/king-crown.png"
+                alt=""
+                className="featured-badge__icon-image"
+              />
+            </span>
+            <span className="featured-badge__text">{t.featured}</span>
+          </div>
+        )}
+
+        {!propertyIsFeatured && isReserved && (
+          <div className="status-ribbon status-ribbon--reserved">
             <span className="status-ribbon__inner">{badgeText}</span>
           </div>
         )}
       </div>
     )
   }
+
 
   const renderGenderMeta = (property: Property) => {
     const gender = normalizeGender(property.gender)
@@ -1525,10 +1601,12 @@ export default async function SakanSeoPage({
       >
         {renderPropertyImage(
           property,
-          translateAvailabilityStatus(
-            property.availability_status,
-            selectedLanguage
-          )
+          isPropertyFeatured(property)
+            ? t.featured
+            : translateAvailabilityStatus(
+                property.availability_status,
+                selectedLanguage
+              )
         )}
 
         <div className="mt-2.5 space-y-1 md:mt-3">
@@ -2177,6 +2255,80 @@ export default async function SakanSeoPage({
 
         .property-media-slider__dot:hover {
           transform: scale(1.12);
+        }
+
+        .featured-badge {
+          position: absolute;
+          top: 12px;
+          left: 12px;
+          z-index: 45;
+          display: inline-flex;
+          max-width: calc(100% - 24px);
+          align-items: center;
+          gap: 6px;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.88));
+          padding: 7px 12px;
+          color: #111827;
+          font-size: 12px;
+          line-height: 1;
+          font-weight: 800;
+          letter-spacing: -0.01em;
+          box-shadow:
+            0 10px 26px rgba(15, 23, 42, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.92);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          pointer-events: none;
+        }
+
+        [dir='rtl'] .featured-badge {
+          left: auto;
+          right: 12px;
+        }
+
+        .featured-badge__icon {
+          display: inline-flex;
+          height: 20px;
+          width: 20px;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          border-radius: 0;
+          background: transparent;
+          color: inherit;
+          line-height: 1;
+        }
+
+        .featured-badge__icon-image {
+          display: block;
+          width: 20px;
+          height: 20px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
+
+        .featured-badge__text {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        @media (min-width: 768px) {
+          .featured-badge {
+            top: 14px;
+            left: 14px;
+            padding: 8px 14px;
+            font-size: 13px;
+          }
+
+          [dir='rtl'] .featured-badge {
+            left: auto;
+            right: 14px;
+          }
         }
 
         .status-ribbon {

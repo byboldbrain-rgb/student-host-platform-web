@@ -1654,7 +1654,9 @@ export async function updatePropertyAction(formData: FormData) {
 
   const { data: existingProperty, error: existingPropertyError } = await supabase
     .from('properties')
-    .select('id, broker_id, owner_id, admin_status, availability_status, property_id')
+    .select(
+      'id, broker_id, owner_id, admin_status, availability_status, property_id, is_featured, featured_rank, featured_until, featured_at, featured_by_admin_id'
+    )
     .eq('id', propertyDbId)
     .maybeSingle()
 
@@ -1715,6 +1717,56 @@ export async function updatePropertyAction(formData: FormData) {
   const admin_status = isSuperAdmin(admin)
     ? submittedAdminStatus
     : existingProperty.admin_status
+
+  const superAdminCanManageFeatured = isSuperAdmin(admin)
+
+  const requestedIsFeatured = toBoolean(
+    String(formData.get('is_featured') || 'false')
+  )
+
+  const is_featured = superAdminCanManageFeatured
+    ? requestedIsFeatured
+    : existingProperty.is_featured === true
+
+  let featured_rank = 0
+  let featured_until: string | null = null
+  let featured_at: string | null = null
+  let featured_by_admin_id: string | null = null
+
+  if (superAdminCanManageFeatured) {
+    if (is_featured) {
+      featured_rank = Math.max(
+        0,
+        Math.trunc(toNumberOrDefault(formData.get('featured_rank'), 0))
+      )
+
+      const rawFeaturedUntil = String(formData.get('featured_until') || '').trim()
+
+      if (rawFeaturedUntil) {
+        const featuredUntilDate = new Date(rawFeaturedUntil)
+
+        if (Number.isNaN(featuredUntilDate.getTime())) {
+          throw new Error('Featured until date is invalid')
+        }
+
+        featured_until = featuredUntilDate.toISOString()
+      }
+
+      featured_at =
+        existingProperty.is_featured === true && existingProperty.featured_at
+          ? existingProperty.featured_at
+          : new Date().toISOString()
+      featured_by_admin_id = admin.id
+    }
+  } else if (is_featured) {
+    featured_rank = Math.max(
+      0,
+      Math.trunc(Number(existingProperty.featured_rank ?? 0))
+    )
+    featured_until = existingProperty.featured_until ?? null
+    featured_at = existingProperty.featured_at ?? null
+    featured_by_admin_id = existingProperty.featured_by_admin_id ?? null
+  }
 
   const normalizedSubmittedAvailabilityStatus =
     normalizeAvailabilityStatus(submittedAvailabilityStatus)
@@ -1903,6 +1955,11 @@ export async function updatePropertyAction(formData: FormData) {
     smoking_policy: String(formData.get('smoking_policy') || '').trim() || null,
     admin_status,
     is_active: availability_status !== 'inactive',
+    is_featured,
+    featured_rank,
+    featured_until,
+    featured_at,
+    featured_by_admin_id,
     updated_by_admin_id: admin.id,
   }
 
@@ -2230,6 +2287,9 @@ export async function updatePropertyAction(formData: FormData) {
       university_id,
       admin_status,
       availability_status,
+      is_featured,
+      featured_rank,
+      featured_until,
       structure_sync_mode: 'preserve_existing_ids',
       waiting_list_notifications:
         waitingListNotificationResult || {

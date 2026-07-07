@@ -148,6 +148,11 @@ type Property = {
   admin_status: 'draft' | 'pending_review' | 'published' | 'rejected' | 'archived'
   is_active: boolean
   floor_number?: number | null
+  is_featured?: boolean | null
+  featured_rank?: number | null
+  featured_until?: string | null
+  featured_at?: string | null
+  featured_by_admin_id?: string | null
 }
 
 type PropertyBookingRequest = {
@@ -508,6 +513,16 @@ function getInitials(label: string) {
     .join('')
 }
 
+function formatDateTimeLocalInputValue(value?: string | null) {
+  if (!value) return ''
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000
+  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16)
+}
+
 function IconThumb({ label, iconUrl }: { label: string; iconUrl?: string | null }) {
   if (iconUrl) {
     return (
@@ -794,6 +809,13 @@ export default function EditPropertyForm({
   const [smokingPolicy] = useState(property.smoking_policy || '')
   const [airbnbPriceMin] = useState(String(property.airbnb_price_min ?? ''))
   const [airbnbPriceMax] = useState(String(property.airbnb_price_max ?? ''))
+  const [isFeatured, setIsFeatured] = useState(property.is_featured === true)
+  const [featuredRank, setFeaturedRank] = useState(
+    String(property.featured_rank ?? 0)
+  )
+  const [featuredUntil, setFeaturedUntil] = useState(
+    formatDateTimeLocalInputValue(property.featured_until)
+  )
   const [addressSearch, setAddressSearch] = useState('')
   const [addressSuggestions, setAddressSuggestions] = useState<MapboxAddressSuggestion[]>([])
   const [isSearchingAddress, setIsSearchingAddress] = useState(false)
@@ -1613,6 +1635,16 @@ export default function EditPropertyForm({
     formData.set('latitude', normalizeNumberString(selectedLatitude))
     formData.set('longitude', normalizeNumberString(selectedLongitude))
 
+    if (canChangeAdminStatus) {
+      formData.set('is_featured', isFeatured ? 'true' : 'false')
+      formData.set('featured_rank', normalizeNumberString(featuredRank || '0'))
+      formData.set('featured_until', featuredUntil)
+    } else {
+      formData.set('is_featured', property.is_featured === true ? 'true' : 'false')
+      formData.set('featured_rank', String(property.featured_rank ?? 0))
+      formData.set('featured_until', property.featured_until ?? '')
+    }
+
     if (!canChangeBroker) {
       formData.set('broker_id', property.broker_id)
     } else {
@@ -1871,6 +1903,25 @@ export default function EditPropertyForm({
       {!canChangeBroker && <input type="hidden" name="broker_id" value={property.broker_id} />}
       {!canChangeAdminStatus && (
         <input type="hidden" name="admin_status" value={property.admin_status} />
+      )}
+      {!canChangeAdminStatus && (
+        <>
+          <input
+            type="hidden"
+            name="is_featured"
+            value={property.is_featured === true ? 'true' : 'false'}
+          />
+          <input
+            type="hidden"
+            name="featured_rank"
+            value={String(property.featured_rank ?? 0)}
+          />
+          <input
+            type="hidden"
+            name="featured_until"
+            value={property.featured_until ?? ''}
+          />
+        </>
       )}
 
       <header className="sticky top-0 z-[110] bg-[#f5f7f9]">
@@ -2759,6 +2810,85 @@ export default function EditPropertyForm({
             </h1>
 
             <div className="mt-6 space-y-6">
+              {canChangeAdminStatus && (
+                <FeatureSection
+                  title="Featured Placement"
+                  subtitle="Use this to push selected properties to the top of search results. This is separate from amenities/facilities."
+                >
+                  <div className="space-y-5">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#e6ebf2] bg-[#f8fbff] p-4">
+                      <input
+                        type="checkbox"
+                        checked={isFeatured}
+                        onChange={(event) => setIsFeatured(event.target.checked)}
+                        className="mt-1 h-4 w-4"
+                      />
+
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-[#162033]">
+                          Mark this property as Featured
+                        </span>
+                        <span className="mt-1 block text-sm text-[#687385]">
+                          Featured properties appear before normal properties in the public
+                          search page.
+                        </span>
+                      </span>
+                    </label>
+
+                    {isFeatured && (
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <label className="block">
+                          <span className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+                            Featured Rank
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={featuredRank}
+                            onChange={(event) => setFeaturedRank(event.target.value)}
+                            placeholder="100"
+                            className={inputClass}
+                          />
+                          <p className="mt-2 text-xs text-[#687385]">
+                            Higher rank appears first. Example: 100 appears before 50.
+                          </p>
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+                            Featured Until
+                          </span>
+                          <input
+                            type="datetime-local"
+                            value={featuredUntil}
+                            onChange={(event) => setFeaturedUntil(event.target.value)}
+                            className={inputClass}
+                          />
+                          <p className="mt-2 text-xs text-[#687385]">
+                            Leave empty to keep it featured without an expiry date.
+                          </p>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </FeatureSection>
+              )}
+
+              {!canChangeAdminStatus && property.is_featured === true && (
+                <FeatureSection
+                  title="Featured Placement"
+                  subtitle="This property is currently featured. Only super admins can change this setting."
+                >
+                  <div className="rounded-2xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-sm text-[#1e3a8a]">
+                    Featured Rank: {property.featured_rank ?? 0}
+                    {property.featured_until
+                      ? ` · Until: ${new Date(property.featured_until).toLocaleString()}`
+                      : ' · No expiry date'}
+                  </div>
+                </FeatureSection>
+              )}
+
               {amenityCategoryGroups.map((group) => (
                 <FeatureSection
                   key={group.key}
