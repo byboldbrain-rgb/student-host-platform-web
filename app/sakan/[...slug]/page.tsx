@@ -1013,7 +1013,6 @@ export default async function SakanSeoPage({
 
   // أقل عدد كروت على الصفحة = Scroll أخف على الموبايل
   const PAGE_SIZE = 8
-  const MAX_CARD_IMAGES = 3
 
   const currentPage = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
   const from = (currentPage - 1) * PAGE_SIZE
@@ -1491,7 +1490,6 @@ export default async function SakanSeoPage({
         return a.originalIndex - b.originalIndex
       })
       .map((item) => item.imageUrl)
-      .slice(0, MAX_CARD_IMAGES)
   }
 
     const mapProperties = allSortedProperties
@@ -1533,6 +1531,7 @@ export default async function SakanSeoPage({
         latitude,
         longitude,
         imageUrl: getPropertyImages(property)[0] ?? null,
+        imageUrls: getPropertyImages(property),
       }
     })
     .filter((property): property is NonNullable<typeof property> => Boolean(property))
