@@ -32,11 +32,16 @@ type CityRow = {
   slug: string | null
 }
 
-type UniversityRow = {
+type PropertyAreaRow = {
   id: string
   name_ar: string | null
   name_en: string | null
   slug: string | null
+}
+
+type PropertyAreaResult = {
+  area_id: string | null
+  property_areas: PropertyAreaRow | PropertyAreaRow[] | null
 }
 
 function isIncomingUserMessage(event: MessengerEvent) {
@@ -67,6 +72,14 @@ function trimMessengerTitle(title: string) {
   return `${cleanTitle.slice(0, 19)}…`
 }
 
+function getAreaFromResult(row: PropertyAreaResult) {
+  if (Array.isArray(row.property_areas)) {
+    return row.property_areas[0] ?? null
+  }
+
+  return row.property_areas ?? null
+}
+
 async function upsertSession(params: {
   psid: string
   pageId?: string | null
@@ -74,6 +87,7 @@ async function upsertSession(params: {
   step: string
   cityId?: string | null
   universityId?: string | null
+  areaId?: string | null
   lastPayload?: string | null
   lastMessageText?: string | null
 }) {
@@ -87,6 +101,7 @@ async function upsertSession(params: {
       step: params.step,
       city_id: params.cityId ?? null,
       university_id: params.universityId ?? null,
+      area_id: params.areaId ?? null,
       last_payload: params.lastPayload ?? null,
       last_message_text: params.lastMessageText ?? null,
     },
@@ -177,44 +192,71 @@ async function sendCities(psid: string, userType: 'student' | 'owner') {
   })
 }
 
-async function sendUniversities(params: {
+async function sendAreas(params: {
   psid: string
   userType: 'student' | 'owner'
   cityId: string
 }) {
   const supabase = getMessengerSupabaseAdminClient()
 
-  const { data: universities, error } = await supabase
-    .from('universities')
-    .select('id, name_ar, name_en, slug')
+  const { data, error } = await supabase
+    .from('properties')
+    .select(
+      `
+      area_id,
+      property_areas (
+        id,
+        name_ar,
+        name_en,
+        slug
+      )
+    `
+    )
     .eq('city_id', params.cityId)
-    .order('name_ar', { ascending: true })
-    .limit(12)
+    .eq('admin_status', 'published')
+    .eq('is_active', true)
+    .not('area_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(200)
 
   if (error) {
-    throw new Error(`Failed to fetch universities: ${error.message}`)
+    throw new Error(`Failed to fetch areas: ${error.message}`)
   }
 
-  if (!universities?.length) {
+  const uniqueAreas = new Map<string, PropertyAreaRow>()
+
+  for (const row of (data ?? []) as PropertyAreaResult[]) {
+    const area = getAreaFromResult(row)
+
+    if (area?.id && !uniqueAreas.has(area.id)) {
+      uniqueAreas.set(area.id, area)
+    }
+  }
+
+  const areas = Array.from(uniqueAreas.values()).slice(0, 12)
+
+  if (!areas.length) {
     await sendMessengerText(
       params.psid,
-      'حاليًا مفيش جامعات متاحة للمدينة دي.\nجرب تختار مدينة تانية أو تواصل مع الدعم.'
+      params.userType === 'student'
+        ? 'حاليًا مفيش مناطق فيها شقق منشورة في المدينة دي.\nجرب تختار مدينة تانية أو تواصل مع الدعم.'
+        : 'حاليًا مفيش مناطق متاحة في المدينة دي.\nفريق Navienty هيتابع معاك قريبًا.'
     )
     return
   }
 
-  const prefix = params.userType === 'student' ? 'STUDENT_UNIVERSITY' : 'OWNER_UNIVERSITY'
+  const prefix = params.userType === 'student' ? 'STUDENT_AREA' : 'OWNER_AREA'
 
-  const quickReplies = (universities as UniversityRow[]).map((university) => ({
+  const quickReplies = areas.map((area) => ({
     content_type: 'text' as const,
-    title: trimMessengerTitle(university.name_ar || university.name_en || 'جامعة'),
-    payload: `${prefix}:${university.id}`,
+    title: trimMessengerTitle(area.name_ar || area.name_en || 'منطقة'),
+    payload: `${prefix}:${area.id}`,
   }))
 
   const message =
     params.userType === 'student'
-      ? 'تمام ✅\nاختار الجامعة اللي عاوز سكن قريب منها:'
-      : 'تمام ✅\nاختار الجامعة القريبة من السكن:'
+      ? 'تمام ✅\nاختار المنطقة اللي عاوز تسكن فيها:'
+      : 'تمام ✅\nاختار المنطقة الموجود فيها السكن:'
 
   await sendMessengerText(params.psid, message, {
     quickReplies,
@@ -233,24 +275,26 @@ async function handleCitySelection(params: {
     psid: params.psid,
     pageId: params.pageId,
     userType: params.userType,
-    step: 'select_university',
+    step: 'select_area',
     cityId: params.cityId,
+    universityId: null,
+    areaId: null,
     lastPayload: params.payload,
     lastMessageText: params.messageText ?? null,
   })
 
-  await sendUniversities({
+  await sendAreas({
     psid: params.psid,
     userType: params.userType,
     cityId: params.cityId,
   })
 }
 
-async function handleUniversitySelection(params: {
+async function handleAreaSelection(params: {
   psid: string
   pageId?: string | null
   userType: 'student' | 'owner'
-  universityId: string
+  areaId: string
   payload: string
   messageText?: string | null
 }) {
@@ -260,16 +304,25 @@ async function handleUniversitySelection(params: {
     psid: params.psid,
     pageId: params.pageId,
     userType: params.userType,
-    step: 'select_area',
+    step: params.userType === 'student' ? 'area_selected' : 'owner_area_selected',
     cityId: session?.city_id ?? null,
-    universityId: params.universityId,
+    universityId: null,
+    areaId: params.areaId,
     lastPayload: params.payload,
     lastMessageText: params.messageText ?? null,
   })
 
+  if (params.userType === 'student') {
+    await sendMessengerText(
+      params.psid,
+      'تمام ✅\nتم اختيار المنطقة.\n\nالخطوة الجاية هنجهزلك لينك الشقق المناسبة.'
+    )
+    return
+  }
+
   await sendMessengerText(
     params.psid,
-    'تمام ✅\nتم اختيار الجامعة.\n\nالخطوة الجاية هنخليك تختار المنطقة.'
+    'تمام يا فندم ✅\nتم اختيار المنطقة.\n\nالخطوة الجاية هنجهزلك لينك إضافة السكن.'
   )
 }
 
@@ -294,6 +347,8 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'student',
       step: 'select_city',
+      universityId: null,
+      areaId: null,
       lastPayload: payload,
       lastMessageText: messageText,
     })
@@ -308,6 +363,8 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'owner',
       step: 'select_city',
+      universityId: null,
+      areaId: null,
       lastPayload: payload,
       lastMessageText: messageText,
     })
@@ -322,6 +379,8 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'support',
       step: 'support_needed',
+      universityId: null,
+      areaId: null,
       lastPayload: payload,
       lastMessageText: messageText,
     })
@@ -360,14 +419,14 @@ async function handleMessengerEvent(event: MessengerEvent) {
     return
   }
 
-  if (payload?.startsWith('STUDENT_UNIVERSITY:')) {
-    const universityId = payload.replace('STUDENT_UNIVERSITY:', '')
+  if (payload?.startsWith('STUDENT_AREA:')) {
+    const areaId = payload.replace('STUDENT_AREA:', '')
 
-    await handleUniversitySelection({
+    await handleAreaSelection({
       psid,
       pageId,
       userType: 'student',
-      universityId,
+      areaId,
       payload,
       messageText,
     })
@@ -375,14 +434,14 @@ async function handleMessengerEvent(event: MessengerEvent) {
     return
   }
 
-  if (payload?.startsWith('OWNER_UNIVERSITY:')) {
-    const universityId = payload.replace('OWNER_UNIVERSITY:', '')
+  if (payload?.startsWith('OWNER_AREA:')) {
+    const areaId = payload.replace('OWNER_AREA:', '')
 
-    await handleUniversitySelection({
+    await handleAreaSelection({
       psid,
       pageId,
       userType: 'owner',
-      universityId,
+      areaId,
       payload,
       messageText,
     })
