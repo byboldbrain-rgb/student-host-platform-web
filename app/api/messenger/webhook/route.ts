@@ -5,6 +5,7 @@ import { getMessengerSupabaseAdminClient } from '@/src/lib/messenger/supabase'
 export const runtime = 'nodejs'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://navienty.com'
+const OWNERS_WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_OWNERS_WHATSAPP_NUMBER || ''
 
 type MessengerEvent = {
   sender?: {
@@ -99,6 +100,25 @@ function withBotTracking(url: string) {
   parsedUrl.searchParams.set('utm_campaign', 'student_area_flow')
 
   return parsedUrl.toString()
+}
+
+function getCleanOwnersWhatsAppNumber() {
+  return OWNERS_WHATSAPP_NUMBER.replace(/[^\d]/g, '')
+}
+
+function buildOwnersWhatsAppUrl() {
+  const phone = getCleanOwnersWhatsAppNumber()
+
+  if (!phone) {
+    return null
+  }
+
+  const text = 'مساء الخير، أنا مالك وعندي سكن وعاوز أضيفه على Navienty.'
+  const url = new URL(`https://wa.me/${phone}`)
+
+  url.searchParams.set('text', text)
+
+  return url.toString()
 }
 
 async function upsertSession(params: {
@@ -357,25 +377,75 @@ async function getStudentAreaUrl(params: {
   }
 }
 
-function buildOwnerAddPropertyUrl(params: {
-  cityId?: string | null
-  areaId?: string | null
+async function sendOwnerWhatsAppMessage(params: {
+  psid: string
+  pageId?: string | null
+  payload: string
+  messageText?: string | null
 }) {
-  const url = new URL('/owners/add-property', SITE_URL)
+  const ownersWhatsAppNumber = getCleanOwnersWhatsAppNumber()
+  const ownersWhatsAppUrl = buildOwnersWhatsAppUrl()
 
-  if (params.cityId) {
-    url.searchParams.set('city_id', params.cityId)
+  await upsertSession({
+    psid: params.psid,
+    pageId: params.pageId,
+    userType: 'owner',
+    step: 'sent_owner_whatsapp',
+    cityId: null,
+    universityId: null,
+    areaId: null,
+    lastPayload: params.payload,
+    lastMessageText: params.messageText ?? null,
+  })
+
+  await createMessengerLead({
+    psid: params.psid,
+    pageId: params.pageId,
+    userType: 'owner',
+    finalUrl: ownersWhatsAppUrl,
+    leadStatus: ownersWhatsAppUrl ? 'sent_to_owner_form' : 'support_needed',
+  })
+
+  if (!ownersWhatsAppNumber || !ownersWhatsAppUrl) {
+    await sendMessengerText(
+      params.psid,
+      'حاليًا رقم واتساب الملاك غير متاح.\nفريق Navienty هيتابع معاك قريبًا 👌',
+      {
+        quickReplies: [
+          {
+            content_type: 'text',
+            title: 'طالب بدور على سكن',
+            payload: 'STUDENT_START',
+          },
+          {
+            content_type: 'text',
+            title: 'الدعم',
+            payload: 'SUPPORT',
+          },
+        ],
+      }
+    )
+    return
   }
 
-  if (params.areaId) {
-    url.searchParams.set('area_id', params.areaId)
-  }
-
-  url.searchParams.set('utm_source', 'messenger')
-  url.searchParams.set('utm_medium', 'bot')
-  url.searchParams.set('utm_campaign', 'owner_area_flow')
-
-  return url.toString()
+  await sendMessengerText(
+    params.psid,
+    `أهلاً بحضرتك 👋\nلو عندك سكن وعاوز تضيفه على Navienty، ابعتلنا تفاصيل السكن والصور على واتساب الملاك:\n\n+${ownersWhatsAppNumber}\n\nأو اضغط على اللينك ده:\n${ownersWhatsAppUrl}`,
+    {
+      quickReplies: [
+        {
+          content_type: 'text',
+          title: 'طالب بدور على سكن',
+          payload: 'STUDENT_START',
+        },
+        {
+          content_type: 'text',
+          title: 'الدعم',
+          payload: 'SUPPORT',
+        },
+      ],
+    }
+  )
 }
 
 async function handleCitySelection(params: {
@@ -486,25 +556,12 @@ async function handleAreaSelection(params: {
     return
   }
 
-  const ownerUrl = buildOwnerAddPropertyUrl({
-    cityId,
-    areaId: params.areaId,
-  })
-
-  await createMessengerLead({
+  await sendOwnerWhatsAppMessage({
     psid: params.psid,
     pageId: params.pageId,
-    userType: 'owner',
-    cityId,
-    areaId: params.areaId,
-    finalUrl: ownerUrl,
-    leadStatus: 'sent_to_owner_form',
+    payload: params.payload,
+    messageText: params.messageText ?? null,
   })
-
-  await sendMessengerText(
-    params.psid,
-    `تمام يا فندم ✅\nتقدر تضيف السكن من هنا:\n\n${ownerUrl}\n\nبعد الإضافة، فريق Navienty هيراجع البيانات والصور قبل النشر.`
-  )
 }
 
 async function handleMessengerEvent(event: MessengerEvent) {
@@ -540,19 +597,13 @@ async function handleMessengerEvent(event: MessengerEvent) {
   }
 
   if (payload === 'OWNER_START') {
-    await upsertSession({
+    await sendOwnerWhatsAppMessage({
       psid,
       pageId,
-      userType: 'owner',
-      step: 'select_city',
-      cityId: null,
-      universityId: null,
-      areaId: null,
-      lastPayload: payload,
-      lastMessageText: messageText,
+      payload,
+      messageText,
     })
 
-    await sendCities(psid, 'owner')
     return
   }
 
@@ -644,13 +695,9 @@ async function handleMessengerEvent(event: MessengerEvent) {
   }
 
   if (payload?.startsWith('OWNER_CITY:')) {
-    const cityId = payload.replace('OWNER_CITY:', '')
-
-    await handleCitySelection({
+    await sendOwnerWhatsAppMessage({
       psid,
       pageId,
-      userType: 'owner',
-      cityId,
       payload,
       messageText,
     })
@@ -674,13 +721,9 @@ async function handleMessengerEvent(event: MessengerEvent) {
   }
 
   if (payload?.startsWith('OWNER_AREA:')) {
-    const areaId = payload.replace('OWNER_AREA:', '')
-
-    await handleAreaSelection({
+    await sendOwnerWhatsAppMessage({
       psid,
       pageId,
-      userType: 'owner',
-      areaId,
       payload,
       messageText,
     })
