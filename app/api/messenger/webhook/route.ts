@@ -32,6 +32,13 @@ type CityRow = {
   slug: string | null
 }
 
+type UniversityRow = {
+  id: string
+  name_ar: string | null
+  name_en: string | null
+  slug: string | null
+}
+
 function isIncomingUserMessage(event: MessengerEvent) {
   const psid = event.sender?.id
 
@@ -66,6 +73,7 @@ async function upsertSession(params: {
   userType?: BotUserType | null
   step: string
   cityId?: string | null
+  universityId?: string | null
   lastPayload?: string | null
   lastMessageText?: string | null
 }) {
@@ -78,6 +86,7 @@ async function upsertSession(params: {
       user_type: params.userType ?? null,
       step: params.step,
       city_id: params.cityId ?? null,
+      university_id: params.universityId ?? null,
       last_payload: params.lastPayload ?? null,
       last_message_text: params.lastMessageText ?? null,
     },
@@ -89,6 +98,22 @@ async function upsertSession(params: {
   if (error) {
     throw new Error(`Failed to upsert messenger session: ${error.message}`)
   }
+}
+
+async function getSession(psid: string) {
+  const supabase = getMessengerSupabaseAdminClient()
+
+  const { data, error } = await supabase
+    .from('messenger_bot_sessions')
+    .select('*')
+    .eq('psid', psid)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to get messenger session: ${error.message}`)
+  }
+
+  return data
 }
 
 async function sendMainMenu(psid: string) {
@@ -152,6 +177,50 @@ async function sendCities(psid: string, userType: 'student' | 'owner') {
   })
 }
 
+async function sendUniversities(params: {
+  psid: string
+  userType: 'student' | 'owner'
+  cityId: string
+}) {
+  const supabase = getMessengerSupabaseAdminClient()
+
+  const { data: universities, error } = await supabase
+    .from('universities')
+    .select('id, name_ar, name_en, slug')
+    .eq('city_id', params.cityId)
+    .order('name_ar', { ascending: true })
+    .limit(12)
+
+  if (error) {
+    throw new Error(`Failed to fetch universities: ${error.message}`)
+  }
+
+  if (!universities?.length) {
+    await sendMessengerText(
+      params.psid,
+      'حاليًا مفيش جامعات متاحة للمدينة دي.\nجرب تختار مدينة تانية أو تواصل مع الدعم.'
+    )
+    return
+  }
+
+  const prefix = params.userType === 'student' ? 'STUDENT_UNIVERSITY' : 'OWNER_UNIVERSITY'
+
+  const quickReplies = (universities as UniversityRow[]).map((university) => ({
+    content_type: 'text' as const,
+    title: trimMessengerTitle(university.name_ar || university.name_en || 'جامعة'),
+    payload: `${prefix}:${university.id}`,
+  }))
+
+  const message =
+    params.userType === 'student'
+      ? 'تمام ✅\nاختار الجامعة اللي عاوز سكن قريب منها:'
+      : 'تمام ✅\nاختار الجامعة القريبة من السكن:'
+
+  await sendMessengerText(params.psid, message, {
+    quickReplies,
+  })
+}
+
 async function handleCitySelection(params: {
   psid: string
   pageId?: string | null
@@ -170,9 +239,37 @@ async function handleCitySelection(params: {
     lastMessageText: params.messageText ?? null,
   })
 
+  await sendUniversities({
+    psid: params.psid,
+    userType: params.userType,
+    cityId: params.cityId,
+  })
+}
+
+async function handleUniversitySelection(params: {
+  psid: string
+  pageId?: string | null
+  userType: 'student' | 'owner'
+  universityId: string
+  payload: string
+  messageText?: string | null
+}) {
+  const session = await getSession(params.psid)
+
+  await upsertSession({
+    psid: params.psid,
+    pageId: params.pageId,
+    userType: params.userType,
+    step: 'select_area',
+    cityId: session?.city_id ?? null,
+    universityId: params.universityId,
+    lastPayload: params.payload,
+    lastMessageText: params.messageText ?? null,
+  })
+
   await sendMessengerText(
     params.psid,
-    'تمام ✅\nتم اختيار المدينة.\n\nالخطوة الجاية هنخليك تختار الجامعة.'
+    'تمام ✅\nتم اختيار الجامعة.\n\nالخطوة الجاية هنخليك تختار المنطقة.'
   )
 }
 
@@ -256,6 +353,36 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'owner',
       cityId,
+      payload,
+      messageText,
+    })
+
+    return
+  }
+
+  if (payload?.startsWith('STUDENT_UNIVERSITY:')) {
+    const universityId = payload.replace('STUDENT_UNIVERSITY:', '')
+
+    await handleUniversitySelection({
+      psid,
+      pageId,
+      userType: 'student',
+      universityId,
+      payload,
+      messageText,
+    })
+
+    return
+  }
+
+  if (payload?.startsWith('OWNER_UNIVERSITY:')) {
+    const universityId = payload.replace('OWNER_UNIVERSITY:', '')
+
+    await handleUniversitySelection({
+      psid,
+      pageId,
+      userType: 'owner',
+      universityId,
       payload,
       messageText,
     })
