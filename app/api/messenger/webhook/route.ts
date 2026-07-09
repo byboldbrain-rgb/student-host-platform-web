@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sendMessengerText } from '@/src/lib/messenger/send-message'
+import {
+  sendMessengerButtons,
+  sendMessengerText,
+} from '@/src/lib/messenger/send-message'
 import { getMessengerSupabaseAdminClient } from '@/src/lib/messenger/supabase'
 
 export const runtime = 'nodejs'
@@ -200,21 +203,21 @@ async function createMessengerLead(params: {
 }
 
 async function sendMainMenu(psid: string) {
-  await sendMessengerText(psid, 'أهلاً بيك في Navienty 👋\nاختار المناسب ليك:', {
-    quickReplies: [
+  await sendMessengerButtons(psid, 'أهلاً بيك في Navienty 👋\nاختار المناسب ليك:', {
+    buttons: [
       {
-        content_type: 'text',
+        type: 'postback',
         title: 'طالب بدور على سكن',
         payload: 'STUDENT_START',
       },
       {
-        content_type: 'text',
+        type: 'postback',
         title: 'مالك عندي سكن',
         payload: 'OWNER_START',
       },
       {
-        content_type: 'text',
-        title: 'التواصل مع الدعم',
+        type: 'postback',
+        title: 'الدعم',
         payload: 'SUPPORT',
       },
     ],
@@ -252,8 +255,8 @@ async function sendCities(psid: string, userType: 'student' | 'owner') {
 
   const message =
     userType === 'student'
-      ? 'تمام 👌\nاختار المدينة اللي بتدور فيها على سكن:'
-      : 'تمام يا فندم 👌\nاختار المدينة الموجود فيها السكن:'
+      ? '\nاختار المدينة اللي بتدور فيها على سكن'
+      : '\nاختار المدينة اللي بتدور فيها على سكن'
 
   await sendMessengerText(psid, message, {
     quickReplies,
@@ -323,8 +326,8 @@ async function sendAreas(params: {
 
   const message =
     params.userType === 'student'
-      ? 'تمام ✅\nاختار المنطقة اللي عاوز تسكن فيها:'
-      : 'تمام ✅\nاختار المنطقة الموجود فيها السكن:'
+      ? '\nاختار المنطقة اللي عاوز تسكن فيها:'
+      : '\nاختار المنطقة الموجود فيها السكن:'
 
   await sendMessengerText(params.psid, message, {
     quickReplies,
@@ -377,6 +380,28 @@ async function getStudentAreaUrl(params: {
   }
 }
 
+async function sendStudentFollowUpButtons(psid: string) {
+  await sendMessengerButtons(psid, 'تحب تعمل إيه بعد كده؟', {
+    buttons: [
+      {
+        type: 'postback',
+        title: 'منطقة تانية',
+        payload: 'STUDENT_CHANGE_AREA',
+      },
+      {
+        type: 'postback',
+        title: 'مدينة تانية',
+        payload: 'STUDENT_CHANGE_CITY',
+      },
+      {
+        type: 'postback',
+        title: 'الدعم',
+        payload: 'SUPPORT',
+      },
+    ],
+  })
+}
+
 async function sendOwnerWhatsAppMessage(params: {
   psid: string
   pageId?: string | null
@@ -407,18 +432,18 @@ async function sendOwnerWhatsAppMessage(params: {
   })
 
   if (!ownersWhatsAppNumber || !ownersWhatsAppUrl) {
-    await sendMessengerText(
+    await sendMessengerButtons(
       params.psid,
       'حاليًا رقم واتساب الملاك غير متاح.\nفريق Navienty هيتابع معاك قريبًا 👌',
       {
-        quickReplies: [
+        buttons: [
           {
-            content_type: 'text',
+            type: 'postback',
             title: 'طالب بدور على سكن',
             payload: 'STUDENT_START',
           },
           {
-            content_type: 'text',
+            type: 'postback',
             title: 'الدعم',
             payload: 'SUPPORT',
           },
@@ -428,18 +453,23 @@ async function sendOwnerWhatsAppMessage(params: {
     return
   }
 
-  await sendMessengerText(
+  await sendMessengerButtons(
     params.psid,
-    `أهلاً بحضرتك 👋\nلو عندك سكن وعاوز تضيفه على Navienty، ابعتلنا تفاصيل السكن والصور على واتساب الملاك:\n\n+${ownersWhatsAppNumber}\n\nأو اضغط على اللينك ده:\n${ownersWhatsAppUrl}`,
+    `أهلاً بحضرتك 👋\nلو عندك سكن وعاوز تضيفه على Navienty، ابعتلنا تفاصيل السكن والصور على واتساب الملاك:\n\n+${ownersWhatsAppNumber}`,
     {
-      quickReplies: [
+      buttons: [
         {
-          content_type: 'text',
+          type: 'web_url',
+          title: 'فتح واتساب',
+          url: ownersWhatsAppUrl,
+        },
+        {
+          type: 'postback',
           title: 'طالب بدور على سكن',
           payload: 'STUDENT_START',
         },
         {
-          content_type: 'text',
+          type: 'postback',
           title: 'الدعم',
           payload: 'SUPPORT',
         },
@@ -531,27 +561,10 @@ async function handleAreaSelection(params: {
 
     await sendMessengerText(
       params.psid,
-      `تمام ✅\nدي الشقق المتاحة في ${areaName}:${countText}\n\n${finalUrl}\n\nافتح اللينك وشوف الصور والأسعار والموقع، والطالب لا يدفع أي عمولة على Navienty.`,
-      {
-        quickReplies: [
-          {
-            content_type: 'text',
-            title: 'منطقة تانية',
-            payload: 'STUDENT_CHANGE_AREA',
-          },
-          {
-            content_type: 'text',
-            title: 'مدينة تانية',
-            payload: 'STUDENT_CHANGE_CITY',
-          },
-          {
-            content_type: 'text',
-            title: 'الدعم',
-            payload: 'SUPPORT',
-          },
-        ],
-      }
+      `تمام ✅\nدي الشقق المتاحة في ${areaName}:${countText}\n\n${finalUrl}\n\nافتح اللينك وشوف الصور والأسعار والموقع، والطالب لا يدفع أي عمولة على Navienty.`
     )
+
+    await sendStudentFollowUpButtons(params.psid)
 
     return
   }
@@ -627,7 +640,20 @@ async function handleMessengerEvent(event: MessengerEvent) {
       leadStatus: 'support_needed',
     })
 
-    await sendMessengerText(psid, 'تمام، فريق Navienty هيتابع معاك في أقرب وقت 👌')
+    await sendMessengerButtons(psid, 'تمام، فريق Navienty هيتابع معاك في أقرب وقت 👌', {
+      buttons: [
+        {
+          type: 'postback',
+          title: 'طالب بدور على سكن',
+          payload: 'STUDENT_START',
+        },
+        {
+          type: 'postback',
+          title: 'مالك عندي سكن',
+          payload: 'OWNER_START',
+        },
+      ],
+    })
     return
   }
 
