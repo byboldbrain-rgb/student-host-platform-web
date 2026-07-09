@@ -203,7 +203,7 @@ async function createMessengerLead(params: {
 }
 
 async function sendMainMenu(psid: string) {
-  await sendMessengerButtons(psid, 'أهلاً بيك في Navienty 👋\nاختار المناسب ليك:', {
+  await sendMessengerButtons(psid, 'أهلاً بيك في Navienty \nاختار المناسب ليك:', {
     buttons: [
       {
         type: 'postback',
@@ -253,12 +253,7 @@ async function sendCities(psid: string, userType: 'student' | 'owner') {
     payload: `${prefix}:${city.id}`,
   }))
 
-  const message =
-    userType === 'student'
-      ? '\nاختار المدينة اللي بتدور فيها على سكن'
-      : '\nاختار المدينة اللي بتدور فيها على سكن'
-
-  await sendMessengerText(psid, message, {
+  await sendMessengerText(psid, '\nاختار المدينة اللي بتدور فيها على سكن', {
     quickReplies,
   })
 }
@@ -309,9 +304,7 @@ async function sendAreas(params: {
   if (!areas.length) {
     await sendMessengerText(
       params.psid,
-      params.userType === 'student'
-        ? 'حاليًا مفيش مناطق فيها شقق منشورة في المدينة دي.\nجرب تختار مدينة تانية أو تواصل مع الدعم.'
-        : 'حاليًا مفيش مناطق متاحة في المدينة دي.\nفريق Navienty هيتابع معاك قريبًا.'
+      'حاليًا مفيش مناطق فيها شقق منشورة في المدينة دي.\nجرب تختار مدينة تانية أو تواصل مع الدعم.'
     )
     return
   }
@@ -591,6 +584,23 @@ async function handleMessengerEvent(event: MessengerEvent) {
   const pageId = event.recipient?.id ?? null
   const payload = getPayload(event)
   const messageText = event.message?.text ?? null
+
+  if (payload === 'GET_STARTED') {
+    await upsertSession({
+      psid,
+      pageId,
+      userType: null,
+      step: 'main_menu',
+      cityId: null,
+      universityId: null,
+      areaId: null,
+      lastPayload: payload,
+      lastMessageText: messageText,
+    })
+
+    await sendMainMenu(psid)
+    return
+  }
 
   if (payload === 'STUDENT_START') {
     await upsertSession({
