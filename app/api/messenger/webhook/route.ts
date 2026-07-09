@@ -461,7 +461,26 @@ async function handleAreaSelection(params: {
 
     await sendMessengerText(
       params.psid,
-      `تمام ✅\nدي الشقق المتاحة في ${areaName}:${countText}\n\n${finalUrl}\n\nافتح اللينك وشوف الصور والأسعار والموقع، والطالب لا يدفع أي عمولة على Navienty.`
+      `تمام ✅\nدي الشقق المتاحة في ${areaName}:${countText}\n\n${finalUrl}\n\nافتح اللينك وشوف الصور والأسعار والموقع، والطالب لا يدفع أي عمولة على Navienty.`,
+      {
+        quickReplies: [
+          {
+            content_type: 'text',
+            title: 'منطقة تانية',
+            payload: 'STUDENT_CHANGE_AREA',
+          },
+          {
+            content_type: 'text',
+            title: 'مدينة تانية',
+            payload: 'STUDENT_CHANGE_CITY',
+          },
+          {
+            content_type: 'text',
+            title: 'الدعم',
+            payload: 'SUPPORT',
+          },
+        ],
+      }
     )
 
     return
@@ -558,6 +577,54 @@ async function handleMessengerEvent(event: MessengerEvent) {
     })
 
     await sendMessengerText(psid, 'تمام، فريق Navienty هيتابع معاك في أقرب وقت 👌')
+    return
+  }
+
+  if (payload === 'STUDENT_CHANGE_CITY') {
+    await upsertSession({
+      psid,
+      pageId,
+      userType: 'student',
+      step: 'select_city',
+      cityId: null,
+      universityId: null,
+      areaId: null,
+      lastPayload: payload,
+      lastMessageText: messageText,
+    })
+
+    await sendCities(psid, 'student')
+    return
+  }
+
+  if (payload === 'STUDENT_CHANGE_AREA') {
+    const session = await getSession(psid)
+    const cityId = session?.city_id ? String(session.city_id) : null
+
+    if (!cityId) {
+      await sendMessengerText(psid, 'اختار المدينة الأول 👇')
+      await sendCities(psid, 'student')
+      return
+    }
+
+    await upsertSession({
+      psid,
+      pageId,
+      userType: 'student',
+      step: 'select_area',
+      cityId,
+      universityId: null,
+      areaId: null,
+      lastPayload: payload,
+      lastMessageText: messageText,
+    })
+
+    await sendAreas({
+      psid,
+      userType: 'student',
+      cityId,
+    })
+
     return
   }
 
