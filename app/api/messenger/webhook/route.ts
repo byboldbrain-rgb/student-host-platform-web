@@ -4,6 +4,8 @@ import { getMessengerSupabaseAdminClient } from '@/src/lib/messenger/supabase'
 
 export const runtime = 'nodejs'
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://navienty.com'
+
 type MessengerEvent = {
   sender?: {
     id?: string
@@ -44,6 +46,13 @@ type PropertyAreaResult = {
   property_areas: PropertyAreaRow | PropertyAreaRow[] | null
 }
 
+type SakanSeoPageRow = {
+  path: string
+  entity_name_ar: string | null
+  entity_name_en: string | null
+  published_properties_count: number | null
+}
+
 function isIncomingUserMessage(event: MessengerEvent) {
   const psid = event.sender?.id
 
@@ -78,6 +87,18 @@ function getAreaFromResult(row: PropertyAreaResult) {
   }
 
   return row.property_areas ?? null
+}
+
+function withBotTracking(url: string) {
+  const parsedUrl = new URL(url)
+
+  parsedUrl.searchParams.set('lang', 'ar')
+  parsedUrl.searchParams.set('currency', 'EGP')
+  parsedUrl.searchParams.set('utm_source', 'messenger')
+  parsedUrl.searchParams.set('utm_medium', 'bot')
+  parsedUrl.searchParams.set('utm_campaign', 'student_area_flow')
+
+  return parsedUrl.toString()
 }
 
 async function upsertSession(params: {
@@ -129,6 +150,33 @@ async function getSession(psid: string) {
   }
 
   return data
+}
+
+async function createMessengerLead(params: {
+  psid: string
+  pageId?: string | null
+  userType: 'student' | 'owner' | 'support'
+  cityId?: string | null
+  areaId?: string | null
+  finalUrl?: string | null
+  leadStatus: 'new' | 'sent_to_website' | 'sent_to_owner_form' | 'support_needed' | 'closed'
+}) {
+  const supabase = getMessengerSupabaseAdminClient()
+
+  const { error } = await supabase.from('messenger_bot_leads').insert({
+    psid: params.psid,
+    page_id: params.pageId ?? null,
+    user_type: params.userType,
+    city_id: params.cityId ?? null,
+    university_id: null,
+    area_id: params.areaId ?? null,
+    final_url: params.finalUrl ?? null,
+    lead_status: params.leadStatus,
+  })
+
+  if (error) {
+    throw new Error(`Failed to create messenger lead: ${error.message}`)
+  }
 }
 
 async function sendMainMenu(psid: string) {
@@ -263,6 +311,73 @@ async function sendAreas(params: {
   })
 }
 
+async function getStudentAreaUrl(params: {
+  cityId: string
+  areaId: string
+}) {
+  const supabase = getMessengerSupabaseAdminClient()
+
+  const { data: seoPage, error } = await supabase
+    .from('sakan_seo_pages')
+    .select('path, entity_name_ar, entity_name_en, published_properties_count')
+    .eq('page_type', 'area')
+    .eq('city_id', params.cityId)
+    .eq('area_id', params.areaId)
+    .order('published_properties_count', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to fetch sakan SEO page: ${error.message}`)
+  }
+
+  if ((seoPage as SakanSeoPageRow | null)?.path) {
+    const finalUrl = withBotTracking(`${SITE_URL}${(seoPage as SakanSeoPageRow).path}`)
+
+    return {
+      finalUrl,
+      areaName:
+        (seoPage as SakanSeoPageRow).entity_name_ar ||
+        (seoPage as SakanSeoPageRow).entity_name_en ||
+        'المنطقة المختارة',
+      propertiesCount: (seoPage as SakanSeoPageRow).published_properties_count ?? null,
+    }
+  }
+
+  const fallbackUrl = withBotTracking(
+    `${SITE_URL}/properties/search?city_id=${encodeURIComponent(
+      params.cityId
+    )}&area_id=${encodeURIComponent(params.areaId)}`
+  )
+
+  return {
+    finalUrl: fallbackUrl,
+    areaName: 'المنطقة المختارة',
+    propertiesCount: null,
+  }
+}
+
+function buildOwnerAddPropertyUrl(params: {
+  cityId?: string | null
+  areaId?: string | null
+}) {
+  const url = new URL('/owners/add-property', SITE_URL)
+
+  if (params.cityId) {
+    url.searchParams.set('city_id', params.cityId)
+  }
+
+  if (params.areaId) {
+    url.searchParams.set('area_id', params.areaId)
+  }
+
+  url.searchParams.set('utm_source', 'messenger')
+  url.searchParams.set('utm_medium', 'bot')
+  url.searchParams.set('utm_campaign', 'owner_area_flow')
+
+  return url.toString()
+}
+
 async function handleCitySelection(params: {
   psid: string
   pageId?: string | null
@@ -299,30 +414,77 @@ async function handleAreaSelection(params: {
   messageText?: string | null
 }) {
   const session = await getSession(params.psid)
+  const cityId = session?.city_id ? String(session.city_id) : null
 
   await upsertSession({
     psid: params.psid,
     pageId: params.pageId,
     userType: params.userType,
-    step: params.userType === 'student' ? 'area_selected' : 'owner_area_selected',
-    cityId: session?.city_id ?? null,
+    step: params.userType === 'student' ? 'sent_area_link' : 'sent_owner_form_link',
+    cityId,
     universityId: null,
     areaId: params.areaId,
     lastPayload: params.payload,
     lastMessageText: params.messageText ?? null,
   })
 
-  if (params.userType === 'student') {
+  if (!cityId) {
     await sendMessengerText(
       params.psid,
-      'تمام ✅\nتم اختيار المنطقة.\n\nالخطوة الجاية هنجهزلك لينك الشقق المناسبة.'
+      'حصل خطأ بسيط في حفظ المدينة.\nابدأ من جديد واختار المدينة مرة تانية 👇'
     )
+
+    await sendMainMenu(params.psid)
     return
   }
 
+  if (params.userType === 'student') {
+    const { finalUrl, areaName, propertiesCount } = await getStudentAreaUrl({
+      cityId,
+      areaId: params.areaId,
+    })
+
+    await createMessengerLead({
+      psid: params.psid,
+      pageId: params.pageId,
+      userType: 'student',
+      cityId,
+      areaId: params.areaId,
+      finalUrl,
+      leadStatus: 'sent_to_website',
+    })
+
+    const countText =
+      typeof propertiesCount === 'number' && propertiesCount > 0
+        ? `\nعدد الشقق المتاحة تقريبًا: ${propertiesCount}`
+        : ''
+
+    await sendMessengerText(
+      params.psid,
+      `تمام ✅\nدي الشقق المتاحة في ${areaName}:${countText}\n\n${finalUrl}\n\nافتح اللينك وشوف الصور والأسعار والموقع، والطالب لا يدفع أي عمولة على Navienty.`
+    )
+
+    return
+  }
+
+  const ownerUrl = buildOwnerAddPropertyUrl({
+    cityId,
+    areaId: params.areaId,
+  })
+
+  await createMessengerLead({
+    psid: params.psid,
+    pageId: params.pageId,
+    userType: 'owner',
+    cityId,
+    areaId: params.areaId,
+    finalUrl: ownerUrl,
+    leadStatus: 'sent_to_owner_form',
+  })
+
   await sendMessengerText(
     params.psid,
-    'تمام يا فندم ✅\nتم اختيار المنطقة.\n\nالخطوة الجاية هنجهزلك لينك إضافة السكن.'
+    `تمام يا فندم ✅\nتقدر تضيف السكن من هنا:\n\n${ownerUrl}\n\nبعد الإضافة، فريق Navienty هيراجع البيانات والصور قبل النشر.`
   )
 }
 
@@ -347,6 +509,7 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'student',
       step: 'select_city',
+      cityId: null,
       universityId: null,
       areaId: null,
       lastPayload: payload,
@@ -363,6 +526,7 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'owner',
       step: 'select_city',
+      cityId: null,
       universityId: null,
       areaId: null,
       lastPayload: payload,
@@ -379,10 +543,18 @@ async function handleMessengerEvent(event: MessengerEvent) {
       pageId,
       userType: 'support',
       step: 'support_needed',
+      cityId: null,
       universityId: null,
       areaId: null,
       lastPayload: payload,
       lastMessageText: messageText,
+    })
+
+    await createMessengerLead({
+      psid,
+      pageId,
+      userType: 'support',
+      leadStatus: 'support_needed',
     })
 
     await sendMessengerText(psid, 'تمام، فريق Navienty هيتابع معاك في أقرب وقت 👌')
