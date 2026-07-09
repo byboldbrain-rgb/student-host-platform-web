@@ -1,6 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { sendMessengerText } from '@/src/lib/messenger/send-message'
 
 export const runtime = 'nodejs'
+
+type MessengerEvent = {
+  sender?: {
+    id?: string
+  }
+  message?: {
+    text?: string
+    is_echo?: boolean
+    quick_reply?: {
+      payload?: string
+    }
+  }
+  postback?: {
+    payload?: string
+  }
+}
+
+function isIncomingUserMessage(event: MessengerEvent) {
+  const psid = event.sender?.id
+
+  if (!psid) {
+    return false
+  }
+
+  if (event.message?.is_echo) {
+    return false
+  }
+
+  return Boolean(event.message || event.postback)
+}
+
+async function handleMessengerEvent(event: MessengerEvent) {
+  if (!isIncomingUserMessage(event)) {
+    return
+  }
+
+  const psid = event.sender?.id
+
+  if (!psid) {
+    return
+  }
+
+  const payload = event.message?.quick_reply?.payload || event.postback?.payload
+
+  if (payload === 'STUDENT_START') {
+    await sendMessengerText(psid, 'تمام 👌\nهنبدأ نساعدك تلاقي سكن مناسب.\n\nالخطوة الجاية هنخليك تختار المدينة.')
+    return
+  }
+
+  if (payload === 'OWNER_START') {
+    await sendMessengerText(psid, 'أهلاً بحضرتك 👋\nهنساعدك تضيف السكن بتاعك على Navienty.\n\nالخطوة الجاية هنخليك تختار المدينة الموجود فيها السكن.')
+    return
+  }
+
+  if (payload === 'SUPPORT') {
+    await sendMessengerText(psid, 'تمام، فريق Navienty هيتابع معاك في أقرب وقت 👌')
+    return
+  }
+
+  await sendMessengerText(psid, 'أهلاً بيك في Navienty 👋\nاختار المناسب ليك:', {
+    quickReplies: [
+      {
+        content_type: 'text',
+        title: 'طالب بدور على سكن',
+        payload: 'STUDENT_START',
+      },
+      {
+        content_type: 'text',
+        title: 'مالك عندي سكن',
+        payload: 'OWNER_START',
+      },
+      {
+        content_type: 'text',
+        title: 'التواصل مع الدعم',
+        payload: 'SUPPORT',
+      },
+    ],
+  })
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -30,6 +110,12 @@ export async function POST(request: NextRequest) {
 
     if (body.object !== 'page') {
       return new NextResponse('Not Found', { status: 404 })
+    }
+
+    for (const entry of body.entry ?? []) {
+      for (const event of entry.messaging ?? []) {
+        await handleMessengerEvent(event)
+      }
     }
 
     return new NextResponse('EVENT_RECEIVED', { status: 200 })
