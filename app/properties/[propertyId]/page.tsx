@@ -13,6 +13,10 @@ import PropertyVideoButton from "./PropertyVideoButton";
 import SwipeableSheetWrapper from "./SwipeableSheetWrapper";
 import "./property-page.css";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 const squadaOne = Squada_One({
   subsets: ["latin"],
   weight: "400",
@@ -129,8 +133,8 @@ type PropertyRoom = {
     | "fully_reserved"
     | "inactive"
     | null;
-  is_reserved_summer_course?: boolean | null;
-  is_reserved_academic_year?: boolean | null;
+  is_reserved_summer_course?: boolean | string | number | null;
+  is_reserved_academic_year?: boolean | string | number | null;
   private_bathroom?: boolean | null;
   sort_order?: number | null;
   room_beds?: RoomBed[];
@@ -1382,6 +1386,17 @@ function normalizeBookingSeasonCode(
   return null;
 }
 
+function isDatabaseBooleanTrue(
+  value: boolean | string | number | null | undefined,
+) {
+  return (
+    value === true ||
+    value === 1 ||
+    value === "1" ||
+    String(value || "").trim().toLowerCase() === "true"
+  );
+}
+
 function reservationMatchesSeason(
   reservation: PropertyReservation,
   seasonCode: BookingSeasonCode,
@@ -1397,8 +1412,11 @@ function reservationMatchesSeason(
 
 function roomHasExplicitSeasonReservationFlags(room: PropertyRoom) {
   return (
-    typeof room.is_reserved_summer_course === "boolean" ||
-    typeof room.is_reserved_academic_year === "boolean"
+    room.is_reserved_summer_course !== null &&
+    room.is_reserved_summer_course !== undefined
+  ) || (
+    room.is_reserved_academic_year !== null &&
+    room.is_reserved_academic_year !== undefined
   );
 }
 
@@ -1411,7 +1429,7 @@ function isRoomReservedForSeason(
       ? room.is_reserved_summer_course
       : room.is_reserved_academic_year;
 
-  if (seasonFlag === true) return true;
+  if (isDatabaseBooleanTrue(seasonFlag)) return true;
 
   // دعم البيانات القديمة قبل إضافة أعمدة الحجز الموسمية.
   if (
@@ -2028,7 +2046,11 @@ export default async function PropertyPage({
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
-  if (!roomsError && roomsData) {
+  if (roomsError) {
+    throw new Error(`Property rooms query failed: ${roomsError.message}`);
+  }
+
+  if (roomsData) {
     rooms = [...(roomsData as PropertyRoom[])].sort((a, b) => {
       const sortOrderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
       const sortOrderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
@@ -2684,18 +2706,36 @@ export default async function PropertyPage({
     optionCode: Exclude<OptionCode, "full_apartment">,
   ): Record<BookingSeasonCode, boolean> =>
     Object.fromEntries(
-      bookingSeasonCodes.map((seasonCode) => [
-        seasonCode,
-        rooms.some((room) =>
-          isRoomAvailableForOption(
+      bookingSeasonCodes.map((seasonCode) => {
+        const propertyBlocksRoomBookings =
+          typedProperty.availability_status === "inactive" ||
+          hasActiveFullApartmentReservationBySeason[seasonCode];
+
+        if (propertyBlocksRoomBookings) {
+          return [seasonCode, false];
+        }
+
+        const hasAvailableRoom = rooms.some((room) => {
+          if (room.status === "inactive") return false;
+          if (isRoomReservedForSeason(room, seasonCode)) return false;
+
+          const roomOption = getRoomOption(room, optionCode);
+          if (!roomOption || roomOption.is_active === false) return false;
+
+          const roomState =
+            roomOccupancyBySeason[seasonCode].get(room.id) ||
+            emptyRoomOccupancyState(room.id);
+
+          return isRoomAvailableForOption(
             room,
             optionCode,
-            roomOccupancyBySeason[seasonCode].get(room.id) ||
-              emptyRoomOccupancyState(room.id),
+            roomState,
             seasonCode,
-          ),
-        ),
-      ]),
+          );
+        });
+
+        return [seasonCode, hasAvailableRoom];
+      }),
     ) as Record<BookingSeasonCode, boolean>;
 
   const tripleAvailabilityBySeason =
