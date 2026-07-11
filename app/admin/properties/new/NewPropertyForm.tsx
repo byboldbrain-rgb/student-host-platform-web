@@ -5,7 +5,11 @@ import mapboxgl from 'mapbox-gl'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { createPropertyAction } from './actions'
+import { createClient } from '@supabase/supabase-js'
+import {
+  createPropertyAction,
+  createPropertyVideoUploadSignedUrlAction,
+} from './actions'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 
 type City = {
@@ -110,6 +114,12 @@ type ImageFileItem = {
   previewUrl: string
 }
 
+type SignedPropertyVideoUpload = {
+  video_url: string
+  storage_path: string
+  token: string
+}
+
 type Props = {
   cities: City[]
   universities: University[]
@@ -144,6 +154,60 @@ type AmenityCategoryGroup = {
 }
 
 type OwnerMode = 'existing' | 'new'
+
+
+const PROPERTY_VIDEOS_BUCKET = 'property-videos'
+const MAX_PROPERTY_VIDEO_BYTES = 200 * 1024 * 1024
+const ALLOWED_PROPERTY_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov']
+
+function getBrowserSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase browser environment variables are missing. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+    )
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey)
+}
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB'
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`
+}
+
+function getVideoContentType(file: File) {
+  if (file.type) return file.type
+
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  if (extension === 'webm') return 'video/webm'
+  if (extension === 'mov') return 'video/quicktime'
+  return 'video/mp4'
+}
+
+function getVideoValidationMessage(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  const allowedMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime']
+  const hasAllowedType =
+    allowedMimeTypes.includes(file.type.toLowerCase()) ||
+    ALLOWED_PROPERTY_VIDEO_EXTENSIONS.includes(extension)
+
+  if (!hasAllowedType) {
+    return 'Only MP4, WebM, and MOV videos are allowed.'
+  }
+
+  if (file.size <= 0) {
+    return 'The selected video file is empty.'
+  }
+
+  if (file.size > MAX_PROPERTY_VIDEO_BYTES) {
+    return 'The property video must be smaller than 200 MB.'
+  }
+
+  return ''
+}
 
 function generatePropertyCode() {
   return `PROP-${Date.now()}`
@@ -561,6 +625,11 @@ export default function NewPropertyForm({
   const [coverIndex, setCoverIndex] = useState(0)
   const [isDraggingPhotos, setIsDraggingPhotos] = useState(false)
 
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState('')
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false)
+  const [videoUploadProgress, setVideoUploadProgress] = useState('')
+
   const [rooms, setRooms] = useState<RoomForm[]>([
     {
       ...initialRoom,
@@ -572,6 +641,7 @@ export default function NewPropertyForm({
   ])
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const videoInputRef = useRef<HTMLInputElement | null>(null)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const markerRef = useRef<mapboxgl.Marker | null>(null)
@@ -593,6 +663,13 @@ export default function NewPropertyForm({
       })
     }
   }, [imageFiles])
+
+
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
+    }
+  }, [videoPreviewUrl])
 
   const filteredUniversities = useMemo(() => {
     if (!cityId) return []
@@ -1051,6 +1128,37 @@ export default function NewPropertyForm({
     else if (coverIndex > index) setCoverIndex((prev) => prev - 1)
   }
 
+
+  const selectVideo = (filesList: FileList | null) => {
+    const file = filesList?.[0]
+    if (!file) return
+
+    const validationMessage = getVideoValidationMessage(file)
+    if (validationMessage) {
+      setStepError(validationMessage)
+      return
+    }
+
+    setStepError('')
+    setVideoFile(file)
+    setVideoPreviewUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return URL.createObjectURL(file)
+    })
+  }
+
+  const removeVideo = () => {
+    setVideoFile(null)
+    setVideoPreviewUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return ''
+    })
+
+    if (videoInputRef.current) {
+      videoInputRef.current.value = ''
+    }
+  }
+
   const addRoom = () => {
     const nextNumber = rooms.length + 1
 
@@ -1377,13 +1485,69 @@ export default function NewPropertyForm({
     formData.set('admin_status', adminStatus)
     formData.set('cover_index', String(coverIndex))
 
+    formData.delete('uploaded_video_url')
+    formData.delete('uploaded_video_storage_path')
+    formData.delete('uploaded_video_mime_type')
+    formData.delete('uploaded_video_file_size')
+
+    if (videoFile) {
+      setIsUploadingVideo(true)
+      setVideoUploadProgress('Uploading property video...')
+
+      try {
+        const signedUploadFormData = new FormData()
+        signedUploadFormData.set('property_code', propertyCode)
+        signedUploadFormData.set('file_name', videoFile.name)
+        signedUploadFormData.set('file_type', getVideoContentType(videoFile))
+        signedUploadFormData.set('file_size', String(videoFile.size))
+
+        const signedUpload: SignedPropertyVideoUpload =
+          await createPropertyVideoUploadSignedUrlAction(signedUploadFormData)
+
+        const supabaseBrowserClient = getBrowserSupabaseClient()
+        const { error: directUploadError } = await supabaseBrowserClient.storage
+          .from(PROPERTY_VIDEOS_BUCKET)
+          .uploadToSignedUrl(
+            signedUpload.storage_path,
+            signedUpload.token,
+            videoFile,
+            {
+              cacheControl: '3600',
+              contentType: getVideoContentType(videoFile),
+              upsert: false,
+            }
+          )
+
+        if (directUploadError) {
+          throw new Error(
+            `Failed to upload ${videoFile.name}: ${directUploadError.message}`
+          )
+        }
+
+        formData.set('uploaded_video_url', signedUpload.video_url)
+        formData.set('uploaded_video_storage_path', signedUpload.storage_path)
+        formData.set('uploaded_video_mime_type', getVideoContentType(videoFile))
+        formData.set('uploaded_video_file_size', String(videoFile.size))
+        setVideoUploadProgress('Video uploaded. Saving property...')
+      } catch (error: any) {
+        setErrorMessage(error?.message || 'Failed to upload property video')
+        setVideoUploadProgress('')
+        setIsUploadingVideo(false)
+        return
+      }
+    }
+
     startTransition(async () => {
       try {
         await createPropertyAction(formData)
+        setVideoUploadProgress('')
+        setIsUploadingVideo(false)
         router.push('/admin/properties')
         router.refresh()
       } catch (error: any) {
         setErrorMessage(error.message || 'Something went wrong')
+        setVideoUploadProgress('')
+        setIsUploadingVideo(false)
       }
     })
   }
@@ -1417,6 +1581,8 @@ export default function NewPropertyForm({
         ? selectedOwner.phone_number || ''
         : ''
       : newOwnerPhone || ''
+
+  const isBusy = isPending || isUploadingVideo
 
   return (
     <form
@@ -2126,6 +2292,95 @@ export default function NewPropertyForm({
                   </div>
                 </div>
               )}
+
+              <div className="mt-8 border-t border-[#e5e7eb] pt-8">
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime,.mov"
+                  className="hidden"
+                  onChange={(event) => {
+                    selectVideo(event.target.files)
+                    event.target.value = ''
+                  }}
+                />
+
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-[20px] font-bold text-[#111827]">
+                      Property Video
+                    </h2>
+                    <p className="mt-1 text-sm text-[#6b7280]">
+                      Optional — upload one MP4, WebM, or MOV video up to 200 MB.
+                    </p>
+                  </div>
+
+                  {videoFile && (
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      className="rounded-md border border-[#0071c2] px-4 py-2 text-sm font-medium text-[#0071c2]"
+                    >
+                      Replace video
+                    </button>
+                  )}
+                </div>
+
+                {!videoFile ? (
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#9ca3af] bg-[#fafafa] px-6 py-10 text-center transition hover:border-[#0071c2] hover:bg-[#f0f7ff]"
+                  >
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eaf4ff] text-[#0071c2]">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="h-7 w-7"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.5-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14Z" />
+                      </svg>
+                    </span>
+                    <span className="mt-4 text-base font-semibold text-[#111827]">
+                      Upload property video
+                    </span>
+                    <span className="mt-1 text-sm text-[#6b7280]">
+                      The video will appear through the “View property video” button.
+                    </span>
+                  </button>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-[#d9d9d9] bg-[#111827]">
+                    <video
+                      src={videoPreviewUrl}
+                      controls
+                      preload="metadata"
+                      playsInline
+                      className="max-h-[520px] w-full bg-black object-contain"
+                    />
+
+                    <div className="flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#111827]">
+                          {videoFile.name}
+                        </p>
+                        <p className="mt-1 text-xs text-[#6b7280]">
+                          {formatFileSize(videoFile.size)}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={removeVideo}
+                        className="rounded-md border border-[#ef4444] px-4 py-2 text-sm font-semibold text-[#dc2626] transition hover:bg-[#fff1f2]"
+                      >
+                        Remove video
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
@@ -2486,6 +2741,14 @@ export default function NewPropertyForm({
                     <p className="mt-1 font-semibold">{imageFiles.filter((item) => item.file).length}</p>
                   </div>
 
+
+                  <div className="rounded-md border border-[#ececec] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Video</p>
+                    <p className="mt-1 font-semibold">
+                      {videoFile ? videoFile.name : 'No video selected'}
+                    </p>
+                  </div>
+
                   <div className="rounded-md border border-[#ececec] p-3">
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">Bedrooms</p>
                     <p className="mt-1 font-semibold">{bedroomsCount}</p>
@@ -2568,11 +2831,17 @@ export default function NewPropertyForm({
               </div>
             )}
 
+            {videoUploadProgress && (
+              <div className="mb-4 rounded-xl border border-[#bdd7f4] bg-[#f3f9ff] px-4 py-3 text-sm font-medium text-[#0b66c3]">
+                {videoUploadProgress}
+              </div>
+            )}
+
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={goBack}
-                disabled={currentStep === 1 || isPending}
+                disabled={currentStep === 1 || isBusy}
                 className="inline-flex h-[46px] items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-5 text-sm font-medium text-[#1a1a1a] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Back
@@ -2582,7 +2851,7 @@ export default function NewPropertyForm({
                 <button
                   type="button"
                   onClick={goNext}
-                  disabled={isPending}
+                  disabled={isBusy}
                   className="inline-flex h-[46px] min-w-[140px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Continue
@@ -2591,10 +2860,10 @@ export default function NewPropertyForm({
                 <button
                   type="button"
                   onClick={submitProperty}
-                  disabled={isPending || !propertyCode}
+                  disabled={isBusy || !propertyCode}
                   className="inline-flex h-[46px] min-w-[160px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isPending ? 'Saving...' : 'Save Property'}
+                  {isUploadingVideo ? videoUploadProgress || 'Uploading video...' : isPending ? 'Saving...' : 'Save Property'}
                 </button>
               )}
             </div>

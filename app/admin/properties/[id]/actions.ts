@@ -9,8 +9,17 @@ import {
 } from '@/src/lib/admin-auth'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
+const PROPERTY_VIDEOS_BUCKET = 'property-videos'
+const MAX_PROPERTY_VIDEO_BYTES = 200 * 1024 * 1024
+const ALLOWED_PROPERTY_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+])
 
 const ACTIVE_RESERVATION_STATUSES = ['pending', 'reserved', 'checked_in'] as const
+
+const PRICING_SEASON_CODES = ['summer_course', 'academic_year'] as const
 
 function toNullableNumber(value: FormDataEntryValue | null) {
   const str = String(value || '').trim()
@@ -45,6 +54,48 @@ function slugifyFileName(fileName: string) {
   return extension ? `${safeName || 'image'}.${extension}` : safeName || 'image'
 }
 
+
+function isAllowedPropertyVideoFile(fileName: string, fileType: string) {
+  const normalizedType = fileType.toLowerCase().trim()
+  const extension = fileName.split('.').pop()?.toLowerCase() || ''
+
+  return (
+    ALLOWED_PROPERTY_VIDEO_MIME_TYPES.has(normalizedType) ||
+    ['mp4', 'webm', 'mov'].includes(extension)
+  )
+}
+
+function validateUploadedPropertyVideo(params: {
+  propertyDbId: string
+  videoUrl: string
+  storagePath: string
+  mimeType: string
+  fileSizeBytes: number | null
+}) {
+  const { propertyDbId, videoUrl, storagePath, mimeType, fileSizeBytes } = params
+
+  if (!videoUrl || !storagePath) {
+    throw new Error('Uploaded video information is incomplete')
+  }
+
+  if (!storagePath.startsWith(`properties/${propertyDbId}/`)) {
+    throw new Error('Invalid property video storage path')
+  }
+
+  if (!isAllowedPropertyVideoFile(storagePath, mimeType)) {
+    throw new Error('Only MP4, WebM, and MOV videos are allowed')
+  }
+
+  if (
+    fileSizeBytes !== null &&
+    (!Number.isFinite(fileSizeBytes) ||
+      fileSizeBytes <= 0 ||
+      fileSizeBytes > MAX_PROPERTY_VIDEO_BYTES)
+  ) {
+    throw new Error('Property video must be smaller than 200 MB')
+  }
+}
+
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
 type PropertyAvailabilityStatus =
@@ -75,6 +126,15 @@ type BedStatus =
 
 type RoomOptionCode = 'single_room' | 'double_room' | 'triple_room'
 
+type PricingSeasonCode = (typeof PRICING_SEASON_CODES)[number]
+
+type SeasonalPriceMap = Record<PricingSeasonCode, number>
+
+type PricingSeasonRow = {
+  id: string
+  code: PricingSeasonCode
+}
+
 type PropertyOptionCode =
   | 'full_apartment'
   | 'single_room'
@@ -88,6 +148,7 @@ type ParsedRoomOption = {
   occupancy_size: number
   pricing_mode: 'per_person'
   price_egp: number
+  seasonal_prices: SeasonalPriceMap
   consumes_beds_count: number
   is_exclusive: boolean
   is_active: boolean
@@ -123,11 +184,17 @@ type PropertySellableOptionRow = {
   sell_mode: 'entire_property' | 'bed'
   occupancy_size: number | null
   price_egp: number
+  seasonal_prices: SeasonalPriceMap
   rental_duration: 'daily' | 'monthly'
   is_active: boolean
   sort_order: number
   source_scope: 'property' | 'room'
   pricing_mode: 'per_person' | 'per_room'
+}
+
+type ExistingPropertySellableOptionRow = {
+  id: string
+  code: string | null
 }
 
 type ExistingRoomRow = {
@@ -188,13 +255,347 @@ function normalizeRentalDuration(value: string): 'daily' | 'monthly' {
   return value === 'daily' ? 'daily' : 'monthly'
 }
 
+
+function getNullableNumberFromString(value: string | undefined | null) {
+  const str = String(value || '').trim()
+  if (!str) return null
+  const num = Number(str)
+  return Number.isNaN(num) ? null : num
+}
+
+function getFirstNullableNumberFromFormData(
+  formData: FormData,
+  keys: string[]
+) {
+  for (const key of keys) {
+    const value = formData.get(key)
+    const parsed = toNullableNumber(value)
+    if (parsed !== null) return parsed
+  }
+
+  return null
+}
+
+function getFirstIndexedNullableNumberFromFormData(params: {
+  formData: FormData
+  keys: string[]
+  index: number
+}) {
+  const { formData, keys, index } = params
+
+  for (const key of keys) {
+    const values = formData.getAll(key)
+    const parsed = getNullableNumberFromString(String(values[index] || ''))
+    if (parsed !== null) return parsed
+  }
+
+  return null
+}
+
+function assertValidSeasonalPrice(params: {
+  price: number
+  label: string
+  allowZero?: boolean
+}) {
+  const { price, label, allowZero = false } = params
+
+  if (!Number.isFinite(price) || price < 0 || (!allowZero && price <= 0)) {
+    throw new Error(`${label} must be a valid ${allowZero ? 'non-negative' : 'positive'} number`)
+  }
+}
+
+function buildFullApartmentSeasonalPrices(params: {
+  formData: FormData
+  fallbackPrice: number
+}) {
+  const { formData, fallbackPrice } = params
+  const prices = {} as SeasonalPriceMap
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const price =
+      getFirstNullableNumberFromFormData(formData, [
+        `price_egp_${seasonCode}`,
+        `full_apartment_price_egp_${seasonCode}`,
+        `property_price_egp_${seasonCode}`,
+      ]) ?? fallbackPrice
+
+    assertValidSeasonalPrice({
+      price,
+      label:
+        seasonCode === 'summer_course'
+          ? 'Summer course full apartment price'
+          : 'Academic year full apartment price',
+      allowZero: true,
+    })
+
+    prices[seasonCode] = price
+  }
+
+  return prices
+}
+
+function buildRoomOptionSeasonalPrices(params: {
+  formData: FormData
+  optionCode: RoomOptionCode
+  index: number
+  fallbackPrice: number
+}) {
+  const { formData, optionCode, index, fallbackPrice } = params
+  const prices = {} as SeasonalPriceMap
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const price =
+      getFirstIndexedNullableNumberFromFormData({
+        formData,
+        index,
+        keys: [
+          `room_${optionCode}_price_egp_${seasonCode}`,
+          `room_${optionCode}_${seasonCode}_price_egp`,
+        ],
+      }) ?? fallbackPrice
+
+    assertValidSeasonalPrice({
+      price,
+      label: `${optionCode} ${seasonCode} price for room ${index + 1}`,
+      allowZero: fallbackPrice <= 0,
+    })
+
+    prices[seasonCode] = price
+  }
+
+  return prices
+}
+
+function getMinimumSeasonalPrices(options: ParsedRoomOption[]) {
+  const prices = {} as SeasonalPriceMap
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const seasonPrices = options
+      .map((option) => option.seasonal_prices[seasonCode])
+      .filter((price) => Number.isFinite(price) && price > 0)
+
+    prices[seasonCode] = seasonPrices.length > 0 ? Math.min(...seasonPrices) : 0
+  }
+
+  return prices
+}
+
+async function getPricingSeasonsByCode(params: {
+  supabase: AdminSupabaseClient
+}) {
+  const { supabase } = params
+
+  const { data, error } = await supabase
+    .from('property_pricing_seasons')
+    .select('id, code')
+    .in('code', [...PRICING_SEASON_CODES])
+    .eq('is_active', true)
+
+  if (error) {
+    throw new Error(`Failed to load pricing seasons: ${error.message}`)
+  }
+
+  const seasonsByCode = new Map<PricingSeasonCode, PricingSeasonRow>()
+
+  for (const season of (data || []) as PricingSeasonRow[]) {
+    if (PRICING_SEASON_CODES.includes(season.code)) {
+      seasonsByCode.set(season.code, season)
+    }
+  }
+
+  const missingSeasonCodes = PRICING_SEASON_CODES.filter(
+    (seasonCode) => !seasonsByCode.has(seasonCode)
+  )
+
+  if (missingSeasonCodes.length > 0) {
+    throw new Error(
+      `Missing pricing seasons: ${missingSeasonCodes.join(', ')}. Please run the pricing seasons SQL migration first.`
+    )
+  }
+
+  return seasonsByCode
+}
+
+async function upsertSeasonalPrice(params: {
+  supabase: AdminSupabaseClient
+  propertyDbId: string
+  seasonId: string
+  priceEgp: number
+  sellableOptionId?: string | null
+  roomSellableOptionId?: string | null
+}) {
+  const {
+    supabase,
+    propertyDbId,
+    seasonId,
+    priceEgp,
+    sellableOptionId = null,
+    roomSellableOptionId = null,
+  } = params
+
+  if (!sellableOptionId && !roomSellableOptionId) {
+    throw new Error('Seasonal price must be linked to one booking option')
+  }
+
+  let existingQuery: any = supabase
+    .from('property_option_seasonal_prices')
+    .select('id')
+    .eq('season_id', seasonId)
+    .limit(1)
+
+  if (sellableOptionId) {
+    existingQuery = existingQuery.eq('sellable_option_id', sellableOptionId)
+  } else {
+    existingQuery = existingQuery.eq('room_sellable_option_id', roomSellableOptionId)
+  }
+
+  const { data: existingRows, error: existingError } = await existingQuery
+
+  if (existingError) {
+    throw new Error(`Failed to load seasonal price: ${existingError.message}`)
+  }
+
+  const existingRow = Array.isArray(existingRows) ? existingRows[0] : null
+
+  if (existingRow?.id) {
+    const { error: updateError } = await supabase
+      .from('property_option_seasonal_prices')
+      .update({
+        property_id: propertyDbId,
+        price_egp: priceEgp,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existingRow.id)
+
+    if (updateError) {
+      throw new Error(`Failed to update seasonal price: ${updateError.message}`)
+    }
+
+    return
+  }
+
+  const { error: insertError } = await supabase
+    .from('property_option_seasonal_prices')
+    .insert({
+      property_id: propertyDbId,
+      sellable_option_id: sellableOptionId,
+      room_sellable_option_id: roomSellableOptionId,
+      season_id: seasonId,
+      price_egp: priceEgp,
+      is_active: true,
+    })
+
+  if (insertError) {
+    throw new Error(`Failed to insert seasonal price: ${insertError.message}`)
+  }
+}
+
+async function syncSeasonalPricesForSellableOption(params: {
+  supabase: AdminSupabaseClient
+  propertyDbId: string
+  sellableOptionId: string
+  seasonalPrices: SeasonalPriceMap
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
+}) {
+  const {
+    supabase,
+    propertyDbId,
+    sellableOptionId,
+    seasonalPrices,
+    pricingSeasonsByCode,
+  } = params
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const season = pricingSeasonsByCode.get(seasonCode)
+    if (!season) continue
+
+    await upsertSeasonalPrice({
+      supabase,
+      propertyDbId,
+      sellableOptionId,
+      seasonId: season.id,
+      priceEgp: seasonalPrices[seasonCode],
+    })
+  }
+}
+
+async function syncSeasonalPricesForRoomSellableOption(params: {
+  supabase: AdminSupabaseClient
+  propertyDbId: string
+  roomSellableOptionId: string
+  seasonalPrices: SeasonalPriceMap
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
+}) {
+  const {
+    supabase,
+    propertyDbId,
+    roomSellableOptionId,
+    seasonalPrices,
+    pricingSeasonsByCode,
+  } = params
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const season = pricingSeasonsByCode.get(seasonCode)
+    if (!season) continue
+
+    await upsertSeasonalPrice({
+      supabase,
+      propertyDbId,
+      roomSellableOptionId,
+      seasonId: season.id,
+      priceEgp: seasonalPrices[seasonCode],
+    })
+  }
+}
+
+async function deactivateSeasonalPricesForOption(params: {
+  supabase: AdminSupabaseClient
+  sellableOptionId?: string | null
+  roomSellableOptionId?: string | null
+}) {
+  const { supabase, sellableOptionId = null, roomSellableOptionId = null } = params
+  const retiredAt = new Date().toISOString()
+
+  if (sellableOptionId) {
+    const { error } = await supabase
+      .from('property_option_seasonal_prices')
+      .update({
+        is_active: false,
+        updated_at: retiredAt,
+      })
+      .eq('sellable_option_id', sellableOptionId)
+
+    if (error) {
+      throw new Error(`Failed to retire seasonal prices: ${error.message}`)
+    }
+  }
+
+  if (roomSellableOptionId) {
+    const { error } = await supabase
+      .from('property_option_seasonal_prices')
+      .update({
+        is_active: false,
+        updated_at: retiredAt,
+      })
+      .eq('room_sellable_option_id', roomSellableOptionId)
+
+    if (error) {
+      throw new Error(`Failed to retire room seasonal prices: ${error.message}`)
+    }
+  }
+}
+
 function buildRoomOptions(params: {
   singleEnabled: boolean
   singlePrice: number
+  singleSeasonalPrices: SeasonalPriceMap
   doubleEnabled: boolean
   doublePrice: number
+  doubleSeasonalPrices: SeasonalPriceMap
   tripleEnabled: boolean
   triplePrice: number
+  tripleSeasonalPrices: SeasonalPriceMap
   beds_count: number
 }) {
   const options: ParsedRoomOption[] = []
@@ -215,6 +616,7 @@ function buildRoomOptions(params: {
       occupancy_size: 1,
       pricing_mode: 'per_person',
       price_egp: params.singlePrice,
+      seasonal_prices: params.singleSeasonalPrices,
       consumes_beds_count: 1,
       is_exclusive: false,
       is_active: true,
@@ -238,6 +640,7 @@ function buildRoomOptions(params: {
       occupancy_size: 2,
       pricing_mode: 'per_person',
       price_egp: params.doublePrice,
+      seasonal_prices: params.doubleSeasonalPrices,
       consumes_beds_count: 1,
       is_exclusive: false,
       is_active: true,
@@ -261,6 +664,7 @@ function buildRoomOptions(params: {
       occupancy_size: 3,
       pricing_mode: 'per_person',
       price_egp: params.triplePrice,
+      seasonal_prices: params.tripleSeasonalPrices,
       consumes_beds_count: 1,
       is_exclusive: false,
       is_active: true,
@@ -322,12 +726,14 @@ function buildPropertySellableOptionRows(params: {
   propertyDbId: string
   rental_duration: 'daily' | 'monthly'
   fullApartmentPrice: number
+  fullApartmentSeasonalPrices: SeasonalPriceMap
   insertedRooms: InsertedRoomSummary[]
 }) {
   const {
     propertyDbId,
     rental_duration,
     fullApartmentPrice,
+    fullApartmentSeasonalPrices,
     insertedRooms,
   } = params
 
@@ -349,6 +755,16 @@ function buildPropertySellableOptionRows(params: {
     )
     .map((option) => option.price_egp)
 
+  const singleOptions = insertedRooms.flatMap((room) =>
+    room.option_rows.filter((option) => option.code === 'single_room')
+  )
+  const doubleOptions = insertedRooms.flatMap((room) =>
+    room.option_rows.filter((option) => option.code === 'double_room')
+  )
+  const tripleOptions = insertedRooms.flatMap((room) =>
+    room.option_rows.filter((option) => option.code === 'triple_room')
+  )
+
   return [
     {
       property_id: propertyDbId,
@@ -359,6 +775,7 @@ function buildPropertySellableOptionRows(params: {
       sell_mode: 'entire_property',
       occupancy_size: null,
       price_egp: fullApartmentPrice,
+      seasonal_prices: fullApartmentSeasonalPrices,
       rental_duration,
       is_active: true,
       sort_order: 0,
@@ -376,6 +793,7 @@ function buildPropertySellableOptionRows(params: {
             sell_mode: 'bed',
             occupancy_size: 1,
             price_egp: Math.min(...singleOptionPrices),
+            seasonal_prices: getMinimumSeasonalPrices(singleOptions),
             rental_duration,
             is_active: true,
             sort_order: 1,
@@ -395,6 +813,7 @@ function buildPropertySellableOptionRows(params: {
             sell_mode: 'bed',
             occupancy_size: 2,
             price_egp: Math.min(...doubleOptionPrices),
+            seasonal_prices: getMinimumSeasonalPrices(doubleOptions),
             rental_duration,
             is_active: true,
             sort_order: 2,
@@ -414,6 +833,7 @@ function buildPropertySellableOptionRows(params: {
             sell_mode: 'bed',
             occupancy_size: 3,
             price_egp: Math.min(...tripleOptionPrices),
+            seasonal_prices: getMinimumSeasonalPrices(tripleOptions),
             rental_duration,
             is_active: true,
             sort_order: 3,
@@ -728,10 +1148,12 @@ async function assertOptionCanBeRetired(params: {
 
 async function syncRoomSellableOptions(params: {
   supabase: AdminSupabaseClient
+  propertyDbId: string
   roomId: string
   optionRows: ParsedRoomOption[]
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
 }) {
-  const { supabase, roomId, optionRows } = params
+  const { supabase, propertyDbId, roomId, optionRows, pricingSeasonsByCode } = params
 
   const { data: existingOptions, error: existingOptionsError } = await supabase
     .from('property_room_sellable_options')
@@ -760,6 +1182,7 @@ async function syncRoomSellableOptions(params: {
 
   for (const option of optionRows) {
     const existing = existingByCode.get(option.code)
+    let roomSellableOptionId: string
 
     if (existing) {
       const { error: updateError } = await supabase
@@ -784,8 +1207,10 @@ async function syncRoomSellableOptions(params: {
           `Failed to update room option ${option.code}: ${updateError.message}`
         )
       }
+
+      roomSellableOptionId = existing.id
     } else {
-      const { error: insertError } = await supabase
+      const { data: insertedOption, error: insertError } = await supabase
         .from('property_room_sellable_options')
         .insert({
           room_id: roomId,
@@ -802,13 +1227,25 @@ async function syncRoomSellableOptions(params: {
           deleted_at: null,
           retired_reason: null,
         })
+        .select('id')
+        .single()
 
-      if (insertError) {
+      if (insertError || !insertedOption) {
         throw new Error(
-          `Failed to insert room option ${option.code}: ${insertError.message}`
+          `Failed to insert room option ${option.code}: ${insertError?.message || 'Unknown error'}`
         )
       }
+
+      roomSellableOptionId = insertedOption.id
     }
+
+    await syncSeasonalPricesForRoomSellableOption({
+      supabase,
+      propertyDbId,
+      roomSellableOptionId,
+      seasonalPrices: option.seasonal_prices,
+      pricingSeasonsByCode,
+    })
   }
 
   const optionsToRetire = ((existingOptions || []) as ExistingRoomOptionRow[]).filter(
@@ -840,6 +1277,11 @@ async function syncRoomSellableOptions(params: {
         `Failed to retire room option ${option.code}: ${retireError.message}`
       )
     }
+
+    await deactivateSeasonalPricesForOption({
+      supabase,
+      roomSellableOptionId: option.id,
+    })
   }
 }
 
@@ -1232,8 +1674,16 @@ async function syncPropertyRoomsStructure(params: {
   roomRows: ParsedRoomRow[]
   availabilityStatus: PropertyAvailabilityStatus
   gender: string | null
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
 }) {
-  const { supabase, propertyDbId, roomRows, availabilityStatus, gender } = params
+  const {
+    supabase,
+    propertyDbId,
+    roomRows,
+    availabilityStatus,
+    gender,
+    pricingSeasonsByCode,
+  } = params
 
   const activeReservationIds = await getActivePropertyReservationIds({
     supabase,
@@ -1344,8 +1794,10 @@ async function syncPropertyRoomsStructure(params: {
 
     await syncRoomSellableOptions({
       supabase,
+      propertyDbId,
       roomId,
       optionRows: room.option_rows,
+      pricingSeasonsByCode,
     })
 
     await syncRoomBeds({
@@ -1465,20 +1917,25 @@ async function upsertPropertySellableOptions(params: {
   propertyDbId: string
   rental_duration: 'daily' | 'monthly'
   fullApartmentPrice: number
+  fullApartmentSeasonalPrices: SeasonalPriceMap
   insertedRooms: InsertedRoomSummary[]
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
 }) {
   const {
     supabase,
     propertyDbId,
     rental_duration,
     fullApartmentPrice,
+    fullApartmentSeasonalPrices,
     insertedRooms,
+    pricingSeasonsByCode,
   } = params
 
   const desiredRows = buildPropertySellableOptionRows({
     propertyDbId,
     rental_duration,
     fullApartmentPrice,
+    fullApartmentSeasonalPrices,
     insertedRooms,
   })
 
@@ -1495,28 +1952,32 @@ async function upsertPropertySellableOptions(params: {
     )
   }
 
+  const typedExistingRows = (existingRows ?? []) as ExistingPropertySellableOptionRow[]
+
   const existingByCode = new Map(
-    (existingRows ?? []).map((row) => [row.code as PropertyOptionCode, row])
+    typedExistingRows.map((row) => [row.code as PropertyOptionCode, row])
   )
 
   for (const row of desiredRows) {
     const existing = existingByCode.get(row.code)
+    const { seasonal_prices, ...dbRow } = row
+    let sellableOptionId: string
 
     if (existing) {
       const { error: updateError } = await supabase
         .from('property_sellable_options')
         .update({
-          option_code: row.option_code,
-          name_en: row.name_en,
-          name_ar: row.name_ar,
-          sell_mode: row.sell_mode,
-          occupancy_size: row.occupancy_size,
-          price_egp: row.price_egp,
-          rental_duration: row.rental_duration,
+          option_code: dbRow.option_code,
+          name_en: dbRow.name_en,
+          name_ar: dbRow.name_ar,
+          sell_mode: dbRow.sell_mode,
+          occupancy_size: dbRow.occupancy_size,
+          price_egp: dbRow.price_egp,
+          rental_duration: dbRow.rental_duration,
           is_active: true,
-          sort_order: row.sort_order,
-          source_scope: row.source_scope,
-          pricing_mode: row.pricing_mode,
+          sort_order: dbRow.sort_order,
+          source_scope: dbRow.source_scope,
+          pricing_mode: dbRow.pricing_mode,
           deleted_at: null,
           retired_reason: null,
         })
@@ -1527,28 +1988,44 @@ async function upsertPropertySellableOptions(params: {
           `Failed to update property sellable option ${row.code}: ${updateError.message}`
         )
       }
+
+      sellableOptionId = existing.id
     } else {
-      const { error: insertError } = await supabase
+      const { data: insertedOption, error: insertError } = await supabase
         .from('property_sellable_options')
         .insert({
-          ...row,
+          ...dbRow,
           deleted_at: null,
           retired_reason: null,
         })
+        .select('id')
+        .single()
 
-      if (insertError) {
+      if (insertError || !insertedOption) {
         throw new Error(
-          `Failed to insert property sellable option ${row.code}: ${insertError.message}`
+          `Failed to insert property sellable option ${row.code}: ${insertError?.message || 'Unknown error'}`
         )
       }
+
+      sellableOptionId = insertedOption.id
     }
+
+    await syncSeasonalPricesForSellableOption({
+      supabase,
+      propertyDbId,
+      sellableOptionId,
+      seasonalPrices: seasonal_prices,
+      pricingSeasonsByCode,
+    })
   }
 
-  const rowsToRetire = (existingRows ?? []).filter(
+  const rowsToRetire = typedExistingRows.filter(
     (row) => !desiredCodes.includes(row.code as PropertyOptionCode)
   )
 
   if (rowsToRetire.length > 0) {
+    const retiredIds = rowsToRetire.map((row) => row.id)
+
     const { error: retireError } = await supabase
       .from('property_sellable_options')
       .update({
@@ -1556,15 +2033,19 @@ async function upsertPropertySellableOptions(params: {
         deleted_at: new Date().toISOString(),
         retired_reason: 'Replaced during property structure update',
       })
-      .in(
-        'id',
-        rowsToRetire.map((row) => row.id)
-      )
+      .in('id', retiredIds)
 
     if (retireError) {
       throw new Error(
         `Failed to retire old property sellable options: ${retireError.message}`
       )
+    }
+
+    for (const row of rowsToRetire) {
+      await deactivateSeasonalPricesForOption({
+        supabase,
+        sellableOptionId: row.id,
+      })
     }
   }
 }
@@ -1642,6 +2123,89 @@ export async function createPropertyImageUploadSignedUrlAction(formData: FormDat
   }
 }
 
+
+export async function createPropertyVideoUploadSignedUrlAction(formData: FormData) {
+  const adminContext = await requirePropertyEditorAccess()
+  const supabase = createAdminClient()
+  const admin = adminContext.admin
+
+  const propertyDbId = String(formData.get('property_db_id') || '').trim()
+  if (!propertyDbId) {
+    throw new Error('Property ID is required before uploading the video')
+  }
+
+  const originalFileName = String(formData.get('file_name') || '').trim()
+  const fileType = String(formData.get('file_type') || '').trim()
+  const fileSize = Number(String(formData.get('file_size') || '0'))
+
+  if (!originalFileName) {
+    throw new Error('Video file name is required')
+  }
+
+  if (!isAllowedPropertyVideoFile(originalFileName, fileType)) {
+    throw new Error('Only MP4, WebM, and MOV videos are allowed')
+  }
+
+  if (!Number.isFinite(fileSize) || fileSize <= 0) {
+    throw new Error('Video file size is invalid')
+  }
+
+  if (fileSize > MAX_PROPERTY_VIDEO_BYTES) {
+    throw new Error('Property video must be smaller than 200 MB')
+  }
+
+  const { data: existingProperty, error: existingPropertyError } = await supabase
+    .from('properties')
+    .select('id, broker_id')
+    .eq('id', propertyDbId)
+    .maybeSingle()
+
+  if (existingPropertyError) {
+    throw new Error(existingPropertyError.message)
+  }
+
+  if (!existingProperty) {
+    throw new Error('Property not found')
+  }
+
+  if (!isSuperAdmin(admin)) {
+    if (!admin.broker_id) {
+      throw new Error('Editor account is missing broker assignment')
+    }
+
+    if (existingProperty.broker_id !== admin.broker_id) {
+      throw new Error('You are not allowed to edit this property')
+    }
+  }
+
+  const safeFileName = slugifyFileName(originalFileName)
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const filePath = `properties/${propertyDbId}/${uniqueSuffix}-${safeFileName}`
+
+  const { data: signedUploadData, error: signedUploadError } =
+    await supabase.storage
+      .from(PROPERTY_VIDEOS_BUCKET)
+      .createSignedUploadUrl(filePath)
+
+  if (signedUploadError || !signedUploadData?.token) {
+    throw new Error(
+      `Failed to prepare video upload: ${
+        signedUploadError?.message || 'Upload token was not created'
+      }`
+    )
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(PROPERTY_VIDEOS_BUCKET)
+    .getPublicUrl(filePath)
+
+  return {
+    video_url: publicUrlData.publicUrl,
+    storage_path: filePath,
+    token: signedUploadData.token,
+  }
+}
+
 export async function updatePropertyAction(formData: FormData) {
   const adminContext = await requirePropertyEditorAccess()
   const supabase = createAdminClient()
@@ -1687,6 +2251,20 @@ export async function updatePropertyAction(formData: FormData) {
   if (existingImagesError) {
     throw new Error(existingImagesError.message)
   }
+
+  const { data: existingVideoRows, error: existingVideoError } = await supabase
+    .from('property_videos')
+    .select('id, video_url, storage_path, file_mime_type, file_size_bytes, is_active')
+    .eq('property_id_ref', propertyDbId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .limit(1)
+
+  if (existingVideoError) {
+    throw new Error(existingVideoError.message)
+  }
+
+  const existingVideo = (existingVideoRows || [])[0] || null
 
   const property_id = String(formData.get('property_id') || '').trim()
   const title_en = String(formData.get('title_en') || '').trim()
@@ -1802,6 +2380,15 @@ export async function updatePropertyAction(formData: FormData) {
     throw new Error('Valid full apartment price is required')
   }
 
+  const fullApartmentSeasonalPrices = buildFullApartmentSeasonalPrices({
+    formData,
+    fallbackPrice: price_egp,
+  })
+
+  const pricingSeasonsByCode = await getPricingSeasonsByCode({
+    supabase,
+  })
+
   const roomIds = formData.getAll('room_id').map((v) => String(v).trim())
   const roomNames = formData.getAll('room_name').map((v) => String(v).trim())
   const roomNameArs = formData.getAll('room_name_ar').map((v) => String(v).trim())
@@ -1859,12 +2446,30 @@ export async function updatePropertyAction(formData: FormData) {
 
       const singleEnabled = toBoolean(roomSingleEnabled[index] || 'false')
       const singlePrice = Number(roomSinglePrices[index] || 0)
+      const singleSeasonalPrices = buildRoomOptionSeasonalPrices({
+        formData,
+        optionCode: 'single_room',
+        index,
+        fallbackPrice: singlePrice,
+      })
 
       const doubleEnabled = toBoolean(roomDoubleEnabled[index] || 'false')
       const doublePrice = Number(roomDoublePrices[index] || 0)
+      const doubleSeasonalPrices = buildRoomOptionSeasonalPrices({
+        formData,
+        optionCode: 'double_room',
+        index,
+        fallbackPrice: doublePrice,
+      })
 
       const tripleEnabled = toBoolean(roomTripleEnabled[index] || 'false')
       const triplePrice = Number(roomTriplePrices[index] || 0)
+      const tripleSeasonalPrices = buildRoomOptionSeasonalPrices({
+        formData,
+        optionCode: 'triple_room',
+        index,
+        fallbackPrice: triplePrice,
+      })
 
       const hasAnyOptionValue =
         singleEnabled ||
@@ -1885,10 +2490,13 @@ export async function updatePropertyAction(formData: FormData) {
       const option_rows = buildRoomOptions({
         singleEnabled,
         singlePrice,
+        singleSeasonalPrices,
         doubleEnabled,
         doublePrice,
+        doubleSeasonalPrices,
         tripleEnabled,
         triplePrice,
+        tripleSeasonalPrices,
         beds_count: parsedBedsCount,
       })
 
@@ -2156,6 +2764,126 @@ export async function updatePropertyAction(formData: FormData) {
     }
   }
 
+
+  const removeExistingVideo = toBoolean(
+    String(formData.get('remove_existing_video') || 'false')
+  )
+  const uploadedVideoUrl = String(
+    formData.get('uploaded_video_url') || ''
+  ).trim()
+  const uploadedVideoStoragePath = String(
+    formData.get('uploaded_video_storage_path') || ''
+  ).trim()
+  const uploadedVideoMimeType = String(
+    formData.get('uploaded_video_mime_type') || ''
+  ).trim()
+  const uploadedVideoFileSize = toNullableNumber(
+    formData.get('uploaded_video_file_size')
+  )
+  const hasUploadedVideo = Boolean(
+    uploadedVideoUrl ||
+      uploadedVideoStoragePath ||
+      uploadedVideoMimeType ||
+      uploadedVideoFileSize !== null
+  )
+
+  let videoAction: 'kept' | 'added' | 'replaced' | 'deleted' | 'none' =
+    existingVideo ? 'kept' : 'none'
+
+  if (hasUploadedVideo) {
+    validateUploadedPropertyVideo({
+      propertyDbId,
+      videoUrl: uploadedVideoUrl,
+      storagePath: uploadedVideoStoragePath,
+      mimeType: uploadedVideoMimeType,
+      fileSizeBytes: uploadedVideoFileSize,
+    })
+
+    const { data: publicVideoUrlData } = supabase.storage
+      .from(PROPERTY_VIDEOS_BUCKET)
+      .getPublicUrl(uploadedVideoStoragePath)
+    const resolvedUploadedVideoUrl = publicVideoUrlData.publicUrl
+
+    if (existingVideo) {
+      const { error: updateVideoError } = await supabase
+        .from('property_videos')
+        .update({
+          video_url: resolvedUploadedVideoUrl,
+          storage_path: uploadedVideoStoragePath,
+          file_mime_type: uploadedVideoMimeType || null,
+          file_size_bytes: uploadedVideoFileSize,
+          is_active: true,
+          sort_order: 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingVideo.id)
+
+      if (updateVideoError) {
+        await supabase.storage
+          .from(PROPERTY_VIDEOS_BUCKET)
+          .remove([uploadedVideoStoragePath])
+        throw new Error(`Failed to replace property video: ${updateVideoError.message}`)
+      }
+
+      if (
+        existingVideo.storage_path &&
+        existingVideo.storage_path !== uploadedVideoStoragePath
+      ) {
+        const { error: oldVideoRemoveError } = await supabase.storage
+          .from(PROPERTY_VIDEOS_BUCKET)
+          .remove([existingVideo.storage_path])
+
+        if (oldVideoRemoveError) {
+          console.error('Failed to remove replaced property video:', oldVideoRemoveError)
+        }
+      }
+
+      videoAction = 'replaced'
+    } else {
+      const { error: insertVideoError } = await supabase
+        .from('property_videos')
+        .insert({
+          property_id_ref: propertyDbId,
+          video_url: resolvedUploadedVideoUrl,
+          storage_path: uploadedVideoStoragePath,
+          file_mime_type: uploadedVideoMimeType || null,
+          file_size_bytes: uploadedVideoFileSize,
+          is_active: true,
+          sort_order: 0,
+        })
+
+      if (insertVideoError) {
+        await supabase.storage
+          .from(PROPERTY_VIDEOS_BUCKET)
+          .remove([uploadedVideoStoragePath])
+        throw new Error(`Failed to save property video: ${insertVideoError.message}`)
+      }
+
+      videoAction = 'added'
+    }
+  } else if (removeExistingVideo && existingVideo) {
+    const { error: deleteVideoError } = await supabase
+      .from('property_videos')
+      .delete()
+      .eq('id', existingVideo.id)
+
+    if (deleteVideoError) {
+      throw new Error(`Failed to delete property video: ${deleteVideoError.message}`)
+    }
+
+    if (existingVideo.storage_path) {
+      const { error: removeVideoStorageError } = await supabase.storage
+        .from(PROPERTY_VIDEOS_BUCKET)
+        .remove([existingVideo.storage_path])
+
+      if (removeVideoStorageError) {
+        console.error('Failed to remove property video file:', removeVideoStorageError)
+      }
+    }
+
+    videoAction = 'deleted'
+  }
+
   const amenityIds = formData
     .getAll('amenity_ids')
     .map((v) => String(v).trim())
@@ -2207,6 +2935,7 @@ export async function updatePropertyAction(formData: FormData) {
     roomRows,
     availabilityStatus: availability_status,
     gender,
+    pricingSeasonsByCode,
   })
 
   const { data: activeRoomsAfterSync, error: activeRoomsAfterSyncError } =
@@ -2249,7 +2978,9 @@ export async function updatePropertyAction(formData: FormData) {
     propertyDbId,
     rental_duration,
     fullApartmentPrice: price_egp,
+    fullApartmentSeasonalPrices,
     insertedRooms: syncedRooms,
+    pricingSeasonsByCode,
   })
 
   await recalculatePropertyAvailabilityState({
@@ -2291,6 +3022,7 @@ export async function updatePropertyAction(formData: FormData) {
       featured_rank,
       featured_until,
       structure_sync_mode: 'preserve_existing_ids',
+      video_action: videoAction,
       waiting_list_notifications:
         waitingListNotificationResult || {
           success: false,

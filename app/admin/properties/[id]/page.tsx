@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/src/lib/supabase/server'
+import { createAdminClient } from '@/src/lib/supabase/admin'
 import {
   requirePropertyEditorAccess,
   isSuperAdmin,
@@ -54,6 +55,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
   const adminContext = await requirePropertyEditorAccess()
   const { id } = await params
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
   const admin = adminContext.admin
   const propertyRes = await supabase
     .from('properties')
@@ -126,6 +128,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
     facilitiesRes,
     billTypesRes,
     imagesRes,
+    videosRes,
     propertyAmenitiesRes,
     propertyFacilitiesRes,
     propertyBillsRes,
@@ -219,6 +222,16 @@ export default async function EditPropertyPage({ params }: PageProps) {
       .eq('property_id_ref', id)
       .order('sort_order'),
 
+    adminSupabase
+      .from('property_videos')
+      .select(
+        'id, video_url, storage_path, file_mime_type, file_size_bytes, duration_seconds, sort_order, is_active'
+      )
+      .eq('property_id_ref', id)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .limit(1),
+
     supabase
       .from('property_amenities')
       .select('amenity_id')
@@ -283,6 +296,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
   if (facilitiesRes.error) throw new Error(facilitiesRes.error.message)
   if (billTypesRes.error) throw new Error(billTypesRes.error.message)
   if (imagesRes.error) throw new Error(imagesRes.error.message)
+  if (videosRes.error) throw new Error(videosRes.error.message)
   if (propertyAmenitiesRes.error) throw new Error(propertyAmenitiesRes.error.message)
   if (propertyFacilitiesRes.error) throw new Error(propertyFacilitiesRes.error.message)
   if (propertyBillsRes.error) throw new Error(propertyBillsRes.error.message)
@@ -367,6 +381,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
         facilities={facilitiesRes.data ?? []}
         billTypes={billTypesRes.data ?? []}
         images={imagesRes.data ?? []}
+        video={(videosRes.data ?? [])[0] ?? null}
         selectedAmenityIds={(propertyAmenitiesRes.data ?? []).map(
           (x: any) => x.amenity_id
         )}

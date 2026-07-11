@@ -1,72 +1,74 @@
-import Link from 'next/link'
-import Script from 'next/script'
-import { notFound, redirect } from 'next/navigation'
-import type { Metadata } from 'next'
-import { createClient } from '../../../src/lib/supabase/server'
-import PropertiesHeader from '../../properties/PropertiesHeader'
-import SortDropdown from '../../properties/search/SortDropdown'
-import PropertyImageSlider from './PropertyImageSlider'
-import PropertyAlertRequestCard from './PropertyAlertRequestCard'
-import PropertiesMap from './PropertiesMap'
-import MobileSearchMapSheet from './MobileSearchMapSheet'
-import MobileBottomNavScrollController from './MobileBottomNavScrollController'
-import { Squada_One } from 'next/font/google'
+import Link from "next/link";
+import Script from "next/script";
+import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { createClient } from "../../../src/lib/supabase/server";
+import PropertiesHeader from "../../properties/PropertiesHeader";
+import SortDropdown from "../../properties/search/SortDropdown";
+import PropertyImageSlider from "./PropertyImageSlider";
+import PropertyAlertRequestCard from "./PropertyAlertRequestCard";
+import PropertiesMap from "./PropertiesMap";
+import MobileSearchMapSheet from "./MobileSearchMapSheet";
+import MobileBottomNavScrollController from "./MobileBottomNavScrollController";
+import { Squada_One } from "next/font/google";
 import {
   getCachedSakanPageData,
   getCachedSakanSeoPages,
-} from '../../properties/data'
+} from "../../properties/data";
 
-
-const SITE_URL = 'https://navienty.com'
-const MIN_INDEXABLE_RESULTS = 3
+const SITE_URL = "https://navienty.com";
+const MIN_INDEXABLE_RESULTS = 3;
 
 function buildPath(slug: string[]) {
-  return `/sakan/${slug.map((item) => item.trim()).filter(Boolean).join('/')}`
+  return `/sakan/${slug
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("/")}`;
 }
 
 export async function generateStaticParams() {
-  const seoPages = await getCachedSakanSeoPages()
+  const seoPages = await getCachedSakanSeoPages();
 
   return seoPages
     .filter(
       (page) =>
         page.is_indexable &&
-        page.published_properties_count >= MIN_INDEXABLE_RESULTS
+        page.published_properties_count >= MIN_INDEXABLE_RESULTS,
     )
     .map((page) => ({
-      slug: page.path.replace(/^\/sakan\//, '').split('/'),
-    }))
+      slug: page.path.replace(/^\/sakan\//, "").split("/"),
+    }));
 }
 
 export async function generateMetadata({
   params,
-}: Pick<PageProps, 'params'>): Promise<Metadata> {
-  const { slug } = await params
-  const path = buildPath(slug)
-  const { seoPage } = await getCachedSakanPageData(path)
+}: Pick<PageProps, "params">): Promise<Metadata> {
+  const { slug } = await params;
+  const path = buildPath(slug);
+  const { seoPage } = await getCachedSakanPageData(path);
 
   if (!seoPage) {
     return {
-      title: 'سكن الطلاب | Navienty',
+      title: "سكن الطلاب | Navienty",
       robots: {
         index: false,
         follow: true,
       },
-    }
+    };
   }
 
   const shouldIndex =
     seoPage.is_indexable &&
-    seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS
+    seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS;
 
   const title =
     seoPage.seo_title_ar ||
     seoPage.seo_h1_ar ||
-    `سكن طلاب في ${seoPage.entity_name_ar}`
+    `سكن طلاب في ${seoPage.entity_name_ar}`;
   const description =
     seoPage.seo_description_ar ||
-    'اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.'
-  const canonicalUrl = `${SITE_URL}${seoPage.path}`
+    "اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.";
+  const canonicalUrl = `${SITE_URL}${seoPage.path}`;
 
   return {
     title,
@@ -80,21 +82,21 @@ export async function generateMetadata({
       googleBot: {
         index: shouldIndex,
         follow: true,
-        'max-image-preview': 'large',
-        'max-snippet': -1,
-        'max-video-preview': -1,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
       },
     },
     openGraph: {
       title,
       description,
       url: canonicalUrl,
-      siteName: 'Navienty',
-      locale: 'ar_EG',
-      type: 'website',
+      siteName: "Navienty",
+      locale: "ar_EG",
+      type: "website",
       images: [
         {
-          url: '/og-image.jpg',
+          url: "/og-image.jpg",
           width: 1200,
           height: 630,
           alt: title,
@@ -102,592 +104,666 @@ export async function generateMetadata({
       ],
     },
     twitter: {
-      card: 'summary_large_image',
+      card: "summary_large_image",
       title,
       description,
-      images: ['/og-image.jpg'],
+      images: ["/og-image.jpg"],
     },
-  }
+  };
 }
 
 const squadaOne = Squada_One({
-  subsets: ['latin'],
-  weight: '400',
-})
+  subsets: ["latin"],
+  weight: "400",
+});
 
 type SearchParams = {
-  rental_duration?: string
-  city_id?: string
-  university_id?: string
-  area_id?: string
-  price_range?: string
-  lang?: string
-  currency?: string
-  page?: string
-  sort?: string
-  gender?: string
-  amenity_ids?: string
-  alert?: string
-}
+  rental_duration?: string;
+  city_id?: string;
+  university_id?: string;
+  area_id?: string;
+  price_range?: string;
+  min_price?: string;
+  max_price?: string;
+  floor?: string;
+  lang?: string;
+  currency?: string;
+  page?: string;
+  sort?: string;
+  gender?: string;
+  amenity_ids?: string;
+  season?: string;
+  alert?: string;
+};
 
 type PageProps = {
   params: Promise<{
-    slug: string[]
-  }>
-  searchParams: Promise<SearchParams>
-}
+    slug: string[];
+  }>;
+  searchParams: Promise<SearchParams>;
+};
 
 type City = {
-  id: string | number
-  name_en: string
-  name_ar: string
-}
+  id: string | number;
+  name_en: string;
+  name_ar: string;
+};
 
 type University = {
-  id: string | number
-  name_en: string
-  name_ar: string
-  city_id: string | number
-}
+  id: string | number;
+  name_en: string;
+  name_ar: string;
+  city_id: string | number;
+};
 
 type PropertyArea = {
-  id: string | number
-  city_id: string | number
-  name_en: string
-  name_ar: string
-  is_active?: boolean | null
-}
+  id: string | number;
+  city_id: string | number;
+  name_en: string;
+  name_ar: string;
+  is_active?: boolean | null;
+};
 
 type UniversityArea = {
-  id?: string | number
-  university_id: string | number
-  area_id: string | number
-}
+  id?: string | number;
+  university_id: string | number;
+  area_id: string | number;
+};
 
 type AmenityOption = {
-  id: string
-  name_en: string
-  name_ar: string
-  icon_url?: string | null
-  sort_order?: number | null
-  is_active?: boolean | null
-}
+  id: string;
+  name_en: string;
+  name_ar: string;
+  icon_url?: string | null;
+  sort_order?: number | null;
+  is_active?: boolean | null;
+};
 
 type Amenity = {
-  id: string
-  name_en: string
-  name_ar: string
-  icon_url?: string | null
-  sort_order?: number | null
-  is_active?: boolean | null
-}
+  id: string;
+  name_en: string;
+  name_ar: string;
+  icon_url?: string | null;
+  sort_order?: number | null;
+  is_active?: boolean | null;
+};
 
 type PropertyAmenityLink = {
-  amenity_id?: string | number | null
-}
+  amenity_id?: string | number | null;
+};
 
 type PropertyImage = {
-  image_url?: string | null
-  is_cover?: boolean | null
-  sort_order?: number | null
-}
+  image_url?: string | null;
+  is_cover?: boolean | null;
+  sort_order?: number | null;
+};
+
+type PricingSeasonCode = "summer_course" | "academic_year";
+
+type PropertySeasonalPriceRow = {
+  property_id?: string | number | null;
+  sellable_option_id?: string | null;
+  room_sellable_option_id?: string | null;
+  price_egp?: number | string | null;
+  is_active?: boolean | null;
+};
 
 type PropertySellableOption = {
-  code?: string | null
-  option_code?: string | null
-  price_egp?: number | null
-  is_active?: boolean | null
-  deleted_at?: string | null
-}
+  id?: string | null;
+  code?: string | null;
+  option_code?: string | null;
+  price_egp?: number | null;
+  is_active?: boolean | null;
+  deleted_at?: string | null;
+};
 
 type PropertyRoomSellableOption = {
-  code?: string | null
-  price_egp?: number | null
-  is_active?: boolean | null
-  deleted_at?: string | null
-}
+  id?: string | null;
+  code?: string | null;
+  price_egp?: number | null;
+  is_active?: boolean | null;
+  deleted_at?: string | null;
+};
 
 type PropertyRoom = {
-  is_active?: boolean | null
-  deleted_at?: string | null
-  property_room_sellable_options?: PropertyRoomSellableOption[] | null
-}
+  is_active?: boolean | null;
+  deleted_at?: string | null;
+  property_room_sellable_options?: PropertyRoomSellableOption[] | null;
+};
 
 type PropertyUniversityLink = {
-  university_id?: string | number | null
-}
+  university_id?: string | number | null;
+};
 
 type PropertyAmenityMatch = {
-  property_id_ref?: string | number | null
-  amenity_id?: string | number | null
-}
+  property_id_ref?: string | number | null;
+  amenity_id?: string | number | null;
+};
 
 type Property = {
-  id: string | number
-  property_id: string
-  title_en: string
-  title_ar: string
-  price_egp: number
-  rental_duration: string
-  availability_status: string
-  gender?: 'boys' | 'girls' | string | null
-  city_id?: string | number | null
-  university_id?: string | number | null
-  area_id?: string | number | null
-  latitude?: number | string | null
-  longitude?: number | string | null
-  created_at?: string | null
-  is_featured?: boolean | null
-  featured_rank?: number | null
-  featured_until?: string | null
-  property_universities?: PropertyUniversityLink[] | null
-  property_images?: PropertyImage[] | null
-  property_sellable_options?: PropertySellableOption[] | null
-  property_rooms?: PropertyRoom[] | null
-}
+  id: string | number;
+  property_id: string;
+  title_en: string;
+  title_ar: string;
+  price_egp: number;
+  rental_duration: string;
+  availability_status: string;
+  gender?: "boys" | "girls" | string | null;
+  city_id?: string | number | null;
+  university_id?: string | number | null;
+  area_id?: string | number | null;
+  floor_number?: number | string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  created_at?: string | null;
+  is_featured?: boolean | null;
+  featured_rank?: number | null;
+  featured_until?: string | null;
+  property_universities?: PropertyUniversityLink[] | null;
+  property_images?: PropertyImage[] | null;
+  property_sellable_options?: PropertySellableOption[] | null;
+  property_rooms?: PropertyRoom[] | null;
+  selected_season_prices?: number[] | null;
+};
 
 const SUPPORTED_CURRENCIES = [
-  'EGP',
-  'USD',
-  'EUR',
-  'BHD',
-  'DZD',
-  'IQD',
-  'JOD',
-  'KWD',
-  'LBP',
-  'LYD',
-  'MAD',
-  'OMR',
-  'QAR',
-  'SAR',
-  'TND',
-] as const
+  "EGP",
+  "USD",
+  "EUR",
+  "BHD",
+  "DZD",
+  "IQD",
+  "JOD",
+  "KWD",
+  "LBP",
+  "LYD",
+  "MAD",
+  "OMR",
+  "QAR",
+  "SAR",
+  "TND",
+] as const;
 
-type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
-type SupportedLanguage = 'en' | 'ar'
+type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+type SupportedLanguage = "en" | "ar";
 type SupportedSort =
-  | 'newly_listed'
-  | 'lowest_price'
-  | 'highest_price'
-  | 'boys'
-  | 'girls'
+  "newly_listed" | "lowest_price" | "highest_price" | "boys" | "girls";
 
-type NormalizedGender = 'boys' | 'girls' | null
+type NormalizedGender = "boys" | "girls" | null;
 
 type NormalizedAvailabilityStatus =
-  | 'available'
-  | 'reserved'
-  | 'unavailable'
-  | 'unknown'
+  "available" | "reserved" | "unavailable" | "unknown";
 
 type MenuFooterLink = {
-  label: string
-  href: string
-  isEmail?: boolean
-}
-
-const PRICE_PRIORITY = [
-  'triple_room',
-  'double_room',
-  'single_room',
-  'full_apartment',
-] as const
+  label: string;
+  href: string;
+  isEmail?: boolean;
+};
 
 const FILTER_AMENITY_IDS = [
-  '75f3d5b8-647d-4229-8c05-695ac765952b',
-  'a732f6a4-cf50-4de1-b2db-5df5dc47e2c1',
-  'f5ab16f9-5941-4ebe-96a0-47f19dbe7f05',
-  '945a09ce-c3f3-4fb3-a0fd-7c33c939343a',
-]
-
-type PricePriorityCode = (typeof PRICE_PRIORITY)[number]
+  "75f3d5b8-647d-4229-8c05-695ac765952b",
+  "a732f6a4-cf50-4de1-b2db-5df5dc47e2c1",
+  "f5ab16f9-5941-4ebe-96a0-47f19dbe7f05",
+  "945a09ce-c3f3-4fb3-a0fd-7c33c939343a",
+];
 
 const TRANSLATIONS = {
   en: {
-    stay: 'stay',
-    night: 'night',
-    month: 'month',
-    featured: 'Elite',
-    city: 'City',
-    university: 'University',
-    area: 'Area',
-    duration: 'Duration',
-    searchCities: 'Search cities',
-    searchAreas: 'Search areas',
-    chooseUniversity: 'Choose university',
-    chooseArea: 'Choose area',
-    chooseDuration: 'Choose duration',
-    selectCity: 'Select city',
-    selectUniversity: 'Select university',
-    selectArea: 'Select area',
-    selectDuration: 'Select duration',
-    anyCity: 'Any city',
-    anyUniversity: 'Any university',
-    anyArea: 'Any area',
-    anyDuration: 'Any duration',
-    daily: 'Daily',
-    monthly: 'Monthly',
-    available: 'Available',
-    unavailable: 'Unavailable',
-    reserved: 'Reserved',
-    boys: 'Stays for Boys',
-    girls: 'Stays for Girls',
-    boysMeta: 'Boys only',
-    girlsMeta: 'Girls only',
-    startSearch: 'Start your search',
-    noResults: 'No properties found matching your search.',
-    alertSuccess: 'Your request was saved successfully. We will notify you on WhatsApp when a matching stay is available.',
-    alertError: 'Something went wrong while saving your request. Please try again.',
-    sortBy: 'Sort By',
-    amenities: 'Amenities',
-    newlyListed: 'Newly listed',
-    lowestPrice: 'Lowest price',
-    highestPrice: 'Highest price',
-    close: 'Close',
-    backToProperties: 'Back to properties',
-    login: 'Log in or sign up',
-    join: 'Guide',
-    facebook: 'Facebook',
-    instagram: 'Instagram',
-    linkedIn: 'LinkedIn',
-    footerTitle: 'Find your way to better student living',
-    quickLinks: 'Quick Links',
-    aboutUs: 'About us',
-    board: 'Board',
-    contact: 'Contact',
-    contactUs: 'Contact Us',
-    footerEmail: 'info@navienty.com',
-    explore: 'Search',
-    community: 'Guide',
-    account: 'Account',
-    mobileLogin: 'Log in',
-    language: 'Language',
-    english: 'English',
-    arabic: 'العربية',
+    stay: "stay",
+    night: "night",
+    month: "month",
+    featured: "Elite",
+    city: "City",
+    university: "University",
+    area: "Area",
+    duration: "Duration",
+    searchCities: "Search cities",
+    searchAreas: "Search areas",
+    chooseUniversity: "Choose university",
+    chooseArea: "Choose area",
+    chooseDuration: "Choose duration",
+    selectCity: "Select city",
+    selectUniversity: "Select university",
+    selectArea: "Select area",
+    selectDuration: "Select duration",
+    anyCity: "Any city",
+    anyUniversity: "Any university",
+    anyArea: "Any area",
+    anyDuration: "Any duration",
+    daily: "Daily",
+    monthly: "Monthly",
+    available: "Available",
+    unavailable: "Unavailable",
+    reserved: "Reserved",
+    boys: "Stays for Boys",
+    girls: "Stays for Girls",
+    boysMeta: "Boys only",
+    girlsMeta: "Girls only",
+    startSearch: "Start your search",
+    noResults: "No properties found matching your search.",
+    alertSuccess:
+      "Your request was saved successfully. We will notify you on WhatsApp when a matching stay is available.",
+    alertError:
+      "Something went wrong while saving your request. Please try again.",
+    sortBy: "Sort By",
+    season: "Stay period",
+    summerCourse: "Summer Course",
+    academicYear: "New Academic Year",
+    amenities: "Amenities",
+    newlyListed: "Newly listed",
+    lowestPrice: "Lowest price",
+    highestPrice: "Highest price",
+    close: "Close",
+    backToProperties: "Back to properties",
+    login: "Log in or sign up",
+    join: "Guide",
+    facebook: "Facebook",
+    instagram: "Instagram",
+    linkedIn: "LinkedIn",
+    footerTitle: "Find your way to better student living",
+    quickLinks: "Quick Links",
+    aboutUs: "About us",
+    board: "Board",
+    contact: "Contact",
+    contactUs: "Contact Us",
+    footerEmail: "info@navienty.com",
+    explore: "Search",
+    community: "Guide",
+    account: "Account",
+    mobileLogin: "Log in",
+    language: "Language",
+    english: "English",
+    arabic: "العربية",
     copyright: `© ${new Date().getFullYear()} Navienty | All rights reserved.`,
   },
   ar: {
-    stay: 'إقامة',
-    night: 'ليلة',
-    month: 'شهر',
-    featured: 'إيليت',
-    city: 'المدينة',
-    university: 'الجامعة',
-    area: 'المنطقة',
-    duration: 'المدة',
-    searchCities: 'ابحث عن مدينة',
-    searchAreas: 'ابحث عن منطقة',
-    chooseUniversity: 'اختر الجامعة',
-    chooseArea: 'اختر المنطقة',
-    chooseDuration: 'اختر المدة',
-    selectCity: 'اختر المدينة',
-    selectUniversity: 'اختر الجامعة',
-    selectArea: 'اختر المنطقة',
-    selectDuration: 'اختر المدة',
-    anyCity: 'أي مدينة',
-    anyUniversity: 'أي جامعة',
-    anyArea: 'أي منطقة',
-    anyDuration: 'أي مدة',
-    daily: 'يومي',
-    monthly: 'شهري',
-    available: 'متاح',
-    unavailable: 'غير متاح',
-    reserved: 'محجوز',
-    boys: 'منازل للأولاد',
-    girls: 'منازل للبنات',
-    boysMeta: 'ولاد فقط',
-    girlsMeta: 'بنات فقط',
-    startSearch: 'ابدأ بحثك',
-    searchResults: 'نتائج البحث',
-    noResults: 'لم يتم العثور على عقارات تطابق بحثك.',
-    alertSuccess: 'تم تسجيل طلبك بنجاح. أول ما ينزل سكن مناسب هنبلغك على واتساب.',
-    alertError: 'حصل خطأ أثناء تسجيل طلبك. حاول مرة تانية.',
-    sortBy: 'ترتيب حسب',
-    amenities: 'المميزات',
-    newlyListed: 'الأحدث',
-    lowestPrice: 'الأقل سعرًا',
-    highestPrice: 'الأعلى سعرًا',
-    close: 'إغلاق',
-    backToProperties: 'الرجوع إلى العقارات',
-    login: 'سجّل الدخول أو أنشئ حسابًا',
-    join: 'الدليل',
-    facebook: 'فيسبوك',
-    instagram: 'إنستجرام',
-    linkedIn: 'لينكدإن',
-    footerTitle: 'نظرة إلى المستقبل.',
-    quickLinks: 'روابط سريعة',
-    aboutUs: 'من نحن',
-    board: 'الإدارة',
-    contact: 'تواصل معنا',
-    contactUs: 'تواصل معنا',
-    footerEmail: 'info@navienty.com',
-    explore: 'استكشاف',
-    community: 'الدليل',
-    account: 'الحساب',
-    mobileLogin: 'تسجيل الدخول',
-    language: 'اللغة',
-    english: 'English',
-    arabic: 'العربية',
+    stay: "إقامة",
+    night: "ليلة",
+    month: "شهر",
+    featured: "إيليت",
+    city: "المدينة",
+    university: "الجامعة",
+    area: "المنطقة",
+    duration: "المدة",
+    searchCities: "ابحث عن مدينة",
+    searchAreas: "ابحث عن منطقة",
+    chooseUniversity: "اختر الجامعة",
+    chooseArea: "اختر المنطقة",
+    chooseDuration: "اختر المدة",
+    selectCity: "اختر المدينة",
+    selectUniversity: "اختر الجامعة",
+    selectArea: "اختر المنطقة",
+    selectDuration: "اختر المدة",
+    anyCity: "أي مدينة",
+    anyUniversity: "أي جامعة",
+    anyArea: "أي منطقة",
+    anyDuration: "أي مدة",
+    daily: "يومي",
+    monthly: "شهري",
+    available: "متاح",
+    unavailable: "غير متاح",
+    reserved: "محجوز",
+    boys: "منازل للأولاد",
+    girls: "منازل للبنات",
+    boysMeta: "ولاد فقط",
+    girlsMeta: "بنات فقط",
+    startSearch: "ابدأ بحثك",
+    searchResults: "نتائج البحث",
+    noResults: "لم يتم العثور على عقارات تطابق بحثك.",
+    alertSuccess:
+      "تم تسجيل طلبك بنجاح. أول ما ينزل سكن مناسب هنبلغك على واتساب.",
+    alertError: "حصل خطأ أثناء تسجيل طلبك. حاول مرة تانية.",
+    sortBy: "ترتيب حسب",
+    season: "فترة السكن",
+    summerCourse: "السمر كورس",
+    academicYear: "السنة الجديدة",
+    amenities: "المميزات",
+    newlyListed: "الأحدث",
+    lowestPrice: "الأقل سعرًا",
+    highestPrice: "الأعلى سعرًا",
+    close: "إغلاق",
+    backToProperties: "الرجوع إلى العقارات",
+    login: "سجّل الدخول أو أنشئ حسابًا",
+    join: "الدليل",
+    facebook: "فيسبوك",
+    instagram: "إنستجرام",
+    linkedIn: "لينكدإن",
+    footerTitle: "نظرة إلى المستقبل.",
+    quickLinks: "روابط سريعة",
+    aboutUs: "من نحن",
+    board: "الإدارة",
+    contact: "تواصل معنا",
+    contactUs: "تواصل معنا",
+    footerEmail: "info@navienty.com",
+    explore: "استكشاف",
+    community: "الدليل",
+    account: "الحساب",
+    mobileLogin: "تسجيل الدخول",
+    language: "اللغة",
+    english: "English",
+    arabic: "العربية",
     copyright: `© ${new Date().getFullYear()} نافينتي | جميع الحقوق محفوظة.`,
   },
-} as const
+} as const;
 
 function normalizeLanguage(value?: string): SupportedLanguage {
-  return value === 'ar' ? 'ar' : 'en'
+  return value === "ar" ? "ar" : "en";
 }
 
 function normalizeCurrency(value?: string): SupportedCurrency {
-  const upper = value?.toUpperCase()
+  const upper = value?.toUpperCase();
   return SUPPORTED_CURRENCIES.includes(upper as SupportedCurrency)
     ? (upper as SupportedCurrency)
-    : 'EGP'
+    : "EGP";
 }
 
 function normalizeSort(value?: string): SupportedSort {
-  if (value === 'lowest_price') return 'lowest_price'
-  if (value === 'highest_price') return 'highest_price'
-  return 'newly_listed'
+  if (value === "lowest_price") return "lowest_price";
+  if (value === "highest_price") return "highest_price";
+  return "newly_listed";
+}
+
+function normalizePricingSeason(
+  value?: string | null,
+): PricingSeasonCode | null {
+  if (value === "summer_course") return "summer_course";
+  if (value === "academic_year") return "academic_year";
+  return null;
 }
 
 function normalizeSelectedGender(
   genderValue?: string | null,
-  legacySortValue?: string | null
+  legacySortValue?: string | null,
 ): NormalizedGender {
-  const normalizedGender = genderValue?.toLowerCase().trim()
+  const normalizedGender = genderValue?.toLowerCase().trim();
 
-  if (normalizedGender === 'boys') return 'boys'
-  if (normalizedGender === 'girls') return 'girls'
+  if (normalizedGender === "boys") return "boys";
+  if (normalizedGender === "girls") return "girls";
 
   // Backward compatibility for old URLs that used sort=boys or sort=girls.
-  const normalizedLegacySort = legacySortValue?.toLowerCase().trim()
+  const normalizedLegacySort = legacySortValue?.toLowerCase().trim();
 
-  if (normalizedLegacySort === 'boys') return 'boys'
-  if (normalizedLegacySort === 'girls') return 'girls'
+  if (normalizedLegacySort === "boys") return "boys";
+  if (normalizedLegacySort === "girls") return "girls";
 
-  return null
+  return null;
 }
 
 function normalizeGender(value?: string | null): NormalizedGender {
-  const normalized = value?.toLowerCase().trim()
+  const normalized = value?.toLowerCase().trim();
 
-  if (normalized === 'boys') return 'boys'
-  if (normalized === 'girls') return 'girls'
+  if (normalized === "boys") return "boys";
+  if (normalized === "girls") return "girls";
 
-  return null
+  return null;
 }
 
 function normalizeAvailabilityStatusForUi(
-  status?: string
+  status?: string,
 ): NormalizedAvailabilityStatus {
   const normalized = status
     ?.toLowerCase()
     .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 
-  if (!normalized) return 'unknown'
-
-  if (
-    normalized === 'available' ||
-    normalized === 'partial reserved' ||
-    normalized === 'partially reserved'
-  ) {
-    return 'available'
-  }
+  if (!normalized) return "unknown";
 
   if (
-    normalized === 'reserved' ||
-    normalized === 'full reserved' ||
-    normalized === 'fully reserved'
+    normalized === "available" ||
+    normalized === "partial reserved" ||
+    normalized === "partially reserved"
   ) {
-    return 'reserved'
+    return "available";
   }
 
-  if (normalized === 'unavailable' || normalized === 'inactive') {
-    return 'unavailable'
+  if (
+    normalized === "reserved" ||
+    normalized === "full reserved" ||
+    normalized === "fully reserved"
+  ) {
+    return "reserved";
   }
 
-  return 'unknown'
+  if (normalized === "unavailable" || normalized === "inactive") {
+    return "unavailable";
+  }
+
+  return "unknown";
 }
 
 function translateAvailabilityStatus(
   value: string,
-  language: SupportedLanguage
+  language: SupportedLanguage,
 ) {
-  const normalized = normalizeAvailabilityStatusForUi(value)
+  const normalized = normalizeAvailabilityStatusForUi(value);
 
-  if (normalized === 'available') return TRANSLATIONS[language].available
-  if (normalized === 'reserved') return TRANSLATIONS[language].reserved
-  if (normalized === 'unavailable') return TRANSLATIONS[language].unavailable
+  if (normalized === "available") return TRANSLATIONS[language].available;
+  if (normalized === "reserved") return TRANSLATIONS[language].reserved;
+  if (normalized === "unavailable") return TRANSLATIONS[language].unavailable;
 
-  return value
+  return value;
 }
 
 function getAvailabilityRank(status?: string) {
-  const normalized = normalizeAvailabilityStatusForUi(status)
+  const normalized = normalizeAvailabilityStatusForUi(status);
 
-  if (normalized === 'available') return 0
-  if (normalized === 'reserved') return 1
-  if (normalized === 'unavailable') return 2
-  return 3
+  if (normalized === "available") return 0;
+  if (normalized === "reserved") return 1;
+  if (normalized === "unavailable") return 2;
+  return 3;
 }
 
 function isTruthyFeaturedFlag(value: unknown) {
-  if (value === true) return true
+  if (value === true) return true;
 
-  const normalized = String(value ?? '')
+  const normalized = String(value ?? "")
     .trim()
-    .toLowerCase()
+    .toLowerCase();
 
   return (
-    normalized === 'true' ||
-    normalized === 't' ||
-    normalized === '1' ||
-    normalized === 'yes' ||
-    normalized === 'y'
-  )
+    normalized === "true" ||
+    normalized === "t" ||
+    normalized === "1" ||
+    normalized === "yes" ||
+    normalized === "y"
+  );
 }
 
 function isPropertyFeatured(property: Property) {
-  const featuredRank = Number(property.featured_rank ?? 0)
-  const hasFeaturedRank = Number.isFinite(featuredRank) && featuredRank > 0
-  const isFeaturedFlagEnabled = isTruthyFeaturedFlag(property.is_featured)
+  const featuredRank = Number(property.featured_rank ?? 0);
+  const hasFeaturedRank = Number.isFinite(featuredRank) && featuredRank > 0;
+  const isFeaturedFlagEnabled = isTruthyFeaturedFlag(property.is_featured);
 
-  if (!isFeaturedFlagEnabled && !hasFeaturedRank) return false
+  if (!isFeaturedFlagEnabled && !hasFeaturedRank) return false;
 
-  if (!property.featured_until) return true
+  if (!property.featured_until) return true;
 
-  const featuredUntilTime = new Date(property.featured_until).getTime()
+  const featuredUntilTime = new Date(property.featured_until).getTime();
 
   // If the property is marked as featured but the date is malformed, keep showing
   // it instead of silently falling back to the old availability ribbon.
-  if (!Number.isFinite(featuredUntilTime)) return true
+  if (!Number.isFinite(featuredUntilTime)) return true;
 
-  return featuredUntilTime > Date.now()
+  return featuredUntilTime > Date.now();
 }
 
 function getCreatedAtTime(value?: string | null) {
-  if (!value) return 0
+  if (!value) return 0;
 
-  const time = new Date(value).getTime()
+  const time = new Date(value).getTime();
 
-  return Number.isFinite(time) ? time : 0
+  return Number.isFinite(time) ? time : 0;
 }
 
-function normalizeOptionCode(value?: string | null) {
-  return value
-    ?.toLowerCase()
-    .trim()
-    .replace(/[-\s]+/g, '_')
-}
+type PriceSortDirection = "ascending" | "descending";
 
-function getOptionPriority(code?: string | null) {
-  const normalizedCode = normalizeOptionCode(code)
-  const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode)
+function normalizePositivePrice(value: unknown): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    typeof value === "boolean"
+  ) {
+    return null;
+  }
 
-  return index === -1 ? Number.POSITIVE_INFINITY : index
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+
+  return parsedValue;
 }
 
 function isUsablePriceOption(option: {
-  code?: string | null
-  option_code?: string | null
-  price_egp?: number | null
-  is_active?: boolean | null
-  deleted_at?: string | null
+  price_egp?: number | string | null;
+  is_active?: boolean | null;
+  deleted_at?: string | null;
 }) {
-  const code = normalizeOptionCode(option.option_code || option.code)
-  const price = Number(option.price_egp)
-
   return (
-    !!code &&
-    PRICE_PRIORITY.includes(code as PricePriorityCode) &&
     option.is_active !== false &&
     !option.deleted_at &&
-    Number.isFinite(price) &&
-    price >= 0
-  )
+    normalizePositivePrice(option.price_egp) !== null
+  );
 }
 
-function getDisplayPriceEgp(property: Property) {
-  const propertyOptions =
-    property.property_sellable_options?.map((option) => ({
-      code: option.option_code || option.code,
-      price_egp: option.price_egp,
-      is_active: option.is_active,
-      deleted_at: option.deleted_at,
-    })) ?? []
+function getDisplayPriceEgp(property: Property): number {
+  const selectedSeasonPrices =
+    property.selected_season_prices
+      ?.map((price) => normalizePositivePrice(price))
+      .filter((price): price is number => price !== null) ?? [];
 
-  const roomOptions =
+  if (selectedSeasonPrices.length > 0) {
+    return Math.min(...selectedSeasonPrices);
+  }
+
+  const propertyOptionPrices =
+    property.property_sellable_options
+      ?.filter(isUsablePriceOption)
+      .map((option) => normalizePositivePrice(option.price_egp))
+      .filter((price): price is number => price !== null) ?? [];
+
+  const roomOptionPrices =
     property.property_rooms
       ?.filter((room) => room.is_active !== false && !room.deleted_at)
       .flatMap((room) =>
-        (room.property_room_sellable_options ?? []).map((option) => ({
-          code: option.code,
-          price_egp: option.price_egp,
-          is_active: option.is_active,
-          deleted_at: option.deleted_at,
-        }))
-      ) ?? []
+        (room.property_room_sellable_options ?? [])
+          .filter(isUsablePriceOption)
+          .map((option) => normalizePositivePrice(option.price_egp))
+          .filter((price): price is number => price !== null),
+      ) ?? [];
 
-  const matchedOption = [...propertyOptions, ...roomOptions]
-    .filter(isUsablePriceOption)
-    .sort((a, b) => {
-      const priorityDiff = getOptionPriority(a.code) - getOptionPriority(b.code)
+  const availableOptionPrices = [...propertyOptionPrices, ...roomOptionPrices];
 
-      if (priorityDiff !== 0) return priorityDiff
+  // نفس السعر الظاهر على الكارت هو السعر المستخدم في الفلترة والترتيب.
+  if (availableOptionPrices.length > 0) {
+    return Math.min(...availableOptionPrices);
+  }
 
-      return Number(a.price_egp) - Number(b.price_egp)
-    })[0]
+  return normalizePositivePrice(property.price_egp) ?? 0;
+}
 
-  return matchedOption?.price_egp ?? property.price_egp
+function getSortablePropertyPrice(property: Property): number | null {
+  return normalizePositivePrice(getDisplayPriceEgp(property));
+}
+
+function comparePrices(
+  aPrice: number | null,
+  bPrice: number | null,
+  direction: PriceSortDirection,
+) {
+  // العقارات التي لا تحتوي على سعر صالح تظل في نهاية النتائج.
+  if (aPrice === null && bPrice === null) return 0;
+  if (aPrice === null) return 1;
+  if (bPrice === null) return -1;
+
+  return direction === "ascending" ? aPrice - bPrice : bPrice - aPrice;
+}
+
+function comparePropertyTieBreakers(a: Property, b: Property) {
+  const availabilityDifference =
+    getAvailabilityRank(a.availability_status) -
+    getAvailabilityRank(b.availability_status);
+
+  if (availabilityDifference !== 0) {
+    return availabilityDifference;
+  }
+
+  const aFeatured = isPropertyFeatured(a);
+  const bFeatured = isPropertyFeatured(b);
+
+  if (aFeatured !== bFeatured) {
+    return aFeatured ? -1 : 1;
+  }
+
+  if (aFeatured && bFeatured) {
+    const featuredRankDifference =
+      Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0);
+
+    if (featuredRankDifference !== 0) {
+      return featuredRankDifference;
+    }
+  }
+
+  const createdAtDifference =
+    getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at);
+
+  if (createdAtDifference !== 0) {
+    return createdAtDifference;
+  }
+
+  return String(a.property_id || a.id).localeCompare(
+    String(b.property_id || b.id),
+  );
 }
 
 async function getCurrencyRate(currency: SupportedCurrency) {
-  if (currency === 'EGP') return 1
+  if (currency === "EGP") return 1;
 
-  const accessKey = process.env.EXCHANGERATE_API_KEY
-  if (!accessKey) return 1
+  const accessKey = process.env.EXCHANGERATE_API_KEY;
+  if (!accessKey) return 1;
 
   try {
-    const cacheBust = Date.now().toString()
+    const cacheBust = Date.now().toString();
 
     const response = await fetch(
       `https://api.exchangerate.host/live?access_key=${accessKey}&currencies=EGP,${currency}&v=${cacheBust}`,
-      { cache: 'no-store' }
-    )
+      { cache: "no-store" },
+    );
 
-    const data = await response.json()
+    const data = await response.json();
 
     if (data?.success && data?.quotes) {
-      const egpFromUsd = data.quotes.USDEGP
-      const targetFromUsd = data.quotes[`USD${currency}`]
+      const egpFromUsd = data.quotes.USDEGP;
+      const targetFromUsd = data.quotes[`USD${currency}`];
 
       if (
-        typeof egpFromUsd === 'number' &&
-        typeof targetFromUsd === 'number' &&
+        typeof egpFromUsd === "number" &&
+        typeof targetFromUsd === "number" &&
         egpFromUsd > 0
       ) {
-        return targetFromUsd / egpFromUsd
+        return targetFromUsd / egpFromUsd;
       }
     }
 
     if (data?.rates?.EGP && data?.rates?.[currency]) {
-      const egpRate = data.rates.EGP
-      const targetRate = data.rates[currency]
+      const egpRate = data.rates.EGP;
+      const targetRate = data.rates[currency];
 
       if (
-        typeof egpRate === 'number' &&
-        typeof targetRate === 'number' &&
+        typeof egpRate === "number" &&
+        typeof targetRate === "number" &&
         egpRate > 0
       ) {
-        return targetRate / egpRate
+        return targetRate / egpRate;
       }
     }
 
-    return 1
+    return 1;
   } catch {
-    return 1
+    return 1;
   }
 }
 
@@ -695,158 +771,199 @@ function formatPrice(
   amountEgp: number,
   currency: SupportedCurrency,
   language: SupportedLanguage,
-  rate: number
+  rate: number,
 ) {
-  const converted = currency === 'EGP' ? amountEgp : amountEgp * rate
-  const locale = language === 'ar' ? 'ar-EG' : 'en-US'
+  const converted = currency === "EGP" ? amountEgp : amountEgp * rate;
+  const locale = language === "ar" ? "ar-EG" : "en-US";
 
   return new Intl.NumberFormat(locale, {
-    style: 'currency',
+    style: "currency",
     currency,
-    maximumFractionDigits: currency === 'IQD' || currency === 'LBP' ? 0 : 2,
-  }).format(converted)
+    maximumFractionDigits: currency === "IQD" || currency === "LBP" ? 0 : 2,
+  }).format(converted);
 }
 
-
 function normalizeAmenityIds(value?: string) {
-  if (!value) return []
+  if (!value) return [];
 
   return Array.from(
     new Set(
       value
-        .split(',')
+        .split(",")
         .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  )
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeNonNegativeFilterNumber(value?: string | null) {
+  if (value === null || value === undefined || value.trim() === "") {
+    return null;
+  }
+
+  const normalizedValue = Number(value);
+
+  if (!Number.isFinite(normalizedValue) || normalizedValue < 0) {
+    return null;
+  }
+
+  return normalizedValue;
+}
+
+function normalizeFloorFilter(value?: string | null) {
+  const normalizedValue = normalizeNonNegativeFilterNumber(value);
+
+  if (normalizedValue === null || !Number.isInteger(normalizedValue)) {
+    return null;
+  }
+
+  return normalizedValue;
+}
+
+function normalizePriceFilterBounds(
+  minimumValue?: string | null,
+  maximumValue?: string | null,
+) {
+  const minimumPrice = normalizeNonNegativeFilterNumber(minimumValue);
+  const maximumPrice = normalizeNonNegativeFilterNumber(maximumValue);
+
+  if (minimumPrice !== null && maximumPrice !== null) {
+    return minimumPrice <= maximumPrice
+      ? { minimumPrice, maximumPrice }
+      : { minimumPrice: maximumPrice, maximumPrice: minimumPrice };
+  }
+
+  return { minimumPrice, maximumPrice };
 }
 
 function buildVisiblePages(currentPage: number, totalPages: number) {
-  const pages: (number | 'dots')[] = []
+  const pages: (number | "dots")[] = [];
 
   if (totalPages <= 7) {
-    for (let i = 1; i <= totalPages; i++) pages.push(i)
-    return pages
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+    return pages;
   }
 
-  pages.push(1)
+  pages.push(1);
 
-  if (currentPage > 3) pages.push('dots')
+  if (currentPage > 3) pages.push("dots");
 
-  const start = Math.max(2, currentPage - 1)
-  const end = Math.min(totalPages - 1, currentPage + 1)
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
 
-  for (let i = start; i <= end; i++) pages.push(i)
+  for (let i = start; i <= end; i++) pages.push(i);
 
-  if (currentPage < totalPages - 2) pages.push('dots')
+  if (currentPage < totalPages - 2) pages.push("dots");
 
-  pages.push(totalPages)
+  pages.push(totalPages);
 
-  return pages
+  return pages;
 }
 
-
-type PropertyAlertHousingType = 'single' | 'double' | 'triple' | 'full_apartment'
+type PropertyAlertHousingType =
+  "single" | "double" | "triple" | "full_apartment";
 
 const PROPERTY_ALERT_HOUSING_TYPES: PropertyAlertHousingType[] = [
-  'single',
-  'double',
-  'triple',
-  'full_apartment',
-]
+  "single",
+  "double",
+  "triple",
+  "full_apartment",
+];
 
 function sanitizeUuidLike(value?: FormDataEntryValue | null) {
-  const normalized = String(value ?? '').trim()
+  const normalized = String(value ?? "").trim();
 
-  return normalized.length > 0 ? normalized : null
+  return normalized.length > 0 ? normalized : null;
 }
 
 function sanitizeBudget(value?: FormDataEntryValue | null) {
-  const numericValue = Number(String(value ?? '').replace(/[^0-9.]/g, ''))
+  const numericValue = Number(String(value ?? "").replace(/[^0-9.]/g, ""));
 
   return Number.isFinite(numericValue) && numericValue > 0
     ? Math.round(numericValue)
-    : null
+    : null;
 }
 
 function sanitizeAnonymousAlertToken(value?: FormDataEntryValue | null) {
-  const token = String(value ?? '').trim()
+  const token = String(value ?? "").trim();
 
-  if (!token) return null
+  if (!token) return null;
 
-  return /^[a-zA-Z0-9_-]{12,120}$/.test(token) ? token : null
+  return /^[a-zA-Z0-9_-]{12,120}$/.test(token) ? token : null;
 }
 
 function normalizePropertyAlertHousingTypes(value?: FormDataEntryValue | null) {
-  const values = String(value ?? '')
-    .split(',')
+  const values = String(value ?? "")
+    .split(",")
     .map((item) => item.trim())
-    .filter(Boolean)
+    .filter(Boolean);
 
   return Array.from(
     new Set(
       values.filter((item): item is PropertyAlertHousingType =>
-        PROPERTY_ALERT_HOUSING_TYPES.includes(item as PropertyAlertHousingType)
-      )
-    )
-  )
+        PROPERTY_ALERT_HOUSING_TYPES.includes(item as PropertyAlertHousingType),
+      ),
+    ),
+  );
 }
 
 function addAlertStatusToReturnTo(
   returnTo: string,
-  status: 'success' | 'invalid' | 'error',
+  status: "success" | "invalid" | "error",
   lang: SupportedLanguage,
-  currency: SupportedCurrency
+  currency: SupportedCurrency,
 ) {
-  const fallback = '/properties/search'
+  const fallback = "/properties/search";
   const safeReturnTo =
-    returnTo.startsWith('/sakan/') || returnTo.startsWith('/properties/search')
+    returnTo.startsWith("/sakan/") || returnTo.startsWith("/properties/search")
       ? returnTo
-      : fallback
-  const [pathname, queryString = ''] = safeReturnTo.split('?')
-  const p = new URLSearchParams(queryString)
+      : fallback;
+  const [pathname, queryString = ""] = safeReturnTo.split("?");
+  const p = new URLSearchParams(queryString);
 
-  p.set('lang', lang)
-  p.set('currency', currency)
-  p.set('alert', status)
+  p.set("lang", lang);
+  p.set("currency", currency);
+  p.set("alert", status);
 
-  return `${pathname}?${p.toString()}`
+  return `${pathname}?${p.toString()}`;
 }
 
 async function createPropertyAlertRequest(formData: FormData) {
-  'use server'
+  "use server";
 
-  const supabase = await createClient()
+  const supabase = await createClient();
 
   const currentPath = String(
-    formData.get('current_path') || formData.get('return_to') || '/properties/search'
-  ).trim()
-  const lang = normalizeLanguage(String(formData.get('lang') || 'ar'))
-  const currency = normalizeCurrency(String(formData.get('currency') || 'EGP'))
+    formData.get("current_path") ||
+      formData.get("return_to") ||
+      "/properties/search",
+  ).trim();
+  const lang = normalizeLanguage(String(formData.get("lang") || "ar"));
+  const currency = normalizeCurrency(String(formData.get("currency") || "EGP"));
 
-  const cityId = sanitizeUuidLike(formData.get('city_id'))
-  const universityId = sanitizeUuidLike(formData.get('university_id'))
-  const areaId = sanitizeUuidLike(formData.get('area_id'))
+  const cityId = sanitizeUuidLike(formData.get("city_id"));
+  const universityId = sanitizeUuidLike(formData.get("university_id"));
+  const areaId = sanitizeUuidLike(formData.get("area_id"));
   const anonymousAlertToken = sanitizeAnonymousAlertToken(
-    formData.get('anonymous_alert_token')
-  )
+    formData.get("anonymous_alert_token"),
+  );
   const housingTypes = normalizePropertyAlertHousingTypes(
-    formData.get('housing_types') ?? formData.get('housing_type')
-  )
+    formData.get("housing_types") ?? formData.get("housing_type"),
+  );
   const maxBudget = sanitizeBudget(
-    formData.get('max_budget') ?? formData.get('max_budget_egp')
-  )
+    formData.get("max_budget") ?? formData.get("max_budget_egp"),
+  );
 
-  const redirectWithStatus = (status: 'success' | 'invalid' | 'error') => {
-    redirect(addAlertStatusToReturnTo(currentPath, status, lang, currency))
-  }
+  const redirectWithStatus = (status: "success" | "invalid" | "error") => {
+    redirect(addAlertStatusToReturnTo(currentPath, status, lang, currency));
+  };
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
   if (!user && !anonymousAlertToken) {
-    redirectWithStatus('invalid')
+    redirectWithStatus("invalid");
   }
 
   if (
@@ -856,238 +973,247 @@ async function createPropertyAlertRequest(formData: FormData) {
     housingTypes.length === 0 ||
     !maxBudget
   ) {
-    redirectWithStatus('invalid')
+    redirectWithStatus("invalid");
   }
 
   const { data: university } = await supabase
-    .from('universities')
-    .select('id, city_id')
-    .eq('id', universityId)
-    .maybeSingle()
+    .from("universities")
+    .select("id, city_id")
+    .eq("id", universityId)
+    .maybeSingle();
 
   if (!university || String(university.city_id) !== cityId) {
-    redirectWithStatus('invalid')
+    redirectWithStatus("invalid");
   }
 
   const { data: area } = await supabase
-    .from('property_areas')
-    .select('id, city_id, is_active')
-    .eq('id', areaId)
-    .maybeSingle()
+    .from("property_areas")
+    .select("id, city_id, is_active")
+    .eq("id", areaId)
+    .maybeSingle();
 
   if (!area || area.is_active === false || String(area.city_id) !== cityId) {
-    redirectWithStatus('invalid')
+    redirectWithStatus("invalid");
   }
 
   const { data: universityArea } = await supabase
-    .from('university_property_areas')
-    .select('id')
-    .eq('university_id', universityId)
-    .eq('area_id', areaId)
-    .maybeSingle()
+    .from("university_property_areas")
+    .select("id")
+    .eq("university_id", universityId)
+    .eq("area_id", areaId)
+    .maybeSingle();
 
   if (!universityArea) {
-    redirectWithStatus('invalid')
+    redirectWithStatus("invalid");
   }
 
- const rows = housingTypes.map((housingType) => ({
-  user_id: user?.id ?? null,
-  anonymous_alert_token: user ? null : anonymousAlertToken,
-  city_id: cityId,
-  university_id: universityId,
-  area_id: areaId,
-  housing_type: housingType,
-  max_budget: maxBudget,
-  max_budget_egp: maxBudget,
-  status: 'active',
-}))
+  const rows = housingTypes.map((housingType) => ({
+    user_id: user?.id ?? null,
+    anonymous_alert_token: user ? null : anonymousAlertToken,
+    city_id: cityId,
+    university_id: universityId,
+    area_id: areaId,
+    housing_type: housingType,
+    max_budget: maxBudget,
+    max_budget_egp: maxBudget,
+    status: "active",
+  }));
 
-  const { error } = await supabase.from('property_alert_requests').insert(rows)
+  const { error } = await supabase.from("property_alert_requests").insert(rows);
 
   if (error) {
-    console.error('Failed to create property alert request:', error)
-    redirectWithStatus('error')
+    console.error("Failed to create property alert request:", error);
+    redirectWithStatus("error");
   }
 
-  redirectWithStatus('success')
+  redirectWithStatus("success");
 }
 
 export default async function SakanSeoPage({
   params: routeParams,
   searchParams,
 }: PageProps) {
-  const { slug } = await routeParams
-  const path = buildPath(slug)
-  const { seoPage } = await getCachedSakanPageData(path)
+  const { slug } = await routeParams;
+  const path = buildPath(slug);
+  const { seoPage } = await getCachedSakanPageData(path);
 
   if (!seoPage) {
-    notFound()
+    notFound();
   }
 
-  const incomingParams = await searchParams
+  const incomingParams = await searchParams;
   const params: SearchParams = {
     ...incomingParams,
-    lang: incomingParams.lang ?? 'ar',
-    currency: incomingParams.currency ?? 'EGP',
+    lang: incomingParams.lang ?? "ar",
+    currency: incomingParams.currency ?? "EGP",
     city_id: seoPage.city_id ? String(seoPage.city_id) : incomingParams.city_id,
     university_id: seoPage.university_id
       ? String(seoPage.university_id)
       : incomingParams.university_id,
     area_id: seoPage.area_id ? String(seoPage.area_id) : incomingParams.area_id,
-  }
+  };
 
   const shouldIndex =
     seoPage.is_indexable &&
-    seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS
-  const seoH1 = seoPage.seo_h1_ar || seoPage.entity_name_ar || 'سكن الطلاب'
+    seoPage.published_properties_count >= MIN_INDEXABLE_RESULTS;
+  const seoH1 = seoPage.seo_h1_ar || seoPage.entity_name_ar || "سكن الطلاب";
   const seoIntro =
     seoPage.seo_intro_ar ||
-    'Navienty يساعدك على اكتشاف ومقارنة أماكن السكن الطلابي والتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.'
+    "Navienty يساعدك على اكتشاف ومقارنة أماكن السكن الطلابي والتواصل مع المضيفين بسهولة، بدون أي عمولة على الطالب.";
   const seoFaqItems = Array.isArray(seoPage.seo_faq_ar)
     ? seoPage.seo_faq_ar.filter((item: any) => item?.q && item?.a)
-    : []
+    : [];
 
   const collectionJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
     name: seoH1,
     description:
       seoPage.seo_description_ar ||
-      'صفحة تجمع أماكن سكن طلابية مناسبة على Navienty.',
+      "صفحة تجمع أماكن سكن طلابية مناسبة على Navienty.",
     url: `${SITE_URL}${seoPage.path}`,
     isPartOf: {
-      '@type': 'WebSite',
-      name: 'Navienty',
+      "@type": "WebSite",
+      name: "Navienty",
       url: SITE_URL,
     },
-  }
+  };
 
   const breadcrumbJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
     itemListElement: [
       {
-        '@type': 'ListItem',
+        "@type": "ListItem",
         position: 1,
-        name: 'الرئيسية',
+        name: "الرئيسية",
         item: SITE_URL,
       },
       {
-        '@type': 'ListItem',
+        "@type": "ListItem",
         position: 2,
-        name: 'سكن الطلاب',
+        name: "سكن الطلاب",
         item: `${SITE_URL}/sakan/asyut`,
       },
       {
-        '@type': 'ListItem',
+        "@type": "ListItem",
         position: 3,
         name: seoH1,
         item: `${SITE_URL}${seoPage.path}`,
       },
     ],
-  }
+  };
 
   const faqJsonLd =
     seoFaqItems.length > 0
       ? {
-          '@context': 'https://schema.org',
-          '@type': 'FAQPage',
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
           mainEntity: seoFaqItems.map((item: any) => ({
-            '@type': 'Question',
+            "@type": "Question",
             name: item.q,
             acceptedAnswer: {
-              '@type': 'Answer',
+              "@type": "Answer",
               text: item.a,
             },
           })),
         }
-      : null
-  const selectedLanguage = normalizeLanguage(params.lang)
-  const selectedCurrency = normalizeCurrency(params.currency)
-  const selectedSort = normalizeSort(params.sort)
-  const selectedGender = normalizeSelectedGender(params.gender, params.sort)
-  const selectedAmenityIds = normalizeAmenityIds(params.amenity_ids)
-  const t = TRANSLATIONS[selectedLanguage]
-  const isArabic = selectedLanguage === 'ar'
-  const currencyRate = await getCurrencyRate(selectedCurrency)
+      : null;
+  const selectedLanguage = normalizeLanguage(params.lang);
+  const selectedCurrency = normalizeCurrency(params.currency);
+  const selectedSort = normalizeSort(params.sort);
+  const selectedSeason = normalizePricingSeason(params.season);
+  const selectedGender = normalizeSelectedGender(params.gender, params.sort);
+  const selectedAmenityIds = normalizeAmenityIds(params.amenity_ids);
+  const selectedPriceBounds = normalizePriceFilterBounds(
+    params.min_price,
+    params.max_price,
+  );
+  const selectedMinimumPriceEgp = selectedPriceBounds.minimumPrice;
+  const selectedMaximumPriceEgp = selectedPriceBounds.maximumPrice;
+  const selectedFloor = normalizeFloorFilter(params.floor);
+  const t = TRANSLATIONS[selectedLanguage];
+  const isArabic = selectedLanguage === "ar";
+  const currencyRate = await getCurrencyRate(selectedCurrency);
 
   // أقل عدد كروت على الصفحة = Scroll أخف على الموبايل
-  const PAGE_SIZE = 8
+  const PAGE_SIZE = 24;
 
-  const currentPage = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
-  const from = (currentPage - 1) * PAGE_SIZE
-  const to = from + PAGE_SIZE
+  const currentPage = Math.max(1, Number.parseInt(params.page || "1", 10) || 1);
+  const from = (currentPage - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE;
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
-  const isLoggedIn = !!user
+  const isLoggedIn = !!user;
 
   const { data: cities } = await supabase
-    .from('cities')
-    .select('id, name_en, name_ar')
-    .order('name_en', { ascending: true })
+    .from("cities")
+    .select("id, name_en, name_ar")
+    .order("name_en", { ascending: true });
 
   const { data: universities } = await supabase
-    .from('universities')
-    .select('id, name_en, name_ar, city_id')
-    .order('name_en', { ascending: true })
+    .from("universities")
+    .select("id, name_en, name_ar, city_id")
+    .order("name_en", { ascending: true });
 
   const { data: areas } = await supabase
-    .from('property_areas')
-    .select('id, city_id, name_en, name_ar, is_active')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name_en', { ascending: true })
+    .from("property_areas")
+    .select("id, city_id, name_en, name_ar, is_active")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name_en", { ascending: true });
 
   const { data: universityAreas } = await supabase
-    .from('university_property_areas')
-    .select('id, university_id, area_id')
+    .from("university_property_areas")
+    .select("id, university_id, area_id");
 
   const { data: amenities } = await supabase
-    .from('amenities')
-    .select('id, name_en, name_ar, icon_url, sort_order, is_active')
-    .eq('is_active', true)
-    .in('id', FILTER_AMENITY_IDS)
-    .order('sort_order', { ascending: true })
-    .order('name_en', { ascending: true })
+    .from("amenities")
+    .select("id, name_en, name_ar, icon_url, sort_order, is_active")
+    .eq("is_active", true)
+    .in("id", FILTER_AMENITY_IDS)
+    .order("sort_order", { ascending: true })
+    .order("name_en", { ascending: true });
 
-  let matchingPropertyIdsByAmenities: string[] | null = null
+  let matchingPropertyIdsByAmenities: string[] | null = null;
 
   if (selectedAmenityIds.length > 0) {
     const { data: amenityMatches } = await supabase
-      .from('property_amenities')
-      .select('property_id_ref, amenity_id')
-      .in('amenity_id', selectedAmenityIds)
+      .from("property_amenities")
+      .select("property_id_ref, amenity_id")
+      .in("amenity_id", selectedAmenityIds);
 
-    const amenityIdsByProperty = new Map<string, Set<string>>()
+    const amenityIdsByProperty = new Map<string, Set<string>>();
 
     for (const item of (amenityMatches as PropertyAmenityMatch[]) ?? []) {
-      if (!item.property_id_ref || !item.amenity_id) continue
+      if (!item.property_id_ref || !item.amenity_id) continue;
 
-      const propertyId = String(item.property_id_ref)
-      const amenityId = String(item.amenity_id)
+      const propertyId = String(item.property_id_ref);
+      const amenityId = String(item.amenity_id);
       const existingAmenityIds =
-        amenityIdsByProperty.get(propertyId) ?? new Set<string>()
+        amenityIdsByProperty.get(propertyId) ?? new Set<string>();
 
-      existingAmenityIds.add(amenityId)
-      amenityIdsByProperty.set(propertyId, existingAmenityIds)
+      existingAmenityIds.add(amenityId);
+      amenityIdsByProperty.set(propertyId, existingAmenityIds);
     }
 
     matchingPropertyIdsByAmenities = Array.from(amenityIdsByProperty.entries())
       .filter(([, propertyAmenityIds]) =>
         selectedAmenityIds.every((amenityId) =>
-          propertyAmenityIds.has(amenityId)
-        )
+          propertyAmenityIds.has(amenityId),
+        ),
       )
-      .map(([propertyId]) => propertyId)
+      .map(([propertyId]) => propertyId);
   }
 
   let query = supabase
-    .from('properties')
-    .select(`
+    .from("properties")
+    .select(
+      `
       id,
       property_id,
       title_en,
@@ -1099,6 +1225,7 @@ export default async function SakanSeoPage({
       city_id,
       university_id,
       area_id,
+      floor_number,
       latitude,
       longitude,
       created_at,
@@ -1114,6 +1241,7 @@ export default async function SakanSeoPage({
         sort_order
       ),
       property_sellable_options(
+        id,
         code,
         option_code,
         price_egp,
@@ -1124,267 +1252,507 @@ export default async function SakanSeoPage({
         is_active,
         deleted_at,
         property_room_sellable_options(
+          id,
           code,
           price_egp,
           is_active,
           deleted_at
         )
       )
-    `)
-    .eq('admin_status', 'published')
-    .eq('is_active', true)
-    .neq('availability_status', 'unavailable')
+    `,
+    )
+    .eq("admin_status", "published")
+    .eq("is_active", true)
+    .neq("availability_status", "unavailable");
 
-  if (params.city_id) query = query.eq('city_id', params.city_id)
+  if (params.city_id) query = query.eq("city_id", params.city_id);
 
   if (params.university_id) {
-    query = query.eq('property_universities.university_id', params.university_id)
+    query = query.eq(
+      "property_universities.university_id",
+      params.university_id,
+    );
   }
 
-  if (params.area_id) query = query.eq('area_id', params.area_id)
+  if (params.area_id) query = query.eq("area_id", params.area_id);
+
+  if (selectedFloor !== null) {
+    query = query.eq("floor_number", selectedFloor);
+  }
 
   if (params.rental_duration) {
-    query = query.eq('rental_duration', params.rental_duration)
+    query = query.eq("rental_duration", params.rental_duration);
   }
 
   if (selectedGender) {
-    query = query.eq('gender', selectedGender)
+    query = query.eq("gender", selectedGender);
   }
 
   if (matchingPropertyIdsByAmenities) {
     query =
       matchingPropertyIdsByAmenities.length > 0
-        ? query.in('id', matchingPropertyIdsByAmenities)
-        : query.in('id', ['00000000-0000-0000-0000-000000000000'])
+        ? query.in("id", matchingPropertyIdsByAmenities)
+        : query.in("id", ["00000000-0000-0000-0000-000000000000"]);
   }
 
-  query = query.order('created_at', { ascending: false })
+  query = query.order("created_at", { ascending: false });
 
-  const { data: properties } = await query
+  const { data: properties } = await query;
 
-  const allSortedProperties = (((properties as Property[]) ?? []).sort(
-    (a, b) => {
-      const aFeatured = isPropertyFeatured(a)
-      const bFeatured = isPropertyFeatured(b)
+  const loadedProperties = (properties as Property[]) ?? [];
+  let propertiesForFiltering = loadedProperties;
 
-      if (aFeatured !== bFeatured) {
-        return aFeatured ? -1 : 1
-      }
+  /*
+    عند اختيار فترة السكن، نظهر فقط العقارات التي لديها سعر فعال
+    للفترة المختارة. كما نستخدم سعر هذه الفترة في الكارت والفلترة والـSort.
+  */
+  if (selectedSeason) {
+    /*
+      نحمّل الموسم والأسعار الموسمية من الجداول الفعلية.
+      مهم: لو القراءة مُنعت بسبب RLS أو لم تعد بيانات الموسم متاحة،
+      لا نخفي كل العقارات. نرجع للأسعار الأساسية بدل شاشة نتائج فارغة.
+    */
+    const { data: selectedPricingSeasons, error: pricingSeasonsError } =
+      await supabase
+        .from("property_pricing_seasons")
+        .select("id, code, is_active")
+        .eq("code", selectedSeason)
+        .eq("is_active", true);
 
-      if (aFeatured && bFeatured) {
-        const featuredRankDiff =
-          Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0)
-
-        if (featuredRankDiff !== 0) return featuredRankDiff
-      }
-
-      const availabilityDiff =
-        getAvailabilityRank(a.availability_status) -
-        getAvailabilityRank(b.availability_status)
-
-      if (availabilityDiff !== 0) return availabilityDiff
-
-      const aDisplayPrice = getDisplayPriceEgp(a)
-      const bDisplayPrice = getDisplayPriceEgp(b)
-
-      if (selectedSort === 'lowest_price') {
-        return aDisplayPrice - bDisplayPrice
-      }
-
-      if (selectedSort === 'highest_price') {
-        return bDisplayPrice - aDisplayPrice
-      }
-
-      return getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at)
+    if (pricingSeasonsError) {
+      console.error(
+        "Failed to load selected pricing seasons:",
+        pricingSeasonsError.message,
+      );
     }
-  ))
 
-  const sortedProperties = allSortedProperties.slice(from, to)
-  const count = allSortedProperties.length
-  const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 0
-  const visiblePages = buildVisiblePages(currentPage, totalPages)
+    const selectedSeasonIds = Array.from(
+      new Set(
+        ((selectedPricingSeasons as { id?: string | null }[]) ?? [])
+          .map((season) => String(season.id ?? "").trim())
+          .filter(Boolean),
+      ),
+    );
+
+    const propertyIds = loadedProperties.map((property) => String(property.id));
+    let selectedSeasonalPriceRows: PropertySeasonalPriceRow[] = [];
+    let seasonalPricesReadSucceeded = false;
+
+    if (
+      !pricingSeasonsError &&
+      selectedSeasonIds.length > 0 &&
+      propertyIds.length > 0
+    ) {
+      const { data: seasonalPriceRows, error: seasonalPricesError } =
+        await supabase
+          .from("property_option_seasonal_prices")
+          .select(
+            "property_id, sellable_option_id, room_sellable_option_id, price_egp, is_active",
+          )
+          .in("season_id", selectedSeasonIds)
+          .eq("is_active", true)
+          .in("property_id", propertyIds);
+
+      if (seasonalPricesError) {
+        console.error(
+          "Failed to load seasonal property prices:",
+          seasonalPricesError.message,
+        );
+      } else {
+        seasonalPricesReadSucceeded = true;
+        selectedSeasonalPriceRows =
+          (seasonalPriceRows as PropertySeasonalPriceRow[]) ?? [];
+      }
+    }
+
+    const activePropertyOptionIdsByPropertyId = new Map<string, Set<string>>();
+    const activeRoomOptionIdsByPropertyId = new Map<string, Set<string>>();
+
+    for (const property of loadedProperties) {
+      const propertyId = String(property.id);
+      const activePropertyOptionIds = new Set(
+        (property.property_sellable_options ?? [])
+          .filter((option) => option.is_active !== false && !option.deleted_at)
+          .map((option) => String(option.id ?? "").trim())
+          .filter(Boolean),
+      );
+      const activeRoomOptionIds = new Set(
+        (property.property_rooms ?? [])
+          .filter((room) => room.is_active !== false && !room.deleted_at)
+          .flatMap((room) => room.property_room_sellable_options ?? [])
+          .filter((option) => option.is_active !== false && !option.deleted_at)
+          .map((option) => String(option.id ?? "").trim())
+          .filter(Boolean),
+      );
+
+      activePropertyOptionIdsByPropertyId.set(
+        propertyId,
+        activePropertyOptionIds,
+      );
+      activeRoomOptionIdsByPropertyId.set(propertyId, activeRoomOptionIds);
+    }
+
+    const seasonalPricesByPropertyId = new Map<string, number[]>();
+
+    for (const row of selectedSeasonalPriceRows) {
+      if (!row.property_id || row.is_active === false) continue;
+
+      const propertyId = String(row.property_id);
+      const price = normalizePositivePrice(row.price_egp);
+      if (price === null) continue;
+
+      const propertyOptionId = String(row.sellable_option_id ?? "").trim();
+      const roomOptionId = String(row.room_sellable_option_id ?? "").trim();
+
+      const hasNoOptionLink = !propertyOptionId && !roomOptionId;
+      const belongsToActivePropertyOption = Boolean(
+        propertyOptionId &&
+          activePropertyOptionIdsByPropertyId
+            .get(propertyId)
+            ?.has(propertyOptionId),
+      );
+      const belongsToActiveRoomOption = Boolean(
+        roomOptionId &&
+          activeRoomOptionIdsByPropertyId.get(propertyId)?.has(roomOptionId),
+      );
+
+      /*
+        نقبل الصف إذا كان مرتبطًا بخيار فعال، أو إذا كان من البيانات القديمة
+        ومرتبطًا بالعقار مباشرة من غير option id.
+      */
+      if (
+        !hasNoOptionLink &&
+        !belongsToActivePropertyOption &&
+        !belongsToActiveRoomOption
+      ) {
+        continue;
+      }
+
+      const currentPrices = seasonalPricesByPropertyId.get(propertyId) ?? [];
+      currentPrices.push(price);
+      seasonalPricesByPropertyId.set(propertyId, currentPrices);
+    }
+
+    if (seasonalPricesByPropertyId.size > 0) {
+      propertiesForFiltering = loadedProperties
+        .map((property) => ({
+          ...property,
+          selected_season_prices:
+            seasonalPricesByPropertyId.get(String(property.id)) ?? [],
+        }))
+        .filter(
+          (property) => (property.selected_season_prices?.length ?? 0) > 0,
+        );
+    } else {
+      /*
+        Fail-open fallback:
+        منع RLS أو عدم وجود rows لا يجب أن يحوّل الصفحة كلها إلى صفر نتائج.
+        في الحالة دي نُبقي العقارات ونستخدم أقل سعر أساسي متاح.
+      */
+      if (selectedSeasonIds.length === 0) {
+        console.warn(
+          `No active pricing season found for code: ${selectedSeason}`,
+        );
+      } else if (seasonalPricesReadSucceeded) {
+        console.warn(
+          `No readable seasonal prices found for season: ${selectedSeason}`,
+        );
+      }
+
+      propertiesForFiltering = loadedProperties;
+    }
+  }
+
+  /*
+    فلتر السعر يتم بعد جلب خيارات العقار والغرف لأن السعر الصحيح
+    هو نفس أقل سعر فعلي ظاهر على الكارت، وليس properties.price_egp فقط.
+  */
+  const priceFilteredProperties = propertiesForFiltering.filter((property) => {
+    if (selectedMinimumPriceEgp === null && selectedMaximumPriceEgp === null) {
+      return true;
+    }
+
+    const propertyPrice = getSortablePropertyPrice(property);
+
+    if (propertyPrice === null) {
+      return false;
+    }
+
+    if (
+      selectedMinimumPriceEgp !== null &&
+      propertyPrice < selectedMinimumPriceEgp
+    ) {
+      return false;
+    }
+
+    if (
+      selectedMaximumPriceEgp !== null &&
+      propertyPrice > selectedMaximumPriceEgp
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const allSortedProperties = [...priceFilteredProperties].sort((a, b) => {
+    const aDisplayPrice = getSortablePropertyPrice(a);
+    const bDisplayPrice = getSortablePropertyPrice(b);
+
+    // في ترتيب السعر، السعر نفسه هو العامل الأساسي.
+    if (selectedSort === "lowest_price") {
+      const priceDifference = comparePrices(
+        aDisplayPrice,
+        bDisplayPrice,
+        "ascending",
+      );
+
+      if (priceDifference !== 0) return priceDifference;
+
+      return comparePropertyTieBreakers(a, b);
+    }
+
+    if (selectedSort === "highest_price") {
+      const priceDifference = comparePrices(
+        aDisplayPrice,
+        bDisplayPrice,
+        "descending",
+      );
+
+      if (priceDifference !== 0) return priceDifference;
+
+      return comparePropertyTieBreakers(a, b);
+    }
+
+    // في ترتيب الأحدث نحافظ على أولوية العقارات المميزة.
+    const aFeatured = isPropertyFeatured(a);
+    const bFeatured = isPropertyFeatured(b);
+
+    if (aFeatured !== bFeatured) {
+      return aFeatured ? -1 : 1;
+    }
+
+    if (aFeatured && bFeatured) {
+      const featuredRankDifference =
+        Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0);
+
+      if (featuredRankDifference !== 0) {
+        return featuredRankDifference;
+      }
+    }
+
+    const availabilityDifference =
+      getAvailabilityRank(a.availability_status) -
+      getAvailabilityRank(b.availability_status);
+
+    if (availabilityDifference !== 0) {
+      return availabilityDifference;
+    }
+
+    const createdAtDifference =
+      getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at);
+
+    if (createdAtDifference !== 0) {
+      return createdAtDifference;
+    }
+
+    return String(a.property_id || a.id).localeCompare(
+      String(b.property_id || b.id),
+    );
+  });
+
+  const sortedProperties = allSortedProperties.slice(from, to);
+  const count = allSortedProperties.length;
+  const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 0;
+  const visiblePages = buildVisiblePages(currentPage, totalPages);
   const formattedHomesCount = new Intl.NumberFormat(
-    selectedLanguage === 'ar' ? 'ar-EG' : 'en-US'
-  ).format(count)
+    selectedLanguage === "ar" ? "ar-EG" : "en-US",
+  ).format(count);
   const mobileMapHomesLabel =
-    selectedLanguage === 'ar'
+    selectedLanguage === "ar"
       ? `أكثر من ${formattedHomesCount} سكن`
-      : `Over ${formattedHomesCount} homes`
+      : `Over ${formattedHomesCount} homes`;
 
   const buildPropertiesPageLink = () => {
-    const p = new URLSearchParams()
-    p.set('lang', selectedLanguage)
-    p.set('currency', selectedCurrency)
-    return `/properties?${p.toString()}`
-  }
+    const p = new URLSearchParams();
+    p.set("lang", selectedLanguage);
+    p.set("currency", selectedCurrency);
+    return `/properties?${p.toString()}`;
+  };
 
   const buildSimpleNavLink = (path: string) => {
-    const p = new URLSearchParams()
-    p.set('lang', selectedLanguage)
-    p.set('currency', selectedCurrency)
-    return `${path}?${p.toString()}`
-  }
+    const p = new URLSearchParams();
+    p.set("lang", selectedLanguage);
+    p.set("currency", selectedCurrency);
+    return `${path}?${p.toString()}`;
+  };
 
   const buildPropertyHref = (propertyId: string) => {
-    const p = new URLSearchParams()
-    p.set('lang', selectedLanguage)
-    p.set('currency', selectedCurrency)
-    return `/properties/${propertyId}?${p.toString()}`
-  }
+    const p = new URLSearchParams();
+    p.set("lang", selectedLanguage);
+    p.set("currency", selectedCurrency);
 
-  const buildPageLink = (pageNumber: number) => {
-    const p = new URLSearchParams()
-
-    Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'page' && key !== 'sort' && key !== 'gender') {
-        p.set(key, value)
-      }
-    })
-
-    p.set('lang', selectedLanguage)
-    p.set('currency', selectedCurrency)
-    p.set('sort', selectedSort)
-
-    if (selectedGender) {
-      p.set('gender', selectedGender)
+    if (selectedSeason) {
+      p.set("season", selectedSeason);
     }
 
-    p.set('page', pageNumber.toString())
+    return `/properties/${propertyId}?${p.toString()}`;
+  };
 
-    return `${seoPage.path}?${p.toString()}`
-  }
-
-  const buildSearchPageLink = (updates: Partial<SearchParams> = {}) => {
-    const p = new URLSearchParams()
+  const buildPageLink = (pageNumber: number) => {
+    const p = new URLSearchParams();
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value) p.set(key, value)
-    })
+      if (value && key !== "page" && key !== "sort" && key !== "gender") {
+        p.set(key, value);
+      }
+    });
+
+    p.set("lang", selectedLanguage);
+    p.set("currency", selectedCurrency);
+    p.set("sort", selectedSort);
+
+    if (selectedGender) {
+      p.set("gender", selectedGender);
+    }
+
+    p.set("page", pageNumber.toString());
+
+    return `${seoPage.path}?${p.toString()}`;
+  };
+
+  const buildSearchPageLink = (updates: Partial<SearchParams> = {}) => {
+    const p = new URLSearchParams();
+
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) p.set(key, value);
+    });
 
     Object.entries(updates).forEach(([key, value]) => {
       if (value) {
-        p.set(key, value)
+        p.set(key, value);
       } else {
-        p.delete(key)
+        p.delete(key);
       }
-    })
+    });
 
-    p.set('lang', updates.lang ?? selectedLanguage)
-    p.set('currency', updates.currency ?? selectedCurrency)
+    p.set("lang", updates.lang ?? selectedLanguage);
+    p.set("currency", updates.currency ?? selectedCurrency);
 
-    return `${seoPage.path}?${p.toString()}`
-  }
+    return `${seoPage.path}?${p.toString()}`;
+  };
 
   const buildAlertReturnTo = () => {
-    const p = new URLSearchParams()
+    const p = new URLSearchParams();
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'alert') {
-        p.set(key, value)
+      if (value && key !== "alert") {
+        p.set(key, value);
       }
-    })
+    });
 
-    p.set('lang', selectedLanguage)
-    p.set('currency', selectedCurrency)
+    p.set("lang", selectedLanguage);
+    p.set("currency", selectedCurrency);
 
-    return `${seoPage.path}?${p.toString()}`
-  }
+    return `${seoPage.path}?${p.toString()}`;
+  };
 
   const buildSortLink = (sortValue: SupportedSort) => {
-    const p = new URLSearchParams()
+    const p = new URLSearchParams();
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && key !== 'page' && key !== 'sort' && key !== 'gender') {
-        p.set(key, value)
+      if (value && key !== "page" && key !== "sort" && key !== "gender") {
+        p.set(key, value);
       }
-    })
+    });
 
-    p.set('lang', selectedLanguage)
-    p.set('currency', selectedCurrency)
+    p.set("lang", selectedLanguage);
+    p.set("currency", selectedCurrency);
 
-    if (sortValue === 'boys' || sortValue === 'girls') {
-      p.set('gender', sortValue)
-      p.set('sort', selectedSort)
+    if (sortValue === "boys" || sortValue === "girls") {
+      p.set("gender", sortValue);
+      p.set("sort", selectedSort);
     } else {
-      p.set('sort', sortValue)
+      p.set("sort", sortValue);
 
       if (selectedGender) {
-        p.set('gender', selectedGender)
+        p.set("gender", selectedGender);
       }
     }
 
-    return `${seoPage.path}?${p.toString()}`
-  }
+    return `${seoPage.path}?${p.toString()}`;
+  };
 
   const sortOptions = [
     {
-      value: 'newly_listed' as SupportedSort,
+      value: "newly_listed" as SupportedSort,
       label: t.newlyListed,
-      href: buildSortLink('newly_listed'),
+      href: buildSortLink("newly_listed"),
     },
     {
-      value: 'lowest_price' as SupportedSort,
+      value: "lowest_price" as SupportedSort,
       label: t.lowestPrice,
-      href: buildSortLink('lowest_price'),
+      href: buildSortLink("lowest_price"),
     },
     {
-      value: 'highest_price' as SupportedSort,
+      value: "highest_price" as SupportedSort,
       label: t.highestPrice,
-      href: buildSortLink('highest_price'),
+      href: buildSortLink("highest_price"),
     },
     {
-      value: 'boys' as SupportedSort,
+      value: "boys" as SupportedSort,
       label: t.boys,
-      href: buildSortLink('boys'),
+      href: buildSortLink("boys"),
     },
     {
-      value: 'girls' as SupportedSort,
+      value: "girls" as SupportedSort,
       label: t.girls,
-      href: buildSortLink('girls'),
+      href: buildSortLink("girls"),
     },
-  ]
+  ];
 
   const primaryMenuLinks = [
     {
       label: isLoggedIn ? t.account : t.login,
       href: isLoggedIn
-        ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/login'),
+        ? buildSimpleNavLink("/account")
+        : buildSimpleNavLink("/login"),
     },
-    { label: t.join, href: buildSimpleNavLink('/community') },
-  ]
+    { label: t.join, href: buildSimpleNavLink("/community") },
+  ];
 
   const socialMenuLinks = [
-    { label: t.facebook, href: 'https://www.facebook.com/' },
-    { label: t.instagram, href: 'https://www.instagram.com/' },
-    { label: t.linkedIn, href: 'https://www.linkedin.com/' },
-  ]
+    { label: t.facebook, href: "https://www.facebook.com/" },
+    { label: t.instagram, href: "https://www.instagram.com/" },
+    { label: t.linkedIn, href: "https://www.linkedin.com/" },
+  ];
 
   const footerQuickLinks = [
-    { label: t.aboutUs, href: buildSimpleNavLink('/about') },
-    { label: t.board, href: buildSimpleNavLink('/board') },
-    { label: t.contact, href: buildSimpleNavLink('/contact') },
-  ]
+    { label: t.aboutUs, href: buildSimpleNavLink("/about") },
+    { label: t.board, href: buildSimpleNavLink("/board") },
+    { label: t.contact, href: buildSimpleNavLink("/contact") },
+  ];
 
   const menuFooterLinks: MenuFooterLink[] = [
     ...footerQuickLinks,
     { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
-  ]
+  ];
 
-  const backToPropertiesHref = buildPropertiesPageLink()
+  const backToPropertiesHref = buildPropertiesPageLink();
 
   const searchBarProps = {
     cities: (cities as City[]) ?? [],
     universities: (universities as University[]) ?? [],
     areas: (areas as PropertyArea[]) ?? [],
     universityAreas: (universityAreas as UniversityArea[]) ?? [],
-    initialCityId: params.city_id ?? '',
-    initialUniversityId: params.university_id ?? '',
-    initialAreaId: params.area_id ?? '',
-    initialRentalDuration: params.rental_duration ?? '',
-    initialPriceRange: params.price_range ?? '',
+    initialCityId: params.city_id ?? "",
+    initialUniversityId: params.university_id ?? "",
+    initialAreaId: params.area_id ?? "",
+    initialRentalDuration: params.rental_duration ?? "",
+    initialPriceRange: params.price_range ?? "",
     language: selectedLanguage,
     currency: selectedCurrency,
+    locationMode: "city-area" as const,
     labels: {
       city: t.city,
       university: t.university,
@@ -1425,8 +1793,8 @@ export default async function SakanSeoPage({
             strokeLinejoin="round"
             d={
               isArabic
-                ? 'm8.25 4.5 7.5 7.5-7.5 7.5'
-                : 'M15.75 19.5 8.25 12l7.5-7.5'
+                ? "m8.25 4.5 7.5 7.5-7.5 7.5"
+                : "M15.75 19.5 8.25 12l7.5-7.5"
             }
           />
         </svg>
@@ -1436,86 +1804,92 @@ export default async function SakanSeoPage({
       <SortDropdown
         isArabic={isArabic}
         selectedSort={selectedSort}
+        showSeasonFilter
         sortByLabel={t.sortBy}
+        seasonLabel={t.season}
+        summerCourseLabel={t.summerCourse}
+        academicYearLabel={t.academicYear}
         amenitiesLabel={t.amenities}
         options={sortOptions}
         amenities={(amenities as Amenity[]) ?? []}
+        selectedCurrency={selectedCurrency}
+        currencyRate={currencyRate}
       />
     ),
-    mobileSearchBarClassName: 'mt-0',
-  }
+    mobileSearchBarClassName: "mt-0",
+  };
 
   const alertStatus =
-    params.alert === 'success' ||
-    params.alert === 'invalid' ||
-    params.alert === 'error' ||
-    params.alert === 'login_required'
+    params.alert === "success" ||
+    params.alert === "invalid" ||
+    params.alert === "error" ||
+    params.alert === "login_required"
       ? params.alert
-      : undefined
+      : undefined;
 
-
-  const nextMobileLanguage: SupportedLanguage = selectedLanguage === 'ar' ? 'en' : 'ar'
-  const mobileLanguageHref = buildSearchPageLink({ lang: nextMobileLanguage })
-  const mobileLanguageLabel = selectedLanguage === 'ar' ? t.english : t.arabic
+  const nextMobileLanguage: SupportedLanguage =
+    selectedLanguage === "ar" ? "en" : "ar";
+  const mobileLanguageHref = buildSearchPageLink({ lang: nextMobileLanguage });
+  const mobileLanguageLabel = selectedLanguage === "ar" ? t.english : t.arabic;
   const mobileLanguageAriaLabel =
-    selectedLanguage === 'ar'
-      ? 'Switch language to English'
-      : 'تغيير اللغة إلى العربية'
+    selectedLanguage === "ar"
+      ? "Switch language to English"
+      : "تغيير اللغة إلى العربية";
 
   const getPropertyImages = (property: Property) => {
     const validImages =
       property.property_images
         ?.map((item, index) => ({
-          imageUrl: item?.image_url?.trim() ?? '',
+          imageUrl: item?.image_url?.trim() ?? "",
           isCover: item?.is_cover === true,
           sortOrder:
-            typeof item?.sort_order === 'number'
+            typeof item?.sort_order === "number"
               ? item.sort_order
               : Number.POSITIVE_INFINITY,
           originalIndex: index,
         }))
-        .filter((item) => Boolean(item.imageUrl)) ?? []
+        .filter((item) => Boolean(item.imageUrl)) ?? [];
 
     if (validImages.length === 0) {
-      return []
+      return [];
     }
 
     return validImages
       .sort((a, b) => {
-        if (a.isCover !== b.isCover) return a.isCover ? -1 : 1
+        if (a.isCover !== b.isCover) return a.isCover ? -1 : 1;
 
-        const sortOrderDiff = a.sortOrder - b.sortOrder
-        if (sortOrderDiff !== 0) return sortOrderDiff
+        const sortOrderDiff = a.sortOrder - b.sortOrder;
+        if (sortOrderDiff !== 0) return sortOrderDiff;
 
-        return a.originalIndex - b.originalIndex
+        return a.originalIndex - b.originalIndex;
       })
-      .map((item) => item.imageUrl)
-  }
+      .map((item) => item.imageUrl);
+  };
 
-    const mapProperties = allSortedProperties
+  const mapProperties = allSortedProperties
     .map((property) => {
       const hasLatitude =
         property.latitude !== null &&
         property.latitude !== undefined &&
-        String(property.latitude).trim() !== ''
+        String(property.latitude).trim() !== "";
 
       const hasLongitude =
         property.longitude !== null &&
         property.longitude !== undefined &&
-        String(property.longitude).trim() !== ''
+        String(property.longitude).trim() !== "";
 
       if (!hasLatitude || !hasLongitude) {
-        return null
+        return null;
       }
 
-      const latitude = Number(property.latitude)
-      const longitude = Number(property.longitude)
+      const latitude = Number(property.latitude);
+      const longitude = Number(property.longitude);
 
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return null
+        return null;
       }
 
-      const displayPriceEgp = getDisplayPriceEgp(property)
+      const displayPriceEgp = getDisplayPriceEgp(property);
 
       return {
         id: String(property.id),
@@ -1526,25 +1900,27 @@ export default async function SakanSeoPage({
           displayPriceEgp,
           selectedCurrency,
           selectedLanguage,
-          currencyRate
+          currencyRate,
         ),
         latitude,
         longitude,
         imageUrl: getPropertyImages(property)[0] ?? null,
         imageUrls: getPropertyImages(property),
-      }
+      };
     })
-    .filter((property): property is NonNullable<typeof property> => Boolean(property))
+    .filter((property): property is NonNullable<typeof property> =>
+      Boolean(property),
+    );
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
-    const images = getPropertyImages(property)
+    const images = getPropertyImages(property);
     const normalizedStatus = normalizeAvailabilityStatusForUi(
-      property.availability_status
-    )
+      property.availability_status,
+    );
 
-    const isReserved = normalizedStatus === 'reserved'
-    const propertyTitle = isArabic ? property.title_ar : property.title_en
-    const propertyIsFeatured = isPropertyFeatured(property)
+    const isReserved = normalizedStatus === "reserved";
+    const propertyTitle = isArabic ? property.title_ar : property.title_en;
+    const propertyIsFeatured = isPropertyFeatured(property);
 
     return (
       <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_6px_18px_rgba(15,23,42,0.08)] dark:bg-slate-800 dark:shadow-[0_10px_30px_rgba(0,0,0,0.35)] md:rounded-[28px] md:shadow-[0_10px_30px_rgba(15,23,42,0.10)]">
@@ -1575,22 +1951,21 @@ export default async function SakanSeoPage({
           </div>
         )}
       </div>
-    )
-  }
-
+    );
+  };
 
   const renderGenderMeta = (property: Property) => {
-    const gender = normalizeGender(property.gender)
+    const gender = normalizeGender(property.gender);
 
-    if (!gender) return null
+    if (!gender) return null;
 
-    const label = gender === 'boys' ? t.boysMeta : t.girlsMeta
+    const label = gender === "boys" ? t.boysMeta : t.girlsMeta;
 
-    return <span className="property-meta-gender">{label}</span>
-  }
+    return <span className="property-meta-gender">{label}</span>;
+  };
 
   const renderPropertyCard = (property: Property) => {
-    const displayPriceEgp = getDisplayPriceEgp(property)
+    const displayPriceEgp = getDisplayPriceEgp(property);
 
     return (
       <Link
@@ -1604,8 +1979,8 @@ export default async function SakanSeoPage({
             ? t.featured
             : translateAvailabilityStatus(
                 property.availability_status,
-                selectedLanguage
-              )
+                selectedLanguage,
+              ),
         )}
 
         <div className="mt-2.5 space-y-1 md:mt-3">
@@ -1627,23 +2002,23 @@ export default async function SakanSeoPage({
                 displayPriceEgp,
                 selectedCurrency,
                 selectedLanguage,
-                currencyRate
+                currencyRate,
               )}
-            </span>{' '}
+            </span>{" "}
             <span className="text-[11px] text-slate-500 dark:text-slate-400 md:text-[12px]">
-              / {property.rental_duration === 'daily' ? t.night : t.month}
+              / {property.rental_duration === "daily" ? t.night : t.month}
             </span>
           </p>
         </div>
       </Link>
-    )
-  }
+    );
+  };
 
-  const renderPagination = (className = '') => {
-    if (totalPages <= 1) return null
+  const renderPagination = (className = "") => {
+    if (totalPages <= 1) return null;
 
-    const previousPageDisabled = currentPage === 1
-    const nextPageDisabled = currentPage === totalPages
+    const previousPageDisabled = currentPage === 1;
+    const nextPageDisabled = currentPage === totalPages;
 
     return (
       <div
@@ -1655,8 +2030,8 @@ export default async function SakanSeoPage({
           aria-disabled={previousPageDisabled}
           className={`flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-[#111827] shadow-[0_8px_24px_rgba(15,23,42,0.14)] transition md:h-10 md:w-10 md:border-0 md:bg-transparent md:text-[#054aff] md:shadow-none ${
             previousPageDisabled
-              ? 'pointer-events-none opacity-30 hover:bg-transparent'
-              : 'hover:bg-slate-50 md:hover:bg-[#054aff]/10'
+              ? "pointer-events-none opacity-30 hover:bg-transparent"
+              : "hover:bg-slate-50 md:hover:bg-[#054aff]/10"
           }`}
         >
           <svg
@@ -1677,7 +2052,7 @@ export default async function SakanSeoPage({
 
         <div className="hidden items-center gap-2 md:flex md:gap-3">
           {visiblePages.map((item, index) =>
-            item === 'dots' ? (
+            item === "dots" ? (
               <span
                 key={`dots-${index}`}
                 className="flex h-10 min-w-[24px] items-center justify-center text-[18px] font-semibold text-[#054aff]"
@@ -1690,13 +2065,13 @@ export default async function SakanSeoPage({
                 href={buildPageLink(item)}
                 className={`flex h-10 w-10 items-center justify-center rounded-full text-[16px] font-semibold transition ${
                   currentPage === item
-                    ? 'bg-[#054aff] text-white'
-                    : 'text-[#054aff] hover:bg-[#054aff]/10'
+                    ? "bg-[#054aff] text-white"
+                    : "text-[#054aff] hover:bg-[#054aff]/10"
                 }`}
               >
                 {item}
               </Link>
-            )
+            ),
           )}
         </div>
 
@@ -1705,8 +2080,8 @@ export default async function SakanSeoPage({
           aria-disabled={nextPageDisabled}
           className={`flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-[#111827] shadow-[0_8px_24px_rgba(15,23,42,0.14)] transition md:h-10 md:w-10 md:border-0 md:bg-transparent md:text-[#054aff] md:shadow-none ${
             nextPageDisabled
-              ? 'pointer-events-none opacity-30 hover:bg-transparent'
-              : 'hover:bg-slate-50 md:hover:bg-[#054aff]/10'
+              ? "pointer-events-none opacity-30 hover:bg-transparent"
+              : "hover:bg-slate-50 md:hover:bg-[#054aff]/10"
           }`}
         >
           <svg
@@ -1725,13 +2100,12 @@ export default async function SakanSeoPage({
           </svg>
         </Link>
       </div>
-    )
-  }
-
+    );
+  };
 
   return (
     <main
-      dir={isArabic ? 'rtl' : 'ltr'}
+      dir={isArabic ? "rtl" : "ltr"}
       className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <Script
@@ -1739,7 +2113,7 @@ export default async function SakanSeoPage({
         type="application/ld+json"
         strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(collectionJsonLd).replace(/</g, '\u003c'),
+          __html: JSON.stringify(collectionJsonLd).replace(/</g, "\u003c"),
         }}
       />
 
@@ -1748,7 +2122,7 @@ export default async function SakanSeoPage({
         type="application/ld+json"
         strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, '\u003c'),
+          __html: JSON.stringify(breadcrumbJsonLd).replace(/</g, "\u003c"),
         }}
       />
 
@@ -1758,7 +2132,7 @@ export default async function SakanSeoPage({
           type="application/ld+json"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(faqJsonLd).replace(/</g, '\u003c'),
+            __html: JSON.stringify(faqJsonLd).replace(/</g, "\u003c"),
           }}
         />
       )}
@@ -3109,7 +3483,7 @@ export default async function SakanSeoPage({
                   >
                     {item.label}
                   </Link>
-                )
+                ),
               )}
             </div>
           </div>
@@ -3121,10 +3495,16 @@ export default async function SakanSeoPage({
           <SortDropdown
             isArabic={isArabic}
             selectedSort={selectedSort}
+            showSeasonFilter
             sortByLabel={t.sortBy}
+            seasonLabel={t.season}
+            summerCourseLabel={t.summerCourse}
+            academicYearLabel={t.academicYear}
             amenitiesLabel={t.amenities}
             options={sortOptions}
             amenities={(amenities as Amenity[]) ?? []}
+            selectedCurrency={selectedCurrency}
+            currencyRate={currencyRate}
           />
         </div>
 
@@ -3135,9 +3515,9 @@ export default async function SakanSeoPage({
             universities={(universities as University[]) ?? []}
             areas={(areas as PropertyArea[]) ?? []}
             universityAreas={(universityAreas as UniversityArea[]) ?? []}
-            initialCityId={params.city_id ?? ''}
-            initialUniversityId={params.university_id ?? ''}
-            initialAreaId={params.area_id ?? ''}
+            initialCityId={params.city_id ?? ""}
+            initialUniversityId={params.university_id ?? ""}
+            initialAreaId={params.area_id ?? ""}
             language={selectedLanguage}
             currency={selectedCurrency}
             currentPath={buildAlertReturnTo()}
@@ -3150,15 +3530,21 @@ export default async function SakanSeoPage({
           <>
             <MobileSearchMapSheet
               properties={mapProperties}
-              feeLabel={isArabic ? 'الأسعار تشمل كل الرسوم' : 'Prices include all fees'}
+              feeLabel={
+                isArabic ? "الأسعار تشمل كل الرسوم" : "Prices include all fees"
+              }
               homesLabel={mobileMapHomesLabel}
             >
-              <div dir={isArabic ? 'rtl' : 'ltr'}>
+              <div dir={isArabic ? "rtl" : "ltr"}>
                 <div className="grid grid-cols-1 gap-6">
-                  {sortedProperties.map((property) => renderPropertyCard(property))}
+                  {sortedProperties.map((property) =>
+                    renderPropertyCard(property),
+                  )}
                 </div>
 
-                {renderPagination('pb-[calc(env(safe-area-inset-bottom,0px)+128px)]')}
+                {renderPagination(
+                  "pb-[calc(env(safe-area-inset-bottom,0px)+128px)]",
+                )}
               </div>
             </MobileSearchMapSheet>
 
@@ -3166,9 +3552,11 @@ export default async function SakanSeoPage({
               className="hidden grid-cols-1 gap-8 lg:grid lg:grid-cols-[minmax(0,52%)_minmax(420px,48%)]"
               dir="ltr"
             >
-              <div dir={isArabic ? 'rtl' : 'ltr'}>
+              <div dir={isArabic ? "rtl" : "ltr"}>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  {sortedProperties.map((property) => renderPropertyCard(property))}
+                  {sortedProperties.map((property) =>
+                    renderPropertyCard(property),
+                  )}
                 </div>
 
                 {renderPagination()}
@@ -3188,7 +3576,10 @@ export default async function SakanSeoPage({
         )}
       </section>
 
-      <section className="mx-auto hidden max-w-5xl px-4 pb-12 md:block md:px-6 lg:px-8" dir="rtl">
+      <section
+        className="mx-auto hidden max-w-5xl px-4 pb-12 md:block md:px-6 lg:px-8"
+        dir="rtl"
+      >
         <div className="rounded-[32px] border border-slate-200 bg-slate-50 p-8 dark:border-white/10 dark:bg-[#0b1220]">
           <h1 className="text-2xl font-extrabold tracking-[-0.03em] text-slate-950 dark:text-white">
             {seoH1}
@@ -3281,7 +3672,7 @@ export default async function SakanSeoPage({
           </Link>
 
           <Link
-            href={buildSimpleNavLink('/community')}
+            href={buildSimpleNavLink("/community")}
             className="mobile-bottom-nav__item"
           >
             <img
@@ -3323,5 +3714,5 @@ export default async function SakanSeoPage({
         </div>
       </nav>
     </main>
-  )
+  );
 }

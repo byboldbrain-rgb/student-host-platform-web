@@ -23,7 +23,7 @@ const SITE_URL = 'https://navienty.com'
 export const metadata: Metadata = {
   title: 'سكن طلاب قريب من الجامعة بدون عمولة',
   description:
-    'اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع حسب المدينة أو الجامعة أو المنطقة، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.',
+    'اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع حسب المدينة أو المنطقة، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.',
   alternates: {
     canonical: `${SITE_URL}/properties`,
   },
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Navienty - سكن طلاب قريب من الجامعة بدون عمولة',
     description:
-      'قارن أماكن السكن الطلابي حسب الجامعة والمدينة والمنطقة، شاهد الصور والأسعار، وتواصل مباشرة مع المضيف بدون عمولة.',
+      'قارن أماكن السكن الطلابي حسب المدينة والمنطقة، شاهد الصور والأسعار، وتواصل مباشرة مع المضيف بدون عمولة.',
     url: `${SITE_URL}/properties`,
     siteName: 'Navienty',
     locale: 'ar_EG',
@@ -623,7 +623,7 @@ export default async function PropertiesPage({
     '@type': 'CollectionPage',
     name: 'سكن طلاب قريب من الجامعة بدون عمولة',
     description:
-      'صفحة بحث ومقارنة أماكن السكن الطلابي على Navienty حسب المدينة والجامعة والمنطقة والأسعار.',
+      'صفحة بحث ومقارنة أماكن السكن الطلابي على Navienty حسب المدينة والمنطقة والأسعار.',
     url: `${SITE_URL}/properties`,
     inLanguage: 'ar-EG',
     isPartOf: {
@@ -983,6 +983,7 @@ export default async function PropertiesPage({
     initialPriceRange: price_range ?? '',
     language: selectedLanguage,
     currency: selectedCurrency,
+    locationMode: 'city-area' as const,
     labels: {
       city: t.city,
       university: t.university,

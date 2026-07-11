@@ -35,12 +35,16 @@ type SearchParams = {
   university_id?: string;
   area_id?: string;
   price_range?: string;
+  min_price?: string;
+  max_price?: string;
+  floor?: string;
   lang?: string;
   currency?: string;
   page?: string;
   sort?: string;
   gender?: string;
   amenity_ids?: string;
+  season?: string;
   alert?: string;
 };
 
@@ -99,7 +103,18 @@ type PropertyImage = {
   sort_order?: number | null;
 };
 
+type PricingSeasonCode = "summer_course" | "academic_year";
+
+type PropertySeasonalPriceRow = {
+  property_id?: string | number | null;
+  sellable_option_id?: string | null;
+  room_sellable_option_id?: string | null;
+  price_egp?: number | string | null;
+  is_active?: boolean | null;
+};
+
 type PropertySellableOption = {
+  id?: string | null;
   code?: string | null;
   option_code?: string | null;
   price_egp?: number | null;
@@ -108,6 +123,7 @@ type PropertySellableOption = {
 };
 
 type PropertyRoomSellableOption = {
+  id?: string | null;
   code?: string | null;
   price_egp?: number | null;
   is_active?: boolean | null;
@@ -141,6 +157,7 @@ type Property = {
   city_id?: string | number | null;
   university_id?: string | number | null;
   area_id?: string | number | null;
+  floor_number?: number | string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   created_at?: string | null;
@@ -151,6 +168,7 @@ type Property = {
   property_images?: PropertyImage[] | null;
   property_sellable_options?: PropertySellableOption[] | null;
   property_rooms?: PropertyRoom[] | null;
+  selected_season_prices?: number[] | null;
 };
 
 const SUPPORTED_CURRENCIES = [
@@ -187,21 +205,12 @@ type MenuFooterLink = {
   isEmail?: boolean;
 };
 
-const PRICE_PRIORITY = [
-  "triple_room",
-  "double_room",
-  "single_room",
-  "full_apartment",
-] as const;
-
 const FILTER_AMENITY_IDS = [
   "75f3d5b8-647d-4229-8c05-695ac765952b",
   "a732f6a4-cf50-4de1-b2db-5df5dc47e2c1",
   "f5ab16f9-5941-4ebe-96a0-47f19dbe7f05",
   "945a09ce-c3f3-4fb3-a0fd-7c33c939343a",
 ];
-
-type PricePriorityCode = (typeof PRICE_PRIORITY)[number];
 
 const TRANSLATIONS = {
   en: {
@@ -242,6 +251,9 @@ const TRANSLATIONS = {
     alertError:
       "Something went wrong while saving your request. Please try again.",
     sortBy: "Sort By",
+    season: "Stay period",
+    summerCourse: "Summer Course",
+    academicYear: "New Academic Year",
     amenities: "Amenities",
     newlyListed: "Newly listed",
     lowestPrice: "Lowest price",
@@ -307,6 +319,9 @@ const TRANSLATIONS = {
       "تم تسجيل طلبك بنجاح. أول ما ينزل سكن مناسب هنبلغك على واتساب.",
     alertError: "حصل خطأ أثناء تسجيل طلبك. حاول مرة تانية.",
     sortBy: "ترتيب حسب",
+    season: "فترة السكن",
+    summerCourse: "السمر كورس",
+    academicYear: "السنة الجديدة",
     amenities: "المميزات",
     newlyListed: "الأحدث",
     lowestPrice: "الأقل سعرًا",
@@ -351,6 +366,14 @@ function normalizeSort(value?: string): SupportedSort {
   if (value === "lowest_price") return "lowest_price";
   if (value === "highest_price") return "highest_price";
   return "newly_listed";
+}
+
+function normalizePricingSeason(
+  value?: string | null,
+): PricingSeasonCode | null {
+  if (value === "summer_course") return "summer_course";
+  if (value === "academic_year") return "academic_year";
+  return null;
 }
 
 function normalizeSelectedGender(
@@ -478,73 +501,136 @@ function getCreatedAtTime(value?: string | null) {
   return Number.isFinite(time) ? time : 0;
 }
 
-function normalizeOptionCode(value?: string | null) {
-  return value
-    ?.toLowerCase()
-    .trim()
-    .replace(/[-\s]+/g, "_");
-}
+type PriceSortDirection = "ascending" | "descending";
 
-function getOptionPriority(code?: string | null) {
-  const normalizedCode = normalizeOptionCode(code);
-  const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode);
+function normalizePositivePrice(value: unknown): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    typeof value === "boolean"
+  ) {
+    return null;
+  }
 
-  return index === -1 ? Number.POSITIVE_INFINITY : index;
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+
+  return parsedValue;
 }
 
 function isUsablePriceOption(option: {
-  code?: string | null;
-  option_code?: string | null;
-  price_egp?: number | null;
+  price_egp?: number | string | null;
   is_active?: boolean | null;
   deleted_at?: string | null;
 }) {
-  const code = normalizeOptionCode(option.option_code || option.code);
-  const price = Number(option.price_egp);
-
   return (
-    !!code &&
-    PRICE_PRIORITY.includes(code as PricePriorityCode) &&
     option.is_active !== false &&
     !option.deleted_at &&
-    Number.isFinite(price) &&
-    price >= 0
+    normalizePositivePrice(option.price_egp) !== null
   );
 }
 
-function getDisplayPriceEgp(property: Property) {
-  const propertyOptions =
-    property.property_sellable_options?.map((option) => ({
-      code: option.option_code || option.code,
-      price_egp: option.price_egp,
-      is_active: option.is_active,
-      deleted_at: option.deleted_at,
-    })) ?? [];
+function getDisplayPriceEgp(property: Property): number {
+  const selectedSeasonPrices =
+    property.selected_season_prices
+      ?.map((price) => normalizePositivePrice(price))
+      .filter((price): price is number => price !== null) ?? [];
 
-  const roomOptions =
+  if (selectedSeasonPrices.length > 0) {
+    return Math.min(...selectedSeasonPrices);
+  }
+
+  const propertyOptionPrices =
+    property.property_sellable_options
+      ?.filter(isUsablePriceOption)
+      .map((option) => normalizePositivePrice(option.price_egp))
+      .filter((price): price is number => price !== null) ?? [];
+
+  const roomOptionPrices =
     property.property_rooms
       ?.filter((room) => room.is_active !== false && !room.deleted_at)
       .flatMap((room) =>
-        (room.property_room_sellable_options ?? []).map((option) => ({
-          code: option.code,
-          price_egp: option.price_egp,
-          is_active: option.is_active,
-          deleted_at: option.deleted_at,
-        })),
+        (room.property_room_sellable_options ?? [])
+          .filter(isUsablePriceOption)
+          .map((option) => normalizePositivePrice(option.price_egp))
+          .filter((price): price is number => price !== null),
       ) ?? [];
 
-  const matchedOption = [...propertyOptions, ...roomOptions]
-    .filter(isUsablePriceOption)
-    .sort((a, b) => {
-      const priorityDiff =
-        getOptionPriority(a.code) - getOptionPriority(b.code);
+  const availableOptionPrices = [...propertyOptionPrices, ...roomOptionPrices];
 
-      if (priorityDiff !== 0) return priorityDiff;
+  /*
+    سعر الكارت والـSort لازم يكون أقل سعر متاح فعليًا داخل العقار.
+    بهذا الشكل السعر الظاهر على الكارت هو نفسه السعر المستخدم في الترتيب.
+  */
+  if (availableOptionPrices.length > 0) {
+    return Math.min(...availableOptionPrices);
+  }
 
-      return Number(a.price_egp) - Number(b.price_egp);
-    })[0];
+  return normalizePositivePrice(property.price_egp) ?? 0;
+}
 
-  return matchedOption?.price_egp ?? property.price_egp;
+function getSortablePropertyPrice(property: Property): number | null {
+  return normalizePositivePrice(getDisplayPriceEgp(property));
+}
+
+function comparePrices(
+  aPrice: number | null,
+  bPrice: number | null,
+  direction: PriceSortDirection,
+) {
+  /*
+    أي عقار بدون سعر صالح يظل في نهاية النتائج،
+    سواء كان الترتيب من الأقل أو من الأعلى.
+  */
+  if (aPrice === null && bPrice === null) return 0;
+  if (aPrice === null) return 1;
+  if (bPrice === null) return -1;
+
+  return direction === "ascending" ? aPrice - bPrice : bPrice - aPrice;
+}
+
+function comparePropertyTieBreakers(a: Property, b: Property) {
+  /*
+    العوامل التالية لا تعمل إلا عندما يكون سعر العقارين متساويًا.
+  */
+  const availabilityDifference =
+    getAvailabilityRank(a.availability_status) -
+    getAvailabilityRank(b.availability_status);
+
+  if (availabilityDifference !== 0) {
+    return availabilityDifference;
+  }
+
+  const aFeatured = isPropertyFeatured(a);
+  const bFeatured = isPropertyFeatured(b);
+
+  if (aFeatured !== bFeatured) {
+    return aFeatured ? -1 : 1;
+  }
+
+  if (aFeatured && bFeatured) {
+    const featuredRankDifference =
+      Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0);
+
+    if (featuredRankDifference !== 0) {
+      return featuredRankDifference;
+    }
+  }
+
+  const createdAtDifference =
+    getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at);
+
+  if (createdAtDifference !== 0) {
+    return createdAtDifference;
+  }
+
+  return String(a.property_id || a.id).localeCompare(
+    String(b.property_id || b.id),
+  );
 }
 
 async function getCurrencyRate(currency: SupportedCurrency) {
@@ -622,6 +708,46 @@ function normalizeAmenityIds(value?: string) {
         .filter(Boolean),
     ),
   );
+}
+
+function normalizeNonNegativeFilterNumber(value?: string | null) {
+  if (value === null || value === undefined || value.trim() === "") {
+    return null;
+  }
+
+  const normalizedValue = Number(value);
+
+  if (!Number.isFinite(normalizedValue) || normalizedValue < 0) {
+    return null;
+  }
+
+  return normalizedValue;
+}
+
+function normalizeFloorFilter(value?: string | null) {
+  const normalizedValue = normalizeNonNegativeFilterNumber(value);
+
+  if (normalizedValue === null || !Number.isInteger(normalizedValue)) {
+    return null;
+  }
+
+  return normalizedValue;
+}
+
+function normalizePriceFilterBounds(
+  minimumValue?: string | null,
+  maximumValue?: string | null,
+) {
+  const minimumPrice = normalizeNonNegativeFilterNumber(minimumValue);
+  const maximumPrice = normalizeNonNegativeFilterNumber(maximumValue);
+
+  if (minimumPrice !== null && maximumPrice !== null) {
+    return minimumPrice <= maximumPrice
+      ? { minimumPrice, maximumPrice }
+      : { minimumPrice: maximumPrice, maximumPrice: minimumPrice };
+  }
+
+  return { minimumPrice, maximumPrice };
 }
 
 function buildVisiblePages(currentPage: number, totalPages: number) {
@@ -818,14 +944,22 @@ export default async function SearchResultsPage({
   const selectedLanguage = normalizeLanguage(params.lang);
   const selectedCurrency = normalizeCurrency(params.currency);
   const selectedSort = normalizeSort(params.sort);
+  const selectedSeason = normalizePricingSeason(params.season);
   const selectedGender = normalizeSelectedGender(params.gender, params.sort);
   const selectedAmenityIds = normalizeAmenityIds(params.amenity_ids);
+  const selectedPriceBounds = normalizePriceFilterBounds(
+    params.min_price,
+    params.max_price,
+  );
+  const selectedMinimumPriceEgp = selectedPriceBounds.minimumPrice;
+  const selectedMaximumPriceEgp = selectedPriceBounds.maximumPrice;
+  const selectedFloor = normalizeFloorFilter(params.floor);
   const t = TRANSLATIONS[selectedLanguage];
   const isArabic = selectedLanguage === "ar";
   const currencyRate = await getCurrencyRate(selectedCurrency);
 
   // أقل عدد كروت على الصفحة = Scroll أخف على الموبايل
-  const PAGE_SIZE = 8;
+  const PAGE_SIZE = 24;
 
   const currentPage = Math.max(1, Number.parseInt(params.page || "1", 10) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
@@ -913,6 +1047,7 @@ export default async function SearchResultsPage({
       city_id,
       university_id,
       area_id,
+      floor_number,
       latitude,
       longitude,
       created_at,
@@ -928,6 +1063,7 @@ export default async function SearchResultsPage({
         sort_order
       ),
       property_sellable_options(
+        id,
         code,
         option_code,
         price_egp,
@@ -938,6 +1074,7 @@ export default async function SearchResultsPage({
         is_active,
         deleted_at,
         property_room_sellable_options(
+          id,
           code,
           price_egp,
           is_active,
@@ -961,6 +1098,10 @@ export default async function SearchResultsPage({
 
   if (params.area_id) query = query.eq("area_id", params.area_id);
 
+  if (selectedFloor !== null) {
+    query = query.eq("floor_number", selectedFloor);
+  }
+
   if (params.rental_duration) {
     query = query.eq("rental_duration", params.rental_duration);
   }
@@ -980,42 +1121,266 @@ export default async function SearchResultsPage({
 
   const { data: properties } = await query;
 
-  const allSortedProperties = ((properties as Property[]) ?? []).sort(
-    (a, b) => {
-      const aFeatured = isPropertyFeatured(a);
-      const bFeatured = isPropertyFeatured(b);
+  const loadedProperties = (properties as Property[]) ?? [];
+  let propertiesForFiltering = loadedProperties;
 
-      if (aFeatured !== bFeatured) {
-        return aFeatured ? -1 : 1;
+  /*
+    عند اختيار فترة السكن، نحاول تحميل الأسعار الموسمية واستخدامها
+    في الكارت والخريطة وفلتر السعر والترتيب.
+
+    لو قراءة جداول المواسم فشلت بسبب RLS أو لم توجد بيانات قابلة للقراءة،
+    لا نخفي كل العقارات؛ نرجع للأسعار الأساسية بدل ظهور صفحة فارغة.
+  */
+  if (selectedSeason) {
+    const { data: selectedPricingSeasons, error: pricingSeasonsError } =
+      await supabase
+        .from("property_pricing_seasons")
+        .select("id, code, is_active")
+        .eq("code", selectedSeason)
+        .eq("is_active", true);
+
+    if (pricingSeasonsError) {
+      console.error(
+        "Failed to load selected pricing seasons:",
+        pricingSeasonsError.message,
+      );
+    }
+
+    const selectedSeasonIds = Array.from(
+      new Set(
+        ((selectedPricingSeasons as { id?: string | null }[]) ?? [])
+          .map((season) => String(season.id ?? "").trim())
+          .filter(Boolean),
+      ),
+    );
+
+    const propertyIds = loadedProperties.map((property) => String(property.id));
+    let selectedSeasonalPriceRows: PropertySeasonalPriceRow[] = [];
+    let seasonalPricesReadSucceeded = false;
+
+    if (
+      !pricingSeasonsError &&
+      selectedSeasonIds.length > 0 &&
+      propertyIds.length > 0
+    ) {
+      const { data: seasonalPriceRows, error: seasonalPricesError } =
+        await supabase
+          .from("property_option_seasonal_prices")
+          .select(
+            "property_id, sellable_option_id, room_sellable_option_id, price_egp, is_active",
+          )
+          .in("season_id", selectedSeasonIds)
+          .eq("is_active", true)
+          .in("property_id", propertyIds);
+
+      if (seasonalPricesError) {
+        console.error(
+          "Failed to load seasonal property prices:",
+          seasonalPricesError.message,
+        );
+      } else {
+        seasonalPricesReadSucceeded = true;
+        selectedSeasonalPriceRows =
+          (seasonalPriceRows as PropertySeasonalPriceRow[]) ?? [];
+      }
+    }
+
+    const activePropertyOptionIdsByPropertyId = new Map<string, Set<string>>();
+    const activeRoomOptionIdsByPropertyId = new Map<string, Set<string>>();
+
+    for (const property of loadedProperties) {
+      const propertyId = String(property.id);
+      const activePropertyOptionIds = new Set(
+        (property.property_sellable_options ?? [])
+          .filter((option) => option.is_active !== false && !option.deleted_at)
+          .map((option) => String(option.id ?? "").trim())
+          .filter(Boolean),
+      );
+      const activeRoomOptionIds = new Set(
+        (property.property_rooms ?? [])
+          .filter((room) => room.is_active !== false && !room.deleted_at)
+          .flatMap((room) => room.property_room_sellable_options ?? [])
+          .filter((option) => option.is_active !== false && !option.deleted_at)
+          .map((option) => String(option.id ?? "").trim())
+          .filter(Boolean),
+      );
+
+      activePropertyOptionIdsByPropertyId.set(
+        propertyId,
+        activePropertyOptionIds,
+      );
+      activeRoomOptionIdsByPropertyId.set(propertyId, activeRoomOptionIds);
+    }
+
+    const seasonalPricesByPropertyId = new Map<string, number[]>();
+
+    for (const row of selectedSeasonalPriceRows) {
+      if (!row.property_id || row.is_active === false) continue;
+
+      const propertyId = String(row.property_id);
+      const price = normalizePositivePrice(row.price_egp);
+      if (price === null) continue;
+
+      const propertyOptionId = String(row.sellable_option_id ?? "").trim();
+      const roomOptionId = String(row.room_sellable_option_id ?? "").trim();
+
+      const hasNoOptionLink = !propertyOptionId && !roomOptionId;
+      const belongsToActivePropertyOption = Boolean(
+        propertyOptionId &&
+        activePropertyOptionIdsByPropertyId
+          .get(propertyId)
+          ?.has(propertyOptionId),
+      );
+      const belongsToActiveRoomOption = Boolean(
+        roomOptionId &&
+        activeRoomOptionIdsByPropertyId.get(propertyId)?.has(roomOptionId),
+      );
+
+      /*
+        نقبل السعر إذا كان مرتبطًا بخيار فعال، أو كان من بيانات قديمة
+        مرتبطة بالعقار مباشرة من غير option id.
+      */
+      if (
+        !hasNoOptionLink &&
+        !belongsToActivePropertyOption &&
+        !belongsToActiveRoomOption
+      ) {
+        continue;
       }
 
-      if (aFeatured && bFeatured) {
-        const featuredRankDiff =
-          Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0);
+      const currentPrices = seasonalPricesByPropertyId.get(propertyId) ?? [];
+      currentPrices.push(price);
+      seasonalPricesByPropertyId.set(propertyId, currentPrices);
+    }
 
-        if (featuredRankDiff !== 0) return featuredRankDiff;
+    if (seasonalPricesByPropertyId.size > 0) {
+      propertiesForFiltering = loadedProperties
+        .map((property) => ({
+          ...property,
+          selected_season_prices:
+            seasonalPricesByPropertyId.get(String(property.id)) ?? [],
+        }))
+        .filter(
+          (property) => (property.selected_season_prices?.length ?? 0) > 0,
+        );
+    } else {
+      if (selectedSeasonIds.length === 0) {
+        console.warn(
+          `No active pricing season found for code: ${selectedSeason}`,
+        );
+      } else if (seasonalPricesReadSucceeded) {
+        console.warn(
+          `No readable seasonal prices found for season: ${selectedSeason}`,
+        );
       }
 
-      const availabilityDiff =
-        getAvailabilityRank(a.availability_status) -
-        getAvailabilityRank(b.availability_status);
+      propertiesForFiltering = loadedProperties;
+    }
+  }
 
-      if (availabilityDiff !== 0) return availabilityDiff;
+  /*
+    فلتر السعر يتم بعد جلب خيارات العقار والغرف، لأن السعر الصحيح
+    هو نفس أقل سعر فعلي ظاهر على الكارت وليس properties.price_egp فقط.
+  */
+  const priceFilteredProperties = propertiesForFiltering.filter((property) => {
+    if (selectedMinimumPriceEgp === null && selectedMaximumPriceEgp === null) {
+      return true;
+    }
 
-      const aDisplayPrice = getDisplayPriceEgp(a);
-      const bDisplayPrice = getDisplayPriceEgp(b);
+    const propertyPrice = getSortablePropertyPrice(property);
 
-      if (selectedSort === "lowest_price") {
-        return aDisplayPrice - bDisplayPrice;
+    if (propertyPrice === null) {
+      return false;
+    }
+
+    if (
+      selectedMinimumPriceEgp !== null &&
+      propertyPrice < selectedMinimumPriceEgp
+    ) {
+      return false;
+    }
+
+    if (
+      selectedMaximumPriceEgp !== null &&
+      propertyPrice > selectedMaximumPriceEgp
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const allSortedProperties = [...priceFilteredProperties].sort((a, b) => {
+    const aDisplayPrice = getSortablePropertyPrice(a);
+    const bDisplayPrice = getSortablePropertyPrice(b);
+
+    /*
+      عند اختيار ترتيب السعر، السعر نفسه هو العامل الأساسي.
+      الـFeatured وحالة الإتاحة لا يسبقان السعر حتى لا تظهر نتائج خاطئة.
+    */
+    if (selectedSort === "lowest_price") {
+      const priceDifference = comparePrices(
+        aDisplayPrice,
+        bDisplayPrice,
+        "ascending",
+      );
+
+      if (priceDifference !== 0) return priceDifference;
+
+      return comparePropertyTieBreakers(a, b);
+    }
+
+    if (selectedSort === "highest_price") {
+      const priceDifference = comparePrices(
+        aDisplayPrice,
+        bDisplayPrice,
+        "descending",
+      );
+
+      if (priceDifference !== 0) return priceDifference;
+
+      return comparePropertyTieBreakers(a, b);
+    }
+
+    /*
+      في ترتيب الأحدث نحافظ على أولوية العقارات المميزة،
+      ثم حالة الإتاحة، ثم تاريخ الإضافة.
+    */
+    const aFeatured = isPropertyFeatured(a);
+    const bFeatured = isPropertyFeatured(b);
+
+    if (aFeatured !== bFeatured) {
+      return aFeatured ? -1 : 1;
+    }
+
+    if (aFeatured && bFeatured) {
+      const featuredRankDifference =
+        Number(b.featured_rank ?? 0) - Number(a.featured_rank ?? 0);
+
+      if (featuredRankDifference !== 0) {
+        return featuredRankDifference;
       }
+    }
 
-      if (selectedSort === "highest_price") {
-        return bDisplayPrice - aDisplayPrice;
-      }
+    const availabilityDifference =
+      getAvailabilityRank(a.availability_status) -
+      getAvailabilityRank(b.availability_status);
 
-      return getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at);
-    },
-  );
+    if (availabilityDifference !== 0) {
+      return availabilityDifference;
+    }
+
+    const createdAtDifference =
+      getCreatedAtTime(b.created_at) - getCreatedAtTime(a.created_at);
+
+    if (createdAtDifference !== 0) {
+      return createdAtDifference;
+    }
+
+    return String(a.property_id || a.id).localeCompare(
+      String(b.property_id || b.id),
+    );
+  });
 
   const sortedProperties = allSortedProperties.slice(from, to);
   const count = allSortedProperties.length;
@@ -1047,6 +1412,11 @@ export default async function SearchResultsPage({
     const p = new URLSearchParams();
     p.set("lang", selectedLanguage);
     p.set("currency", selectedCurrency);
+
+    if (selectedSeason) {
+      p.set("season", selectedSeason);
+    }
+
     return `/properties/${propertyId}?${p.toString()}`;
   };
 
@@ -1203,6 +1573,7 @@ export default async function SearchResultsPage({
     initialPriceRange: params.price_range ?? "",
     language: selectedLanguage,
     currency: selectedCurrency,
+    locationMode: "city-area" as const,
     labels: {
       city: t.city,
       university: t.university,
@@ -1254,10 +1625,16 @@ export default async function SearchResultsPage({
       <SortDropdown
         isArabic={isArabic}
         selectedSort={selectedSort}
+        showSeasonFilter
         sortByLabel={t.sortBy}
+        seasonLabel={t.season}
+        summerCourseLabel={t.summerCourse}
+        academicYearLabel={t.academicYear}
         amenitiesLabel={t.amenities}
         options={sortOptions}
         amenities={(amenities as Amenity[]) ?? []}
+        selectedCurrency={selectedCurrency}
+        currencyRate={currencyRate}
       />
     ),
     mobileSearchBarClassName: "mt-0",
@@ -2910,10 +3287,16 @@ export default async function SearchResultsPage({
           <SortDropdown
             isArabic={isArabic}
             selectedSort={selectedSort}
+            showSeasonFilter
             sortByLabel={t.sortBy}
+            seasonLabel={t.season}
+            summerCourseLabel={t.summerCourse}
+            academicYearLabel={t.academicYear}
             amenitiesLabel={t.amenities}
             options={sortOptions}
             amenities={(amenities as Amenity[]) ?? []}
+            selectedCurrency={selectedCurrency}
+            currencyRate={currencyRate}
           />
         </div>
 

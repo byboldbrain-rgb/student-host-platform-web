@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         greeting: [
           {
             locale: 'default',
-            text: 'أهلاً بيك في Navienty 👋\nاختار المناسب ليك وهنساعدك فورًا',
+            text: 'أهلاً بيك في Navienty \nاختار المناسب ليك وهنساعدك فورًا',
           },
         ],
         ice_breakers: [

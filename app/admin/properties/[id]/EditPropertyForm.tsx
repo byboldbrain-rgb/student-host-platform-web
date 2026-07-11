@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import {
   createPropertyImageUploadSignedUrlAction,
+  createPropertyVideoUploadSignedUrlAction,
   updatePropertyAction,
 } from './actions'
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
@@ -81,11 +82,36 @@ type PropertyImage = {
   sort_order: number
 }
 
+type PropertyVideo = {
+  id: string
+  video_url: string
+  storage_path?: string | null
+  file_mime_type?: string | null
+  file_size_bytes?: number | null
+  duration_seconds?: number | null
+  sort_order?: number | null
+  is_active?: boolean | null
+}
+
 type RoomBed = {
   id: string
   status: 'available' | 'reserved' | 'occupied' | 'maintenance' | 'inactive'
   price_egp?: number | null
 }
+
+type PricingSeasonCode = 'summer_course' | 'academic_year'
+
+type SeasonalPriceRow = {
+  id?: string
+  season_id?: string | null
+  price_egp?: number | string | null
+  is_active?: boolean | null
+  property_pricing_seasons?: {
+    code?: PricingSeasonCode | string | null
+  } | null
+}
+
+type SeasonalPriceMap = Partial<Record<PricingSeasonCode, number | string | null>>
 
 type RoomSellableOption = {
   id: string
@@ -99,11 +125,13 @@ type RoomSellableOption = {
   name_ar?: string | null
   occupancy_size?: number | null
   pricing_mode?: 'per_person' | 'per_room' | null
-  price_egp?: number | null
+  price_egp?: number | string | null
   consumes_beds_count?: number | null
   is_exclusive?: boolean | null
   is_active?: boolean | null
   sort_order?: number | null
+  seasonal_prices?: SeasonalPriceMap | null
+  property_option_seasonal_prices?: SeasonalPriceRow[] | null
 }
 
 type PropertyRoom = {
@@ -131,6 +159,8 @@ type Property = {
   broker_id: string
   owner_id: string | null
   price_egp: number
+  seasonal_prices?: SeasonalPriceMap | null
+  property_option_seasonal_prices?: SeasonalPriceRow[] | null
   rental_duration: 'daily' | 'monthly'
   availability_status: 'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
   address_en: string | null
@@ -184,12 +214,18 @@ type RoomForm = {
   single_room_option_id: string
   single_room_enabled: boolean
   single_room_price_egp: string
+  single_room_summer_course_price_egp: string
+  single_room_academic_year_price_egp: string
   double_room_option_id: string
   double_room_enabled: boolean
   double_room_price_egp: string
+  double_room_summer_course_price_egp: string
+  double_room_academic_year_price_egp: string
   triple_room_option_id: string
   triple_room_enabled: boolean
   triple_room_price_egp: string
+  triple_room_summer_course_price_egp: string
+  triple_room_academic_year_price_egp: string
 }
 
 type ImageFileItem = {
@@ -207,6 +243,7 @@ type Props = {
   facilities: Facility[]
   billTypes: BillType[]
   images: PropertyImage[]
+  video?: PropertyVideo | null
   selectedAmenityIds: string[]
   selectedFacilityIds: number[]
   selectedBillTypeIds: number[]
@@ -248,8 +285,17 @@ type SignedPropertyImageUpload = {
   token: string
 }
 
+type SignedPropertyVideoUpload = {
+  video_url: string
+  storage_path: string
+  token: string
+}
+
 const PROPERTY_IMAGES_BUCKET = 'property-images'
+const PROPERTY_VIDEOS_BUCKET = 'property-videos'
 const PROPERTY_IMAGE_UPLOAD_BATCH_SIZE = 4
+const MAX_PROPERTY_VIDEO_BYTES = 200 * 1024 * 1024
+const ALLOWED_PROPERTY_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov']
 
 function getBrowserSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -262,6 +308,43 @@ function getBrowserSupabaseClient() {
   }
 
   return createClient(supabaseUrl, supabaseAnonKey)
+}
+
+
+function formatFileSize(bytes?: number | null) {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return 'Unknown size'
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`
+}
+
+function getVideoContentType(file: File) {
+  if (file.type) return file.type
+
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  if (extension === 'webm') return 'video/webm'
+  if (extension === 'mov') return 'video/quicktime'
+  return 'video/mp4'
+}
+
+function getVideoValidationMessage(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  const allowedMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime']
+  const hasAllowedType =
+    allowedMimeTypes.includes(file.type.toLowerCase()) ||
+    ALLOWED_PROPERTY_VIDEO_EXTENSIONS.includes(extension)
+
+  if (!hasAllowedType) {
+    return 'Only MP4, WebM, and MOV videos are allowed.'
+  }
+
+  if (file.size <= 0) {
+    return 'The selected video file is empty.'
+  }
+
+  if (file.size > MAX_PROPERTY_VIDEO_BYTES) {
+    return 'The property video must be smaller than 200 MB.'
+  }
+
+  return ''
 }
 
 const FORM_STEPS = [
@@ -295,12 +378,18 @@ const initialRoom: RoomForm = {
   single_room_option_id: '',
   single_room_enabled: false,
   single_room_price_egp: '',
+  single_room_summer_course_price_egp: '',
+  single_room_academic_year_price_egp: '',
   double_room_option_id: '',
   double_room_enabled: false,
   double_room_price_egp: '',
+  double_room_summer_course_price_egp: '',
+  double_room_academic_year_price_egp: '',
   triple_room_option_id: '',
   triple_room_enabled: false,
   triple_room_price_egp: '',
+  triple_room_summer_course_price_egp: '',
+  triple_room_academic_year_price_egp: '',
 }
 
 function normalizeNumberString(value: string) {
@@ -393,12 +482,7 @@ function ownerMatchesLocation(owner: Owner, cityId: string, universityId: string
 }
 
 function normalizeRoomNumberFieldIfNeeded(field: keyof RoomForm, value: string) {
-  if (
-    field === 'beds_count' ||
-    field === 'single_room_price_egp' ||
-    field === 'double_room_price_egp' ||
-    field === 'triple_room_price_egp'
-  ) {
+  if (field === 'beds_count' || String(field).endsWith('_price_egp')) {
     return normalizeNumberString(value)
   }
 
@@ -418,6 +502,69 @@ function getRoomOptionPrice(
   )
 
   return option?.price_egp != null ? String(option.price_egp) : ''
+}
+
+function getActiveRoomSellableOption(
+  room: PropertyRoom,
+  code: 'single_room' | 'double_room' | 'triple_room'
+) {
+  const options = Array.isArray(room?.room_sellable_options)
+    ? room.room_sellable_options
+    : []
+
+  return (
+    options.find((item) => item.code === code && item.is_active !== false) || null
+  )
+}
+
+function getSeasonalPriceFromRows(
+  rows: SeasonalPriceRow[] | null | undefined,
+  seasonCode: PricingSeasonCode
+) {
+  if (!Array.isArray(rows)) return ''
+
+  const matchingRow = rows.find(
+    (row) =>
+      row?.is_active !== false &&
+      row?.property_pricing_seasons?.code === seasonCode &&
+      row?.price_egp != null
+  )
+
+  return matchingRow?.price_egp != null ? String(matchingRow.price_egp) : ''
+}
+
+function getRoomOptionSeasonalPrice(
+  room: PropertyRoom,
+  code: 'single_room' | 'double_room' | 'triple_room',
+  seasonCode: PricingSeasonCode
+) {
+  const option = getActiveRoomSellableOption(room, code)
+  const fallbackPrice = option?.price_egp != null ? String(option.price_egp) : ''
+
+  const mappedPrice = option?.seasonal_prices?.[seasonCode]
+  if (mappedPrice !== null && mappedPrice !== undefined && String(mappedPrice).trim()) {
+    return String(mappedPrice)
+  }
+
+  return (
+    getSeasonalPriceFromRows(option?.property_option_seasonal_prices, seasonCode) ||
+    fallbackPrice
+  )
+}
+
+function getPropertySeasonalPrice(
+  property: Property,
+  seasonCode: PricingSeasonCode
+) {
+  const mappedPrice = property.seasonal_prices?.[seasonCode]
+  if (mappedPrice !== null && mappedPrice !== undefined && String(mappedPrice).trim()) {
+    return String(mappedPrice)
+  }
+
+  return (
+    getSeasonalPriceFromRows(property.property_option_seasonal_prices, seasonCode) ||
+    String(property.price_egp || '')
+  )
 }
 
 function getRoomOptionEnabled(
@@ -446,19 +593,80 @@ function getRoomOptionId(
   return option?.id || ''
 }
 
+function getRoomSeasonalPriceValue(
+  room: RoomForm,
+  optionCode: RoomOptionCode,
+  seasonCode: PricingSeasonCode
+) {
+  if (optionCode === 'single_room') {
+    return seasonCode === 'summer_course'
+      ? room.single_room_summer_course_price_egp
+      : room.single_room_academic_year_price_egp
+  }
+
+  if (optionCode === 'double_room') {
+    return seasonCode === 'summer_course'
+      ? room.double_room_summer_course_price_egp
+      : room.double_room_academic_year_price_egp
+  }
+
+  return seasonCode === 'summer_course'
+    ? room.triple_room_summer_course_price_egp
+    : room.triple_room_academic_year_price_egp
+}
+
+function getRoomLegacyPriceValue(room: RoomForm, optionCode: RoomOptionCode) {
+  if (optionCode === 'single_room') return room.single_room_price_egp
+  if (optionCode === 'double_room') return room.double_room_price_egp
+  return room.triple_room_price_egp
+}
+
+function getRoomOptionBasePriceValue(room: RoomForm, optionCode: RoomOptionCode) {
+  const summerPrice = getRoomSeasonalPriceValue(room, optionCode, 'summer_course')
+  const academicYearPrice = getRoomSeasonalPriceValue(
+    room,
+    optionCode,
+    'academic_year'
+  )
+  const legacyPrice = getRoomLegacyPriceValue(room, optionCode)
+
+  if (isValidPrice(summerPrice)) return summerPrice
+  if (isValidPrice(academicYearPrice)) return academicYearPrice
+  return legacyPrice
+}
+
+function hasValidRoomOptionSeasonalPrices(
+  room: RoomForm,
+  optionCode: RoomOptionCode
+) {
+  return (
+    isValidPrice(getRoomSeasonalPriceValue(room, optionCode, 'summer_course')) &&
+    isValidPrice(getRoomSeasonalPriceValue(room, optionCode, 'academic_year'))
+  )
+}
+
 function getEnabledRoomOptions(room: RoomForm) {
   const options: EnabledRoomOption[] = []
 
-  if (room.single_room_enabled && isValidPrice(room.single_room_price_egp)) {
-    options.push({ code: 'single_room', price: room.single_room_price_egp })
+  if (room.single_room_enabled && hasValidRoomOptionSeasonalPrices(room, 'single_room')) {
+    options.push({
+      code: 'single_room',
+      price: getRoomOptionBasePriceValue(room, 'single_room'),
+    })
   }
 
-  if (room.double_room_enabled && isValidPrice(room.double_room_price_egp)) {
-    options.push({ code: 'double_room', price: room.double_room_price_egp })
+  if (room.double_room_enabled && hasValidRoomOptionSeasonalPrices(room, 'double_room')) {
+    options.push({
+      code: 'double_room',
+      price: getRoomOptionBasePriceValue(room, 'double_room'),
+    })
   }
 
-  if (room.triple_room_enabled && isValidPrice(room.triple_room_price_egp)) {
-    options.push({ code: 'triple_room', price: room.triple_room_price_egp })
+  if (room.triple_room_enabled && hasValidRoomOptionSeasonalPrices(room, 'triple_room')) {
+    options.push({
+      code: 'triple_room',
+      price: getRoomOptionBasePriceValue(room, 'triple_room'),
+    })
   }
 
   return options
@@ -483,21 +691,24 @@ function getRoomValidationMessage(room: RoomForm) {
 
   if (!enabledAnyOption) return 'Enable at least one booking option for this room.'
 
-  if (room.single_room_enabled && !isValidPrice(room.single_room_price_egp)) {
-    return 'Single Room price must be a valid value.'
+  if (
+    room.single_room_enabled &&
+    !hasValidRoomOptionSeasonalPrices(room, 'single_room')
+  ) {
+    return 'Single Room summer and academic year prices must be valid values.'
   }
 
   if (room.double_room_enabled) {
     if (bedsCount < 2) return 'Double Room requires at least 2 beds.'
-    if (!isValidPrice(room.double_room_price_egp)) {
-      return 'Double Room price must be a valid value.'
+    if (!hasValidRoomOptionSeasonalPrices(room, 'double_room')) {
+      return 'Double Room summer and academic year prices must be valid values.'
     }
   }
 
   if (room.triple_room_enabled) {
     if (bedsCount < 3) return 'Triple Room requires at least 3 beds.'
-    if (!isValidPrice(room.triple_room_price_egp)) {
-      return 'Triple Room price must be a valid value.'
+    if (!hasValidRoomOptionSeasonalPrices(room, 'triple_room')) {
+      return 'Triple Room summer and academic year prices must be valid values.'
     }
   }
 
@@ -587,9 +798,11 @@ function RoomOptionField({
   title,
   description,
   enabled,
-  price,
+  summerCoursePrice,
+  academicYearPrice,
   onToggle,
-  onPriceChange,
+  onSummerCoursePriceChange,
+  onAcademicYearPriceChange,
   inputClass,
   disabled = false,
   disabledReason,
@@ -597,9 +810,11 @@ function RoomOptionField({
   title: string
   description: string
   enabled: boolean
-  price: string
+  summerCoursePrice: string
+  academicYearPrice: string
   onToggle: (value: boolean) => void
-  onPriceChange: (value: string) => void
+  onSummerCoursePriceChange: (value: string) => void
+  onAcademicYearPriceChange: (value: string) => void
   inputClass: string
   disabled?: boolean
   disabledReason?: string
@@ -635,20 +850,38 @@ function RoomOptionField({
         <p className="mt-2 text-xs font-medium text-[#b45309]">{disabledReason}</p>
       )}
 
-      <div className="mt-4">
-        <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-          Price (EGP)
-        </label>
-        <input
-          type="number"
-          min="1"
-          step="any"
-          value={price}
-          onChange={(e) => onPriceChange(e.target.value)}
-          placeholder={`Price for ${title}`}
-          disabled={!enabled || disabled}
-          className={`${inputClass} disabled:cursor-not-allowed disabled:bg-[#f3f4f6]`}
-        />
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+            Summer Course Price (EGP)
+          </label>
+          <input
+            type="number"
+            min="1"
+            step="any"
+            value={summerCoursePrice}
+            onChange={(e) => onSummerCoursePriceChange(e.target.value)}
+            placeholder={`Summer price for ${title}`}
+            disabled={!enabled || disabled}
+            className={`${inputClass} disabled:cursor-not-allowed disabled:bg-[#f3f4f6]`}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
+            Academic Year Price (EGP)
+          </label>
+          <input
+            type="number"
+            min="1"
+            step="any"
+            value={academicYearPrice}
+            onChange={(e) => onAcademicYearPriceChange(e.target.value)}
+            placeholder={`Academic year price for ${title}`}
+            disabled={!enabled || disabled}
+            className={`${inputClass} disabled:cursor-not-allowed disabled:bg-[#f3f4f6]`}
+          />
+        </div>
       </div>
     </div>
   )
@@ -745,6 +978,7 @@ export default function EditPropertyForm({
   facilities = [],
   billTypes = [],
   images = [],
+  video = null,
   selectedAmenityIds = [],
   selectedFacilityIds = [],
   selectedBillTypeIds = [],
@@ -756,8 +990,10 @@ export default function EditPropertyForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false)
   const [uploadProgress, setUploadProgress] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const videoInputRef = useRef<HTMLInputElement | null>(null)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const markerRef = useRef<mapboxgl.Marker | null>(null)
@@ -782,7 +1018,11 @@ export default function EditPropertyForm({
   const [ownerId, setOwnerId] = useState(property.owner_id || '')
   const [ownerSearch, setOwnerSearch] = useState('')
 
-  const [priceEgp, setPriceEgp] = useState(String(property.price_egp || ''))
+  const [fullApartmentSummerPriceEgp, setFullApartmentSummerPriceEgp] = useState(
+    getPropertySeasonalPrice(property, 'summer_course')
+  )
+  const [fullApartmentAcademicYearPriceEgp, setFullApartmentAcademicYearPriceEgp] =
+    useState(getPropertySeasonalPrice(property, 'academic_year'))
   const [propertyRentalDuration] = useState<'daily' | 'monthly'>(
     property.rental_duration || 'monthly'
   )
@@ -849,6 +1089,10 @@ export default function EditPropertyForm({
   })
 
   const [isDraggingPhotos, setIsDraggingPhotos] = useState(false)
+  const [existingVideo] = useState<PropertyVideo | null>(video)
+  const [isExistingVideoRemoved, setIsExistingVideoRemoved] = useState(false)
+  const [newVideoFile, setNewVideoFile] = useState<File | null>(null)
+  const [newVideoPreviewUrl, setNewVideoPreviewUrl] = useState('')
 
   const [roomState, setRoomState] = useState<RoomForm[]>(
     safeRooms.length > 0
@@ -868,12 +1112,42 @@ export default function EditPropertyForm({
           single_room_option_id: getRoomOptionId(room, 'single_room'),
           single_room_enabled: getRoomOptionEnabled(room, 'single_room'),
           single_room_price_egp: getRoomOptionPrice(room, 'single_room'),
+          single_room_summer_course_price_egp: getRoomOptionSeasonalPrice(
+            room,
+            'single_room',
+            'summer_course'
+          ),
+          single_room_academic_year_price_egp: getRoomOptionSeasonalPrice(
+            room,
+            'single_room',
+            'academic_year'
+          ),
           double_room_option_id: getRoomOptionId(room, 'double_room'),
           double_room_enabled: getRoomOptionEnabled(room, 'double_room'),
           double_room_price_egp: getRoomOptionPrice(room, 'double_room'),
+          double_room_summer_course_price_egp: getRoomOptionSeasonalPrice(
+            room,
+            'double_room',
+            'summer_course'
+          ),
+          double_room_academic_year_price_egp: getRoomOptionSeasonalPrice(
+            room,
+            'double_room',
+            'academic_year'
+          ),
           triple_room_option_id: getRoomOptionId(room, 'triple_room'),
           triple_room_enabled: getRoomOptionEnabled(room, 'triple_room'),
           triple_room_price_egp: getRoomOptionPrice(room, 'triple_room'),
+          triple_room_summer_course_price_egp: getRoomOptionSeasonalPrice(
+            room,
+            'triple_room',
+            'summer_course'
+          ),
+          triple_room_academic_year_price_egp: getRoomOptionSeasonalPrice(
+            room,
+            'triple_room',
+            'academic_year'
+          ),
         }))
       : [
           {
@@ -900,6 +1174,13 @@ export default function EditPropertyForm({
       })
     }
   }, [newImageFiles])
+
+
+  useEffect(() => {
+    return () => {
+      if (newVideoPreviewUrl) URL.revokeObjectURL(newVideoPreviewUrl)
+    }
+  }, [newVideoPreviewUrl])
 
   const filteredUniversities = useMemo(() => {
     if (!cityId) return []
@@ -1002,6 +1283,11 @@ export default function EditPropertyForm({
   const totalImageCount =
     existingImages.length + newImageFiles.filter((item) => item.file !== null).length
 
+
+  const hasFinalVideo = Boolean(
+    newVideoFile || (existingVideo && !isExistingVideoRemoved)
+  )
+
   const totalBedsFromRooms = useMemo(() => {
     return roomState.reduce((sum, room) => {
       const roomBeds = Number(normalizeNumberString(room.beds_count || '0'))
@@ -1036,10 +1322,16 @@ export default function EditPropertyForm({
       room.beds_count.trim() !== '' ||
       room.single_room_enabled ||
       room.single_room_price_egp.trim() !== '' ||
+      room.single_room_summer_course_price_egp.trim() !== '' ||
+      room.single_room_academic_year_price_egp.trim() !== '' ||
       room.double_room_enabled ||
       room.double_room_price_egp.trim() !== '' ||
+      room.double_room_summer_course_price_egp.trim() !== '' ||
+      room.double_room_academic_year_price_egp.trim() !== '' ||
       room.triple_room_enabled ||
-      room.triple_room_price_egp.trim() !== ''
+      room.triple_room_price_egp.trim() !== '' ||
+      room.triple_room_summer_course_price_egp.trim() !== '' ||
+      room.triple_room_academic_year_price_egp.trim() !== ''
 
     if (!hasAnyValue) return false
     return getRoomValidationMessage(room) !== ''
@@ -1402,6 +1694,45 @@ export default function EditPropertyForm({
     })
   }
 
+  const selectVideo = (filesList: FileList | null) => {
+    const file = filesList?.[0]
+    if (!file) return
+
+    const validationMessage = getVideoValidationMessage(file)
+    if (validationMessage) {
+      setStepError(validationMessage)
+      return
+    }
+
+    setStepError('')
+    setNewVideoFile(file)
+    setNewVideoPreviewUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return URL.createObjectURL(file)
+    })
+  }
+
+  const removeNewVideo = () => {
+    setNewVideoFile(null)
+    setNewVideoPreviewUrl((currentUrl) => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl)
+      return ''
+    })
+
+    if (videoInputRef.current) {
+      videoInputRef.current.value = ''
+    }
+  }
+
+  const removeExistingVideo = () => {
+    removeNewVideo()
+    setIsExistingVideoRemoved(true)
+  }
+
+  const restoreExistingVideo = () => {
+    setIsExistingVideoRemoved(false)
+  }
+
   const addRoom = () => {
     const nextNumber = roomState.length + 1
 
@@ -1447,11 +1778,15 @@ export default function EditPropertyForm({
         if (beds < 2) {
           nextRoom.double_room_enabled = false
           nextRoom.double_room_price_egp = ''
+          nextRoom.double_room_summer_course_price_egp = ''
+          nextRoom.double_room_academic_year_price_egp = ''
         }
 
         if (beds < 3) {
           nextRoom.triple_room_enabled = false
           nextRoom.triple_room_price_egp = ''
+          nextRoom.triple_room_summer_course_price_egp = ''
+          nextRoom.triple_room_academic_year_price_egp = ''
         }
 
         return nextRoom
@@ -1514,14 +1849,15 @@ export default function EditPropertyForm({
 
       case 4:
         if (
-          !isValidPrice(priceEgp) ||
+          !isValidPrice(fullApartmentSummerPriceEgp) ||
+          !isValidPrice(fullApartmentAcademicYearPriceEgp) ||
           !isValidNonNegativeInt(floorNumber) ||
           !isValidNonNegativeInt(bedroomsCount) ||
           !isValidNonNegativeInt(bathroomsCount) ||
           !isValidNonNegativeInt(bedsCount) ||
           !isValidNonNegativeInt(guestsCount)
         ) {
-          return 'Full apartment price, floor number, bedrooms, bathrooms, beds, and guests must be valid values.'
+          return 'Full apartment summer price, academic year price, floor number, bedrooms, bathrooms, beds, and guests must be valid values.'
         }
         return ''
 
@@ -1620,7 +1956,22 @@ export default function EditPropertyForm({
     formData.set('city_id', cityId)
     formData.set('university_id', universityId)
     formData.set('owner_id', ownerId)
-    formData.set('price_egp', normalizeNumberString(priceEgp))
+
+    const normalizedFullApartmentSummerPrice = normalizeNumberString(
+      fullApartmentSummerPriceEgp
+    )
+    const normalizedFullApartmentAcademicYearPrice = normalizeNumberString(
+      fullApartmentAcademicYearPriceEgp
+    )
+
+    formData.set('price_egp', normalizedFullApartmentSummerPrice)
+    formData.set('price_egp_summer_course', normalizedFullApartmentSummerPrice)
+    formData.set('price_egp_academic_year', normalizedFullApartmentAcademicYearPrice)
+    formData.set('full_apartment_price_egp_summer_course', normalizedFullApartmentSummerPrice)
+    formData.set(
+      'full_apartment_price_egp_academic_year',
+      normalizedFullApartmentAcademicYearPrice
+    )
     formData.set('floor_number', normalizeNumberString(floorNumber))
     formData.set('rental_duration', propertyRentalDuration)
     formData.set('availability_status', derivedAvailabilityStatus)
@@ -1747,6 +2098,73 @@ export default function EditPropertyForm({
       }
     }
 
+    formData.delete('uploaded_video_url')
+    formData.delete('uploaded_video_storage_path')
+    formData.delete('uploaded_video_mime_type')
+    formData.delete('uploaded_video_file_size')
+    formData.set('existing_video_id', existingVideo?.id || '')
+    formData.set(
+      'remove_existing_video',
+      isExistingVideoRemoved ? 'true' : 'false'
+    )
+
+    if (newVideoFile) {
+      setIsUploadingVideo(true)
+      setUploadProgress('Uploading property video...')
+
+      try {
+        const signedVideoFormData = new FormData()
+        signedVideoFormData.set('property_db_id', property.id)
+        signedVideoFormData.set('file_name', newVideoFile.name)
+        signedVideoFormData.set(
+          'file_type',
+          getVideoContentType(newVideoFile)
+        )
+        signedVideoFormData.set('file_size', String(newVideoFile.size))
+
+        const signedVideoUpload: SignedPropertyVideoUpload =
+          await createPropertyVideoUploadSignedUrlAction(signedVideoFormData)
+
+        const supabaseBrowserClient = getBrowserSupabaseClient()
+        const { error: directVideoUploadError } =
+          await supabaseBrowserClient.storage
+            .from(PROPERTY_VIDEOS_BUCKET)
+            .uploadToSignedUrl(
+              signedVideoUpload.storage_path,
+              signedVideoUpload.token,
+              newVideoFile,
+              {
+                cacheControl: '3600',
+                contentType: getVideoContentType(newVideoFile),
+                upsert: false,
+              }
+            )
+
+        if (directVideoUploadError) {
+          throw new Error(
+            `Failed to upload ${newVideoFile.name}: ${directVideoUploadError.message}`
+          )
+        }
+
+        formData.set('uploaded_video_url', signedVideoUpload.video_url)
+        formData.set(
+          'uploaded_video_storage_path',
+          signedVideoUpload.storage_path
+        )
+        formData.set(
+          'uploaded_video_mime_type',
+          getVideoContentType(newVideoFile)
+        )
+        formData.set('uploaded_video_file_size', String(newVideoFile.size))
+      } catch (error: any) {
+        setErrorMessage(error?.message || 'Failed to upload property video')
+        setUploadProgress('')
+        setIsUploadingVideo(false)
+        setIsUploadingImages(false)
+        return
+      }
+    }
+
     formData.set('cover_kind', coverSelection.kind)
     formData.set('cover_index', String(coverSelection.index))
 
@@ -1761,12 +2179,18 @@ export default function EditPropertyForm({
     formData.delete('room_single_room_option_id')
     formData.delete('room_single_room_enabled')
     formData.delete('room_single_room_price_egp')
+    formData.delete('room_single_room_price_egp_summer_course')
+    formData.delete('room_single_room_price_egp_academic_year')
     formData.delete('room_double_room_option_id')
     formData.delete('room_double_room_enabled')
     formData.delete('room_double_room_price_egp')
+    formData.delete('room_double_room_price_egp_summer_course')
+    formData.delete('room_double_room_price_egp_academic_year')
     formData.delete('room_triple_room_option_id')
     formData.delete('room_triple_room_enabled')
     formData.delete('room_triple_room_price_egp')
+    formData.delete('room_triple_room_price_egp_summer_course')
+    formData.delete('room_triple_room_price_egp_academic_year')
 
     roomState.forEach((room) => {
       formData.append('room_id', room.id || '')
@@ -1785,7 +2209,15 @@ export default function EditPropertyForm({
       )
       formData.append(
         'room_single_room_price_egp',
-        normalizeNumberString(room.single_room_price_egp)
+        normalizeNumberString(getRoomOptionBasePriceValue(room, 'single_room'))
+      )
+      formData.append(
+        'room_single_room_price_egp_summer_course',
+        normalizeNumberString(room.single_room_summer_course_price_egp)
+      )
+      formData.append(
+        'room_single_room_price_egp_academic_year',
+        normalizeNumberString(room.single_room_academic_year_price_egp)
       )
 
       formData.append('room_double_room_option_id', room.double_room_option_id || '')
@@ -1795,7 +2227,15 @@ export default function EditPropertyForm({
       )
       formData.append(
         'room_double_room_price_egp',
-        normalizeNumberString(room.double_room_price_egp)
+        normalizeNumberString(getRoomOptionBasePriceValue(room, 'double_room'))
+      )
+      formData.append(
+        'room_double_room_price_egp_summer_course',
+        normalizeNumberString(room.double_room_summer_course_price_egp)
+      )
+      formData.append(
+        'room_double_room_price_egp_academic_year',
+        normalizeNumberString(room.double_room_academic_year_price_egp)
       )
 
       formData.append('room_triple_room_option_id', room.triple_room_option_id || '')
@@ -1805,7 +2245,15 @@ export default function EditPropertyForm({
       )
       formData.append(
         'room_triple_room_price_egp',
-        normalizeNumberString(room.triple_room_price_egp)
+        normalizeNumberString(getRoomOptionBasePriceValue(room, 'triple_room'))
+      )
+      formData.append(
+        'room_triple_room_price_egp_summer_course',
+        normalizeNumberString(room.triple_room_summer_course_price_egp)
+      )
+      formData.append(
+        'room_triple_room_price_egp_academic_year',
+        normalizeNumberString(room.triple_room_academic_year_price_egp)
       )
     })
 
@@ -1815,12 +2263,14 @@ export default function EditPropertyForm({
         await updatePropertyAction(formData)
         setUploadProgress('')
         setIsUploadingImages(false)
+        setIsUploadingVideo(false)
         router.push('/admin/properties')
         router.refresh()
       } catch (error: any) {
         setErrorMessage(error.message || 'Something went wrong')
         setUploadProgress('')
         setIsUploadingImages(false)
+        setIsUploadingVideo(false)
       }
     })
   }
@@ -1835,7 +2285,7 @@ export default function EditPropertyForm({
     coverSelection.index >= 0 &&
     coverSelection.index < newImageFiles.length
 
-  const isBusy = isPending || isUploadingImages
+  const isBusy = isPending || isUploadingImages || isUploadingVideo
 
   return (
     <form
@@ -2529,6 +2979,152 @@ export default function EditPropertyForm({
                   </div>
                 </div>
               )}
+
+              <div className="mt-8 border-t border-[#e5e7eb] pt-8">
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime,.mov"
+                  className="hidden"
+                  onChange={(event) => {
+                    selectVideo(event.target.files)
+                    event.target.value = ''
+                  }}
+                />
+
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-[20px] font-bold text-[#111827]">
+                      Property Video
+                    </h2>
+                    <p className="mt-1 text-sm text-[#6b7280]">
+                      Optional — keep, replace, or remove the current property video.
+                    </p>
+                  </div>
+
+                  {(newVideoFile || (existingVideo && !isExistingVideoRemoved)) && (
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      className="rounded-md border border-[#0071c2] px-4 py-2 text-sm font-medium text-[#0071c2]"
+                    >
+                      Replace video
+                    </button>
+                  )}
+                </div>
+
+                {newVideoFile ? (
+                  <div className="overflow-hidden rounded-2xl border border-[#d9d9d9] bg-[#111827]">
+                    <video
+                      src={newVideoPreviewUrl}
+                      controls
+                      preload="metadata"
+                      playsInline
+                      className="max-h-[520px] w-full bg-black object-contain"
+                    />
+
+                    <div className="flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#111827]">
+                          {newVideoFile.name}
+                        </p>
+                        <p className="mt-1 text-xs text-[#6b7280]">
+                          New replacement · {formatFileSize(newVideoFile.size)}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={removeNewVideo}
+                        className="rounded-md border border-[#ef4444] px-4 py-2 text-sm font-semibold text-[#dc2626] transition hover:bg-[#fff1f2]"
+                      >
+                        Cancel replacement
+                      </button>
+                    </div>
+                  </div>
+                ) : existingVideo && !isExistingVideoRemoved ? (
+                  <div className="overflow-hidden rounded-2xl border border-[#d9d9d9] bg-[#111827]">
+                    <video
+                      src={existingVideo.video_url}
+                      controls
+                      preload="metadata"
+                      playsInline
+                      className="max-h-[520px] w-full bg-black object-contain"
+                    />
+
+                    <div className="flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[#111827]">
+                          Current property video
+                        </p>
+                        <p className="mt-1 text-xs text-[#6b7280]">
+                          {formatFileSize(existingVideo.file_size_bytes)}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={removeExistingVideo}
+                        className="rounded-md border border-[#ef4444] px-4 py-2 text-sm font-semibold text-[#dc2626] transition hover:bg-[#fff1f2]"
+                      >
+                        Delete video
+                      </button>
+                    </div>
+                  </div>
+                ) : isExistingVideoRemoved && existingVideo ? (
+                  <div className="flex flex-col gap-4 rounded-2xl border border-[#f3c6c6] bg-[#fff7f7] p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-[#b42318]">
+                        The current video will be deleted when you save.
+                      </p>
+                      <p className="mt-1 text-sm text-[#7f1d1d]">
+                        You can restore it before saving or upload a replacement.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={restoreExistingVideo}
+                        className="rounded-md border border-[#cfcfcf] bg-white px-4 py-2 text-sm font-semibold text-[#1a1a1a]"
+                      >
+                        Undo delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => videoInputRef.current?.click()}
+                        className="rounded-md bg-[#0071c2] px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Upload replacement
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#9ca3af] bg-[#fafafa] px-6 py-10 text-center transition hover:border-[#0071c2] hover:bg-[#f0f7ff]"
+                  >
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eaf4ff] text-[#0071c2]">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="h-7 w-7"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.5-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14Z" />
+                      </svg>
+                    </span>
+                    <span className="mt-4 text-base font-semibold text-[#111827]">
+                      Upload property video
+                    </span>
+                    <span className="mt-1 text-sm text-[#6b7280]">
+                      MP4, WebM, or MOV · maximum 200 MB
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
           </section>
 
@@ -2541,19 +3137,50 @@ export default function EditPropertyForm({
               <div className="space-y-10">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-[#1a1a1a]">
-                    Full Apartment Price (EGP)
+                    Full Apartment Seasonal Prices (EGP)
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="any"
-                    value={priceEgp}
-                    onChange={(e) => setPriceEgp(normalizeNumberString(e.target.value))}
-                    placeholder="Example: 9000"
-                    className={inputClass}
-                  />
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[#4b5563]">
+                        Summer Course Price
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="any"
+                        value={fullApartmentSummerPriceEgp}
+                        onChange={(e) => {
+                          const nextValue = normalizeNumberString(e.target.value)
+                          setFullApartmentSummerPriceEgp(nextValue)
+                        }}
+                        placeholder="Example: 9000"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-[#4b5563]">
+                        Academic Year Price
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="any"
+                        value={fullApartmentAcademicYearPriceEgp}
+                        onChange={(e) =>
+                          setFullApartmentAcademicYearPriceEgp(
+                            normalizeNumberString(e.target.value)
+                          )
+                        }
+                        placeholder="Example: 12000"
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
                   <p className="mt-2 text-sm text-[#6b7280]">
-                    This is the full property price when the whole apartment is booked.
+                    Use Summer Course for the current short season, and Academic Year for students booking the new year early.
                   </p>
                 </div>
 
@@ -2622,7 +3249,7 @@ export default function EditPropertyForm({
                 <span className="mx-1 font-semibold">Double Room</span>
                 و
                 <span className="mx-1 font-semibold">Triple Room</span>
-                مع سعر مستقل لكل خيار.
+                مع سعر مستقل للسمر كورس وسعر مستقل للسنة الجديدة لكل خيار.
               </div>
 
               <div className="space-y-5">
@@ -2743,12 +3370,24 @@ export default function EditPropertyForm({
                             title="Single Room"
                             description="يعرض خيار حجز الغرفة كاملة لطالب واحد."
                             enabled={room.single_room_enabled}
-                            price={room.single_room_price_egp}
+                            summerCoursePrice={room.single_room_summer_course_price_egp}
+                            academicYearPrice={room.single_room_academic_year_price_egp}
                             onToggle={(value) =>
                               updateRoom(index, 'single_room_enabled', value)
                             }
-                            onPriceChange={(value) =>
-                              updateRoom(index, 'single_room_price_egp', value)
+                            onSummerCoursePriceChange={(value) =>
+                              updateRoom(
+                                index,
+                                'single_room_summer_course_price_egp',
+                                value
+                              )
+                            }
+                            onAcademicYearPriceChange={(value) =>
+                              updateRoom(
+                                index,
+                                'single_room_academic_year_price_egp',
+                                value
+                              )
                             }
                             inputClass={inputClass}
                           />
@@ -2757,12 +3396,24 @@ export default function EditPropertyForm({
                             title="Double Room"
                             description="يعرض حجز سرير واحد داخل غرفة دابل، ويتطلب 2 سرير أو أكثر."
                             enabled={room.double_room_enabled}
-                            price={room.double_room_price_egp}
+                            summerCoursePrice={room.double_room_summer_course_price_egp}
+                            academicYearPrice={room.double_room_academic_year_price_egp}
                             onToggle={(value) =>
                               updateRoom(index, 'double_room_enabled', value)
                             }
-                            onPriceChange={(value) =>
-                              updateRoom(index, 'double_room_price_egp', value)
+                            onSummerCoursePriceChange={(value) =>
+                              updateRoom(
+                                index,
+                                'double_room_summer_course_price_egp',
+                                value
+                              )
+                            }
+                            onAcademicYearPriceChange={(value) =>
+                              updateRoom(
+                                index,
+                                'double_room_academic_year_price_egp',
+                                value
+                              )
                             }
                             inputClass={inputClass}
                             disabled={bedsCountValue < 2}
@@ -2773,12 +3424,24 @@ export default function EditPropertyForm({
                             title="Triple Room"
                             description="يعرض حجز سرير واحد داخل غرفة تربل، ويتطلب 3 سراير أو أكثر."
                             enabled={room.triple_room_enabled}
-                            price={room.triple_room_price_egp}
+                            summerCoursePrice={room.triple_room_summer_course_price_egp}
+                            academicYearPrice={room.triple_room_academic_year_price_egp}
                             onToggle={(value) =>
                               updateRoom(index, 'triple_room_enabled', value)
                             }
-                            onPriceChange={(value) =>
-                              updateRoom(index, 'triple_room_price_egp', value)
+                            onSummerCoursePriceChange={(value) =>
+                              updateRoom(
+                                index,
+                                'triple_room_summer_course_price_egp',
+                                value
+                              )
+                            }
+                            onAcademicYearPriceChange={(value) =>
+                              updateRoom(
+                                index,
+                                'triple_room_academic_year_price_egp',
+                                value
+                              )
                             }
                             inputClass={inputClass}
                             disabled={bedsCountValue < 3}
@@ -3079,11 +3742,22 @@ export default function EditPropertyForm({
 
                   <div className="rounded-md border border-[#ececec] p-3">
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
-                      Full Apartment Price
+                      Full Apartment Prices
                     </p>
-                    <p className="mt-1 font-semibold">
-                      {priceEgp ? `${priceEgp} EGP` : '-'}
-                    </p>
+                    <div className="mt-1 space-y-1 font-semibold">
+                      <p>
+                        Summer:{' '}
+                        {fullApartmentSummerPriceEgp
+                          ? `${fullApartmentSummerPriceEgp} EGP`
+                          : '-'}
+                      </p>
+                      <p>
+                        Academic Year:{' '}
+                        {fullApartmentAcademicYearPriceEgp
+                          ? `${fullApartmentAcademicYearPriceEgp} EGP`
+                          : '-'}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="rounded-md border border-[#ececec] p-3">
@@ -3109,6 +3783,22 @@ export default function EditPropertyForm({
                       Images
                     </p>
                     <p className="mt-1 font-semibold">{totalImageCount}</p>
+                  </div>
+
+
+                  <div className="rounded-md border border-[#ececec] p-3">
+                    <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
+                      Video
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {newVideoFile
+                        ? `Replacement selected: ${newVideoFile.name}`
+                        : hasFinalVideo
+                          ? 'Current video kept'
+                          : existingVideo && isExistingVideoRemoved
+                            ? 'Will be deleted'
+                            : 'No video'}
+                    </p>
                   </div>
 
                   <div className="rounded-md border border-[#ececec] p-3">
@@ -3258,7 +3948,7 @@ export default function EditPropertyForm({
                   disabled={isBusy || !propertyCode}
                   className="inline-flex h-[46px] min-w-[160px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isUploadingImages ? uploadProgress || 'Uploading images...' : isPending ? 'Saving...' : 'Update Property'}
+                  {isUploadingVideo ? uploadProgress || 'Uploading video...' : isUploadingImages ? uploadProgress || 'Uploading images...' : isPending ? 'Saving...' : 'Update Property'}
                 </button>
               )}
             </div>

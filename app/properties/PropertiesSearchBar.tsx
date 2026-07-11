@@ -21,7 +21,7 @@ type PropertyArea = {
   city_id: string | number
   name_en: string
   name_ar?: string
-  is_active?: boolean
+  is_active?: boolean | null
 }
 
 type UniversityArea = {
@@ -31,6 +31,7 @@ type UniversityArea = {
 }
 
 type Language = 'en' | 'ar'
+type LocationMode = 'city-university-area' | 'city-area'
 
 type Labels = {
   city: string
@@ -84,9 +85,11 @@ type Props = {
   onRequestClose?: () => void
 
   /**
-   * Search page only customizations
-   * خليهم optional علشان باقي الصفحات ما تتأثرش
+   * city-area removes the university step completely and filters areas
+   * directly by property_areas.city_id.
    */
+  locationMode?: LocationMode
+
   mobileHeaderStartSlot?: ReactNode
   mobileHeaderEndSlot?: ReactNode
   mobileSearchBarClassName?: string
@@ -94,7 +97,7 @@ type Props = {
 
 type OpenMenu = 'city' | 'university' | 'area' | null
 
-function SearchIcon() {
+function SearchIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -102,7 +105,7 @@ function SearchIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2.2"
-      className="h-5 w-5"
+      className={className}
       aria-hidden="true"
     >
       <path
@@ -152,7 +155,7 @@ export default function PropertiesSearchBar({
   mobileMode = false,
   mobileOpen = false,
   onRequestClose,
-
+  locationMode = 'city-university-area',
   mobileHeaderStartSlot,
   mobileHeaderEndSlot,
   mobileSearchBarClassName = '',
@@ -163,10 +166,16 @@ export default function PropertiesSearchBar({
   const universityInputRef = useRef<HTMLInputElement | null>(null)
   const areaInputRef = useRef<HTMLInputElement | null>(null)
 
+  const isCityAreaMode = locationMode === 'city-area'
+  const normalizedInitialUniversityId = isCityAreaMode
+    ? ''
+    : initialUniversityId
+
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null)
   const [draftCityId, setDraftCityId] = useState(initialCityId)
-  const [draftUniversityId, setDraftUniversityId] =
-    useState(initialUniversityId)
+  const [draftUniversityId, setDraftUniversityId] = useState(
+    normalizedInitialUniversityId
+  )
   const [draftAreaId, setDraftAreaId] = useState(initialAreaId)
 
   const [cityQuery, setCityQuery] = useState('')
@@ -179,11 +188,27 @@ export default function PropertiesSearchBar({
 
   const searchLabel = labels.search ?? (isArabic ? 'بحث' : 'Search')
   const clearAllLabel = labels.clearAll ?? (isArabic ? 'مسح الكل' : 'Clear all')
+  const noResultsLabel = isArabic ? 'لا توجد نتائج' : 'No results found'
 
   const canOpenUniversity = !!draftCityId
-  const canOpenArea = !!draftCityId && !!draftUniversityId
+  const canOpenArea =
+    !!draftCityId && (isCityAreaMode || !!draftUniversityId)
+
+  const getCityName = (city: City) =>
+    isArabic ? city.name_ar || city.name_en : city.name_en
+
+  const getUniversityName = (university: University) =>
+    isArabic ? university.name_ar || university.name_en : university.name_en
+
+  const getAreaName = (area: PropertyArea) =>
+    isArabic ? area.name_ar || area.name_en : area.name_en
 
   const openUniversityMenu = () => {
+    if (isCityAreaMode) {
+      openAreaMenu()
+      return
+    }
+
     if (!canOpenUniversity) {
       setOpenMenu('city')
       setCityQuery('')
@@ -201,7 +226,7 @@ export default function PropertiesSearchBar({
       return
     }
 
-    if (!draftUniversityId) {
+    if (!isCityAreaMode && !draftUniversityId) {
       setOpenMenu('university')
       setUniversityQuery('')
       return
@@ -220,76 +245,67 @@ export default function PropertiesSearchBar({
   }, [initialCityId])
 
   useEffect(() => {
-    setDraftUniversityId(initialUniversityId)
-  }, [initialUniversityId])
+    setDraftUniversityId(isCityAreaMode ? '' : initialUniversityId)
+  }, [initialUniversityId, isCityAreaMode])
 
   useEffect(() => {
     setDraftAreaId(initialAreaId)
   }, [initialAreaId])
 
   useEffect(() => {
-    if (!mobileMode) {
-      function handleClickOutside(event: MouseEvent) {
-        if (
-          wrapperRef.current &&
-          !wrapperRef.current.contains(event.target as Node)
-        ) {
-          setOpenMenu(null)
-        }
-      }
+    if (mobileMode) return
 
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside)
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setOpenMenu(null)
       }
     }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [mobileMode])
 
   useEffect(() => {
-    if (mobileMode && mobileOpen) {
-      setOpenMenu('city')
-      setCityQuery('')
-      setUniversityQuery('')
-      setAreaQuery('')
-    }
+    if (!mobileMode || !mobileOpen) return
+
+    setOpenMenu('city')
+    setCityQuery('')
+    setUniversityQuery('')
+    setAreaQuery('')
   }, [mobileMode, mobileOpen])
 
   useEffect(() => {
     if (openMenu === 'city') {
-      setTimeout(() => cityInputRef.current?.focus(), 0)
+      window.setTimeout(() => cityInputRef.current?.focus(), 0)
     }
 
     if (openMenu === 'university') {
-      setTimeout(() => universityInputRef.current?.focus(), 0)
+      window.setTimeout(() => universityInputRef.current?.focus(), 0)
     }
 
     if (openMenu === 'area') {
-      setTimeout(() => areaInputRef.current?.focus(), 0)
+      window.setTimeout(() => areaInputRef.current?.focus(), 0)
     }
   }, [openMenu])
 
-  const getCityName = (city: City) =>
-    isArabic ? city.name_ar || city.name_en : city.name_en
-
-  const getUniversityName = (university: University) =>
-    isArabic ? university.name_ar || university.name_en : university.name_en
-
-  const getAreaName = (area: PropertyArea) =>
-    isArabic ? area.name_ar || area.name_en : area.name_en
-
   const selectedCityLabel = useMemo(() => {
-    const cityName = cities.find(
+    const selectedCity = cities.find(
       (city) => String(city.id) === String(draftCityId)
     )
-    if (cityName) return getCityName(cityName)
+
+    if (selectedCity) return getCityName(selectedCity)
     return isCompact ? labels.city : labels.selectCity
   }, [cities, draftCityId, isCompact, labels.city, labels.selectCity, isArabic])
 
   const selectedUniversityLabel = useMemo(() => {
-    const uni = universities.find(
+    const selectedUniversity = universities.find(
       (university) => String(university.id) === String(draftUniversityId)
     )
-    if (uni) return getUniversityName(uni)
+
+    if (selectedUniversity) return getUniversityName(selectedUniversity)
     return isCompact ? labels.university : labels.selectUniversity
   }, [
     universities,
@@ -301,62 +317,24 @@ export default function PropertiesSearchBar({
   ])
 
   const selectedAreaLabel = useMemo(() => {
-    const area = areas.find((item) => String(item.id) === String(draftAreaId))
-    if (area) return getAreaName(area)
+    const selectedArea = areas.find(
+      (area) => String(area.id) === String(draftAreaId)
+    )
+
+    if (selectedArea) return getAreaName(selectedArea)
     return isCompact ? labels.area : labels.selectArea
   }, [areas, draftAreaId, labels.area, labels.selectArea, isCompact, isArabic])
 
-  const applySearch = (
-    nextValues?: Partial<{
-      cityId: string
-      universityId: string
-      areaId: string
-    }>
-  ) => {
-    const cityId = nextValues?.cityId ?? draftCityId
-    const universityId = nextValues?.universityId ?? draftUniversityId
-    const areaId = nextValues?.areaId ?? draftAreaId
-
-    const params = new URLSearchParams()
-
-    params.set('rental_duration', 'monthly')
-
-    if (cityId) params.set('city_id', cityId)
-    if (universityId) params.set('university_id', universityId)
-    if (areaId) params.set('area_id', areaId)
-    if (initialPriceRange) params.set('price_range', initialPriceRange)
-    if (language) params.set('lang', language)
-    if (currency) params.set('currency', currency)
-
-    const queryString = params.toString()
-
-    onRequestClose?.()
-
-    router.push(
-      queryString ? `/properties/search?${queryString}` : '/properties/search'
-    )
-  }
-
-  const resetAll = () => {
-    setDraftCityId('')
-    setDraftUniversityId('')
-    setDraftAreaId('')
-    setCityQuery('')
-    setUniversityQuery('')
-    setAreaQuery('')
-    setOpenMenu('city')
-  }
-
   const cityUniversities = useMemo(() => {
-    if (!draftCityId) return []
+    if (!draftCityId || isCityAreaMode) return []
 
     return universities.filter(
       (university) => String(university.city_id) === String(draftCityId)
     )
-  }, [draftCityId, universities])
+  }, [draftCityId, universities, isCityAreaMode])
 
   const universityAreaIds = useMemo(() => {
-    if (!draftUniversityId) return new Set<string>()
+    if (!draftUniversityId || isCityAreaMode) return new Set<string>()
 
     return new Set(
       universityAreas
@@ -365,24 +343,35 @@ export default function PropertiesSearchBar({
         )
         .map((item) => String(item.area_id))
     )
-  }, [draftUniversityId, universityAreas])
+  }, [draftUniversityId, universityAreas, isCityAreaMode])
 
   const cityAreas = useMemo(() => {
-    if (!draftCityId || !draftUniversityId) return []
+    if (!draftCityId) return []
 
     let nextAreas = areas.filter(
       (area) =>
-        area.is_active !== false && String(area.city_id) === String(draftCityId)
+        area.is_active !== false &&
+        String(area.city_id) === String(draftCityId)
     )
 
-    if (universityAreaIds.size > 0) {
-      nextAreas = nextAreas.filter((area) =>
-        universityAreaIds.has(String(area.id))
-      )
+    if (!isCityAreaMode) {
+      if (!draftUniversityId) return []
+
+      if (universityAreaIds.size > 0) {
+        nextAreas = nextAreas.filter((area) =>
+          universityAreaIds.has(String(area.id))
+        )
+      }
     }
 
     return nextAreas
-  }, [areas, draftCityId, draftUniversityId, universityAreaIds])
+  }, [
+    areas,
+    draftCityId,
+    draftUniversityId,
+    universityAreaIds,
+    isCityAreaMode,
+  ])
 
   const filteredCities = useMemo(() => {
     const query = cityQuery.trim().toLowerCase()
@@ -411,14 +400,66 @@ export default function PropertiesSearchBar({
     )
   }, [cityAreas, areaQuery, isArabic])
 
-  const universityPlaceholder = draftCityId
-    ? labels.chooseUniversity
-    : labels.selectCity
+  const applySearch = (
+    nextValues?: Partial<{
+      cityId: string
+      universityId: string
+      areaId: string
+    }>
+  ) => {
+    const cityId = nextValues?.cityId ?? draftCityId
+    const universityId = isCityAreaMode
+      ? ''
+      : nextValues?.universityId ?? draftUniversityId
+    const areaId = nextValues?.areaId ?? draftAreaId
 
-  const areaPlaceholder =
-    draftCityId && draftUniversityId
-      ? labels.chooseArea
-      : `${labels.selectCity} / ${labels.selectUniversity}`
+    const params = new URLSearchParams()
+    params.set('rental_duration', initialRentalDuration || 'monthly')
+
+    if (cityId) params.set('city_id', cityId)
+    if (universityId) params.set('university_id', universityId)
+    if (areaId) params.set('area_id', areaId)
+    if (initialPriceRange) params.set('price_range', initialPriceRange)
+    if (language) params.set('lang', language)
+    if (currency) params.set('currency', currency)
+
+    onRequestClose?.()
+    router.push(`/properties/search?${params.toString()}`)
+  }
+
+  const resetAll = () => {
+    setDraftCityId('')
+    setDraftUniversityId('')
+    setDraftAreaId('')
+    setCityQuery('')
+    setUniversityQuery('')
+    setAreaQuery('')
+    setOpenMenu('city')
+  }
+
+  const handleCitySelection = (cityId: string) => {
+    setDraftCityId(cityId)
+    setDraftUniversityId('')
+    setDraftAreaId('')
+    setCityQuery('')
+    setUniversityQuery('')
+    setAreaQuery('')
+    setOpenMenu(isCityAreaMode ? 'area' : 'university')
+  }
+
+  const handleUniversitySelection = (universityId: string) => {
+    setDraftUniversityId(universityId)
+    setDraftAreaId('')
+    setUniversityQuery('')
+    setAreaQuery('')
+    setOpenMenu('area')
+  }
+
+  const handleAreaSelection = (areaId: string) => {
+    setDraftAreaId(areaId)
+    setAreaQuery('')
+    setOpenMenu(null)
+  }
 
   const disabledValueTextClass = 'text-[#a1a1a1] dark:text-slate-600'
 
@@ -427,7 +468,7 @@ export default function PropertiesSearchBar({
     : 'absolute left-0 top-[calc(100%+8px)] z-[80] max-h-72 w-full min-w-[220px] overflow-auto rounded-2xl border border-[#dddddd] bg-white p-2 shadow-[0_12px_32px_rgba(0,0,0,0.14)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_16px_40px_rgba(0,0,0,0.35)]'
 
   const itemClass =
-    'block w-full rounded-xl px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-white/10'
+    'block w-full rounded-xl px-3 py-2.5 text-sm text-gray-700 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-white/10'
 
   const inlineInputClass = `mt-1 w-full bg-transparent p-0 text-[16px] font-normal text-[#222222] outline-none placeholder:text-[#6a6a6a] dark:text-slate-100 dark:placeholder:text-slate-500 ${
     isArabic ? 'text-right' : 'text-left'
@@ -441,122 +482,107 @@ export default function PropertiesSearchBar({
     ? 'sr-only'
     : 'text-[14px] font-semibold leading-none text-[#222222] dark:text-slate-100'
 
-  const sectionPaddingClass = isCompact ? 'px-3 py-2' : 'px-5 py-3'
+  const sectionPaddingClass = isCompact ? 'px-4 py-2.5' : 'px-5 py-3'
+
+  const mobileCollapsedCardClass =
+    'flex w-full items-center justify-between rounded-[18px] border border-[#e4e4e4] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] transition hover:bg-[#fafafa] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#111827]'
+
+  const renderEmptyState = () => (
+    <p className="px-3 py-6 text-center text-sm text-[#8a8a8a] dark:text-slate-500">
+      {noResultsLabel}
+    </p>
+  )
 
   if (mobileMode) {
-    const showCityCard =
-      openMenu !== 'city' && openMenu !== 'university' && openMenu !== 'area'
-
-    const showUniversityCard = openMenu !== 'university' && openMenu !== 'area'
-
-    const showAreaCard = openMenu !== 'area'
-
     return (
       <div dir={isArabic ? 'rtl' : 'ltr'} className="w-full">
-
-      <style>{`
-        @media (prefers-color-scheme: dark) {
-          input {
-            color-scheme: dark;
+        <style>{`
+          @media (prefers-color-scheme: dark) {
+            input { color-scheme: dark; }
+            input:-webkit-autofill,
+            input:-webkit-autofill:hover,
+            input:-webkit-autofill:focus {
+              -webkit-text-fill-color: #f8fafc;
+              box-shadow: 0 0 0 1000px #111827 inset;
+              transition: background-color 9999s ease-in-out 0s;
+            }
           }
-
-          input:-webkit-autofill,
-          input:-webkit-autofill:hover,
-          input:-webkit-autofill:focus {
-            -webkit-text-fill-color: #f8fafc;
-            box-shadow: 0 0 0 1000px #111827 inset;
-            transition: background-color 9999s ease-in-out 0s;
-          }
-        }
-      `}</style>
-
+        `}</style>
 
         <div className="space-y-3">
-          <div
-            className={cn(
-              'rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.32)]',
-              mobileSearchBarClassName
-            )}
-          >
-            <div className="mb-4">
-              <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-[#222222] dark:text-slate-100">
-                {openMenu === 'city'
-                  ? labels.selectCity
-                  : openMenu === 'university'
-                    ? labels.selectUniversity
-                    : labels.selectArea}
+          {mobileHeaderStartSlot}
+
+          {openMenu === 'city' ? (
+            <div
+              className={cn(
+                'rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.32)]',
+                mobileSearchBarClassName
+              )}
+            >
+              <h2 className="mb-4 text-[18px] font-semibold tracking-[-0.01em] text-[#222222] dark:text-slate-100">
+                {labels.selectCity}
               </h2>
-            </div>
 
-            {openMenu === 'city' && (
-              <>
-                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
-                  <SearchIcon />
-                  <input
-                    ref={cityInputRef}
-                    type="text"
-                    value={cityQuery}
-                    onChange={(e) => setCityQuery(e.target.value)}
-                    placeholder={labels.searchCities}
-                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] dark:text-slate-100 dark:placeholder:text-slate-500 ${
-                      isArabic ? 'text-right' : 'text-left'
-                    }`}
-                  />
-                </div>
+              <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
+                <SearchIcon />
+                <input
+                  ref={cityInputRef}
+                  type="text"
+                  value={cityQuery}
+                  onChange={(event) => setCityQuery(event.target.value)}
+                  placeholder={labels.searchCities}
+                  className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] dark:text-slate-100 dark:placeholder:text-slate-500 ${
+                    isArabic ? 'text-right' : 'text-left'
+                  }`}
+                />
+              </div>
 
-                <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
-                  {filteredCities.map((city) => (
-                    <button
-                      key={city.id}
-                      type="button"
-                      onClick={() => {
-                        const nextCityId = String(city.id)
-                        setDraftCityId(nextCityId)
-                        setDraftUniversityId('')
-                        setDraftAreaId('')
-                        setCityQuery('')
-                        setUniversityQuery('')
-                        setAreaQuery('')
-                        setOpenMenu('university')
-                      }}
-                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                    >
-                      <div className="min-w-0">
+              <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+                {filteredCities.length > 0
+                  ? filteredCities.map((city) => (
+                      <button
+                        key={city.id}
+                        type="button"
+                        onClick={() => handleCitySelection(String(city.id))}
+                        className={`flex w-full items-center rounded-2xl px-2 py-3 transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
+                          isArabic ? 'text-right' : 'text-left'
+                        }`}
+                      >
                         <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
                           {getCityName(city)}
                         </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+                      </button>
+                    ))
+                  : renderEmptyState()}
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setCityQuery('')
+                setOpenMenu('city')
+              }}
+              className={mobileCollapsedCardClass}
+            >
+              <span className="text-[13px] font-medium text-[#9a9a9a] dark:text-slate-500">
+                {labels.city}
+              </span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
+                  {draftCityId ? selectedCityLabel : labels.selectCity}
+                </span>
+                <ChevronDownIcon />
+              </span>
+            </button>
+          )}
 
-            {openMenu === 'university' && (
-              <>
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUniversityQuery('')
-                      setOpenMenu('city')
-                    }}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
-                      {labels.selectCity}
-                    </p>
-
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
-                        {draftCityId ? selectedCityLabel : labels.selectCity}
-                      </span>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
-                </div>
+          {!isCityAreaMode &&
+            (openMenu === 'university' ? (
+              <div className="rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.32)]">
+                <h2 className="mb-4 text-[18px] font-semibold tracking-[-0.01em] text-[#222222] dark:text-slate-100">
+                  {labels.selectUniversity}
+                </h2>
 
                 <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
                   <SearchIcon />
@@ -564,8 +590,8 @@ export default function PropertiesSearchBar({
                     ref={universityInputRef}
                     type="text"
                     value={universityQuery}
-                    onChange={(e) => setUniversityQuery(e.target.value)}
-                    placeholder={universityPlaceholder}
+                    onChange={(event) => setUniversityQuery(event.target.value)}
+                    placeholder={labels.chooseUniversity}
                     disabled={!canOpenUniversity}
                     className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:text-slate-600 ${
                       isArabic ? 'text-right' : 'text-left'
@@ -573,521 +599,342 @@ export default function PropertiesSearchBar({
                   />
                 </div>
 
-                <div className="max-h-[40vh] space-y-1 overflow-y-auto pr-1">
-                  {filteredUniversities.map((university) => (
-                    <button
-                      key={university.id}
-                      type="button"
-                      onClick={() => {
-                        setDraftUniversityId(String(university.id))
-                        setDraftAreaId('')
-                        setUniversityQuery('')
-                        setAreaQuery('')
-                        setOpenMenu('area')
-                      }}
-                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
-                          {getUniversityName(university)}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                <div className="max-h-[44vh] space-y-1 overflow-y-auto pr-1">
+                  {filteredUniversities.length > 0
+                    ? filteredUniversities.map((university) => (
+                        <button
+                          key={university.id}
+                          type="button"
+                          onClick={() =>
+                            handleUniversitySelection(String(university.id))
+                          }
+                          className={`flex w-full items-center rounded-2xl px-2 py-3 transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
+                            isArabic ? 'text-right' : 'text-left'
+                          }`}
+                        >
+                          <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
+                            {getUniversityName(university)}
+                          </p>
+                        </button>
+                      ))
+                    : renderEmptyState()}
                 </div>
-              </>
-            )}
-
-            {openMenu === 'area' && (
-              <>
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
-                  <button
-                    type="button"
-                    onClick={() => setOpenMenu('city')}
-                    className="flex w-full items-center justify-between text-left"
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={openUniversityMenu}
+                className={mobileCollapsedCardClass}
+              >
+                <span className="text-[13px] font-medium text-[#9a9a9a] dark:text-slate-500">
+                  {labels.university}
+                </span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      'truncate text-[14px] font-medium',
+                      draftCityId
+                        ? 'text-[#222222] dark:text-slate-100'
+                        : disabledValueTextClass
+                    )}
                   >
-                    <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
-                      {labels.selectCity}
-                    </p>
+                    {draftUniversityId
+                      ? selectedUniversityLabel
+                      : draftCityId
+                        ? labels.selectUniversity
+                        : labels.selectCity}
+                  </span>
+                  <ChevronDownIcon />
+                </span>
+              </button>
+            ))}
 
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
-                        {draftCityId ? selectedCityLabel : labels.selectCity}
-                      </span>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
-                </div>
+          {openMenu === 'area' ? (
+            <div className="rounded-[24px] border border-[#e4e4e4] bg-white px-4 py-4 shadow-[0_6px_18px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.32)]">
+              <h2 className="mb-4 text-[18px] font-semibold tracking-[-0.01em] text-[#222222] dark:text-slate-100">
+                {labels.selectArea}
+              </h2>
 
-                <div className="mb-3 rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#111827] dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!draftCityId) {
-                        setOpenMenu('city')
-                        return
-                      }
+              <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
+                <SearchIcon />
+                <input
+                  ref={areaInputRef}
+                  type="text"
+                  value={areaQuery}
+                  onChange={(event) => setAreaQuery(event.target.value)}
+                  placeholder={canOpenArea ? labels.searchAreas : labels.selectCity}
+                  disabled={!canOpenArea}
+                  className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:text-slate-600 ${
+                    isArabic ? 'text-right' : 'text-left'
+                  }`}
+                />
+              </div>
 
-                      setOpenMenu('university')
-                    }}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
-                      {labels.selectUniversity}
-                    </p>
-
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
-                        {draftUniversityId
-                          ? selectedUniversityLabel
-                          : labels.selectUniversity}
-                      </span>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
-                </div>
-
-                <div className="mb-3 flex items-center gap-3 rounded-[12px] border border-[#cfcfcf] px-4 py-3.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
-                  <SearchIcon />
-                  <input
-                    ref={areaInputRef}
-                    type="text"
-                    value={areaQuery}
-                    onChange={(e) => setAreaQuery(e.target.value)}
-                    placeholder={areaPlaceholder}
-                    disabled={!canOpenArea}
-                    className={`w-full bg-transparent text-[14px] text-[#222222] outline-none placeholder:text-[#8a8a8a] disabled:cursor-not-allowed disabled:text-[#a1a1a1] dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:text-slate-600 ${
-                      isArabic ? 'text-right' : 'text-left'
-                    }`}
-                  />
-                </div>
-
-                <div className="max-h-[40vh] space-y-1 overflow-y-auto pr-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftAreaId('')
-                      setAreaQuery('')
-                      setOpenMenu(null)
-                    }}
-                    className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
-                      isArabic ? 'text-right' : 'text-left'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
-                        {labels.anyArea}
-                      </p>
-                    </div>
-                  </button>
-
-                  {filteredAreas.map((area) => (
-                    <button
-                      key={area.id}
-                      type="button"
-                      onClick={() => {
-                        setDraftAreaId(String(area.id))
-                        setAreaQuery('')
-                        setOpenMenu(null)
-                      }}
-                      className={`flex w-full items-center rounded-2xl px-2 py-3 text-left transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                    >
-                      <div className="min-w-0">
+              <div className="max-h-[44vh] space-y-1 overflow-y-auto pr-1">
+                {filteredAreas.length > 0
+                  ? filteredAreas.map((area) => (
+                      <button
+                        key={area.id}
+                        type="button"
+                        onClick={() => handleAreaSelection(String(area.id))}
+                        className={`flex w-full items-center rounded-2xl px-2 py-3 transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
+                          isArabic ? 'text-right' : 'text-left'
+                        }`}
+                      >
                         <p className="truncate text-[15px] font-semibold leading-[1.2] text-[#2a2a2a] dark:text-slate-100">
                           {getAreaName(area)}
                         </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {showCityCard && (
-            <button
-              type="button"
-              onClick={() => {
-                setCityQuery('')
-                setOpenMenu('city')
-              }}
-              className="flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.24)]"
-            >
-              <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
-                  {labels.city}
-                </p>
+                      </button>
+                    ))
+                  : renderEmptyState()}
               </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
-                  {draftCityId ? selectedCityLabel : labels.selectCity}
-                </span>
-                <ChevronDownIcon />
-              </div>
-            </button>
-          )}
-
-          {showUniversityCard && (
-            <button
-              type="button"
-              onClick={openUniversityMenu}
-              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.24)] ${
-                canOpenUniversity ? '' : 'cursor-not-allowed opacity-55'
-              }`}
-            >
-              <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
-                  {labels.university}
-                </p>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
-                  {draftUniversityId
-                    ? selectedUniversityLabel
-                    : labels.selectUniversity}
-                </span>
-                <ChevronDownIcon />
-              </div>
-            </button>
-          )}
-
-          {showAreaCard && (
+            </div>
+          ) : (
             <button
               type="button"
               onClick={openAreaMenu}
-              className={`flex w-full items-center justify-between rounded-[18px] border border-[#dddddd] bg-white px-5 py-4 text-left shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_10px_24px_rgba(0,0,0,0.24)] ${
-                canOpenArea ? '' : 'cursor-not-allowed opacity-55'
-              }`}
+              className={mobileCollapsedCardClass}
             >
-              <div>
-                <p className="text-[13px] font-medium text-[#6f6f6f] dark:text-slate-400">
-                  {labels.area}
-                </p>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[14px] font-medium text-[#222222] dark:text-slate-100">
-                  {draftAreaId ? selectedAreaLabel : labels.selectArea}
+              <span className="text-[13px] font-medium text-[#9a9a9a] dark:text-slate-500">
+                {labels.area}
+              </span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    'truncate text-[14px] font-medium',
+                    canOpenArea
+                      ? 'text-[#222222] dark:text-slate-100'
+                      : disabledValueTextClass
+                  )}
+                >
+                  {draftAreaId
+                    ? selectedAreaLabel
+                    : canOpenArea
+                      ? labels.selectArea
+                      : labels.selectCity}
                 </span>
                 <ChevronDownIcon />
-              </div>
+              </span>
             </button>
           )}
 
-          <div className="flex items-center justify-between px-3 pt-2">
+          <div className="flex items-center justify-between gap-3 px-2 pt-1">
             <button
               type="button"
               onClick={resetAll}
-              className="text-[15px] font-medium text-[#222222] dark:text-slate-100"
+              className="text-[14px] font-medium text-[#444444] underline-offset-4 transition hover:underline dark:text-slate-300"
             >
               {clearAllLabel}
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                if (!draftCityId) {
-                  setOpenMenu('city')
-                  return
-                }
-
-                if (!draftUniversityId) {
-                  setOpenMenu('university')
-                  return
-                }
-
-                if (!draftAreaId) {
-                  setOpenMenu('area')
-                  return
-                }
-
-                applySearch()
-              }}
-              className="flex h-[46px] items-center justify-center gap-2 rounded-full bg-[#0047ff] px-6 text-[16px] font-semibold text-white shadow-sm transition-all duration-200 hover:scale-[1.02] dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8]"
+              onClick={() => applySearch()}
+              className="flex h-[44px] items-center justify-center gap-2 rounded-full bg-[#0a52ff] px-5 text-[14px] font-semibold text-white shadow-[0_8px_20px_rgba(10,82,255,0.24)] transition hover:bg-[#0849e6] active:scale-[0.98]"
             >
-              <SearchIcon />
+              <SearchIcon className="h-[18px] w-[18px]" />
               <span>{searchLabel}</span>
             </button>
           </div>
+
+          {mobileHeaderEndSlot}
         </div>
       </div>
     )
   }
 
   return (
-    <div className="pointer-events-auto w-full">
-
-      <style>{`
-        @media (prefers-color-scheme: dark) {
-          input {
-            color-scheme: dark;
-          }
-
-          input:-webkit-autofill,
-          input:-webkit-autofill:hover,
-          input:-webkit-autofill:focus {
-            -webkit-text-fill-color: #f8fafc;
-            box-shadow: 0 0 0 1000px #111827 inset;
-            transition: background-color 9999s ease-in-out 0s;
-          }
-        }
-      `}</style>
-
-
+    <div
+      ref={wrapperRef}
+      dir={isArabic ? 'rtl' : 'ltr'}
+      className={cn(
+        'relative mx-auto w-full transition-all duration-300',
+        isCompact ? 'max-w-[650px]' : 'max-w-[920px]'
+      )}
+    >
       <div
-        ref={wrapperRef}
-        dir={isArabic ? 'rtl' : 'ltr'}
-        className={`pointer-events-auto relative z-[70] mx-auto flex items-center rounded-full border border-[#dddddd] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-all duration-300 dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_30px_rgba(0,0,0,0.30)] ${
-          isCompact ? 'w-fit max-w-full px-1 py-1' : 'w-full max-w-[900px]'
-        }`}
+        className={cn(
+          'flex items-stretch rounded-full border border-[#dddddd] bg-white shadow-[0_5px_18px_rgba(0,0,0,0.10)] dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_12px_32px_rgba(0,0,0,0.32)]',
+          isCompact ? 'min-h-[52px]' : 'min-h-[66px]'
+        )}
       >
-        <div
-          className={`relative z-[71] min-w-0 transition hover:bg-[#f7f7f7] dark:hover:bg-white/10 ${
-            isArabic ? 'rounded-r-full' : 'rounded-l-full'
-          } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
-        >
+        <div className="relative min-w-0 flex-1">
           <button
             type="button"
             onClick={() => {
               setOpenMenu(openMenu === 'city' ? null : 'city')
               setCityQuery('')
             }}
-            className={`relative z-[72] w-full cursor-pointer ${sectionPaddingClass} ${
-              isArabic ? 'rounded-r-full text-right' : 'rounded-l-full text-left'
-            } ${isCompact ? 'min-w-[100px]' : ''}`}
-          >
-            <p className={titleTextClass}>{labels.city}</p>
-
-            {openMenu === 'city' ? (
-              <input
-                ref={cityInputRef}
-                type="text"
-                value={cityQuery}
-                onChange={(e) => setCityQuery(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                placeholder={labels.searchCities}
-                className={inlineInputClass}
-              />
-            ) : (
-              <p className={valueTextClass}>{selectedCityLabel}</p>
+            className={cn(
+              'flex h-full w-full min-w-0 flex-col justify-center rounded-full transition hover:bg-[#f7f7f7] dark:hover:bg-white/10',
+              sectionPaddingClass,
+              openMenu === 'city' && 'bg-[#f7f7f7] dark:bg-white/10'
             )}
+          >
+            <span className={titleTextClass}>{labels.city}</span>
+            <span className={valueTextClass}>{selectedCityLabel}</span>
           </button>
 
           {openMenu === 'city' && (
             <div className={panelClass}>
-              {filteredCities.map((city) => (
-                <button
-                  key={city.id}
-                  type="button"
-                  onClick={() => {
-                    const nextCityId = String(city.id)
-                    setDraftCityId(nextCityId)
-                    setDraftUniversityId('')
-                    setDraftAreaId('')
-                    setCityQuery('')
-                    setUniversityQuery('')
-                    setAreaQuery('')
-                    setOpenMenu('university')
-                  }}
-                  className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                    String(draftCityId) === String(city.id)
-                      ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100'
-                      : ''
-                  }`}
-                >
-                  {getCityName(city)}
-                </button>
-              ))}
+              <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-xl border border-[#dddddd] bg-white px-3 py-2.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
+                <SearchIcon className="h-4 w-4 shrink-0" />
+                <input
+                  ref={cityInputRef}
+                  type="text"
+                  value={cityQuery}
+                  onChange={(event) => setCityQuery(event.target.value)}
+                  placeholder={labels.searchCities}
+                  className={inlineInputClass}
+                />
+              </div>
+
+              {filteredCities.length > 0
+                ? filteredCities.map((city) => (
+                    <button
+                      key={city.id}
+                      type="button"
+                      onClick={() => handleCitySelection(String(city.id))}
+                      className={cn(itemClass, isArabic ? 'text-right' : 'text-left')}
+                    >
+                      {getCityName(city)}
+                    </button>
+                  ))
+                : renderEmptyState()}
             </div>
           )}
         </div>
 
-        <div
-          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd] dark:bg-white/10`}
-        />
+        <div className="my-3 w-px shrink-0 bg-[#e5e5e5] dark:bg-white/10" />
 
-        <div
-          className={`relative z-[71] min-w-0 transition ${
-            canOpenUniversity ? 'hover:bg-[#f7f7f7] dark:hover:bg-white/10' : 'opacity-55'
-          } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
-        >
-          <button
-            type="button"
-            onClick={openUniversityMenu}
-            className={`relative z-[72] w-full ${sectionPaddingClass} ${
-              canOpenUniversity ? 'cursor-pointer' : 'cursor-not-allowed'
-            } ${isArabic ? 'text-right' : 'text-left'} ${
-              isCompact ? 'min-w-[120px]' : ''
-            }`}
-          >
-            <p className={titleTextClass}>{labels.university}</p>
-
-            {openMenu === 'university' ? (
-              <input
-                ref={universityInputRef}
-                type="text"
-                value={universityQuery}
-                onChange={(e) => setUniversityQuery(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                placeholder={universityPlaceholder}
-                disabled={!canOpenUniversity}
-                className={inlineInputClass}
-              />
-            ) : (
-              <p
-                className={`${valueTextClass} ${
-                  canOpenUniversity ? '' : disabledValueTextClass
-                }`}
+        {!isCityAreaMode && (
+          <>
+            <div className="relative min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={openUniversityMenu}
+                className={cn(
+                  'flex h-full w-full min-w-0 flex-col justify-center rounded-full transition hover:bg-[#f7f7f7] dark:hover:bg-white/10',
+                  sectionPaddingClass,
+                  openMenu === 'university' &&
+                    'bg-[#f7f7f7] dark:bg-white/10'
+                )}
               >
-                {selectedUniversityLabel}
-              </p>
-            )}
-          </button>
-
-          {openMenu === 'university' && canOpenUniversity && (
-            <div className={panelClass}>
-              {filteredUniversities.map((university) => (
-                <button
-                  key={university.id}
-                  type="button"
-                  onClick={() => {
-                    setDraftUniversityId(String(university.id))
-                    setDraftAreaId('')
-                    setUniversityQuery('')
-                    setAreaQuery('')
-                    setOpenMenu('area')
-                  }}
-                  className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                    String(draftUniversityId) === String(university.id)
-                      ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100'
-                      : ''
-                  }`}
+                <span className={titleTextClass}>{labels.university}</span>
+                <span
+                  className={cn(
+                    valueTextClass,
+                    !draftCityId && disabledValueTextClass
+                  )}
                 >
-                  {getUniversityName(university)}
-                </button>
-              ))}
+                  {draftCityId ? selectedUniversityLabel : labels.selectCity}
+                </span>
+              </button>
+
+              {openMenu === 'university' && (
+                <div className={panelClass}>
+                  <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-xl border border-[#dddddd] bg-white px-3 py-2.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
+                    <SearchIcon className="h-4 w-4 shrink-0" />
+                    <input
+                      ref={universityInputRef}
+                      type="text"
+                      value={universityQuery}
+                      onChange={(event) =>
+                        setUniversityQuery(event.target.value)
+                      }
+                      placeholder={labels.chooseUniversity}
+                      className={inlineInputClass}
+                    />
+                  </div>
+
+                  {filteredUniversities.length > 0
+                    ? filteredUniversities.map((university) => (
+                        <button
+                          key={university.id}
+                          type="button"
+                          onClick={() =>
+                            handleUniversitySelection(String(university.id))
+                          }
+                          className={cn(
+                            itemClass,
+                            isArabic ? 'text-right' : 'text-left'
+                          )}
+                        >
+                          {getUniversityName(university)}
+                        </button>
+                      ))
+                    : renderEmptyState()}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <div
-          className={`${isCompact ? 'mx-0 h-4' : 'mx-0 h-8'} w-px shrink-0 bg-[#dddddd] dark:bg-white/10`}
-        />
+            <div className="my-3 w-px shrink-0 bg-[#e5e5e5] dark:bg-white/10" />
+          </>
+        )}
 
-        <div
-          className={`relative z-[71] min-w-0 transition ${
-            canOpenArea ? 'hover:bg-[#f7f7f7] dark:hover:bg-white/10' : 'opacity-55'
-          } ${isCompact ? 'w-auto flex-none' : 'flex-1'}`}
-        >
+        <div className="relative min-w-0 flex-1">
           <button
             type="button"
             onClick={openAreaMenu}
-            className={`relative z-[72] w-full ${sectionPaddingClass} ${
-              canOpenArea ? 'cursor-pointer' : 'cursor-not-allowed'
-            } ${isArabic ? 'text-right' : 'text-left'} ${
-              isCompact ? 'min-w-[105px]' : ''
-            }`}
-          >
-            <p className={titleTextClass}>{labels.area}</p>
-
-            {openMenu === 'area' ? (
-              <input
-                ref={areaInputRef}
-                type="text"
-                value={areaQuery}
-                onChange={(e) => setAreaQuery(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                placeholder={areaPlaceholder}
-                disabled={!canOpenArea}
-                className={inlineInputClass}
-              />
-            ) : (
-              <p
-                className={`${valueTextClass} ${
-                  canOpenArea ? '' : disabledValueTextClass
-                }`}
-              >
-                {selectedAreaLabel}
-              </p>
+            className={cn(
+              'flex h-full w-full min-w-0 flex-col justify-center rounded-full transition hover:bg-[#f7f7f7] dark:hover:bg-white/10',
+              sectionPaddingClass,
+              openMenu === 'area' && 'bg-[#f7f7f7] dark:bg-white/10'
             )}
+          >
+            <span className={titleTextClass}>{labels.area}</span>
+            <span
+              className={cn(
+                valueTextClass,
+                !canOpenArea && disabledValueTextClass
+              )}
+            >
+              {canOpenArea ? selectedAreaLabel : labels.selectCity}
+            </span>
           </button>
 
-          {openMenu === 'area' && canOpenArea && (
+          {openMenu === 'area' && (
             <div className={panelClass}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraftAreaId('')
-                  setAreaQuery('')
-                  setOpenMenu(null)
-                }}
-                className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                  !draftAreaId ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100' : ''
-                }`}
-              >
-                {labels.anyArea}
-              </button>
+              <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-xl border border-[#dddddd] bg-white px-3 py-2.5 text-[#222222] dark:border-white/10 dark:bg-[#111827] dark:text-slate-100">
+                <SearchIcon className="h-4 w-4 shrink-0" />
+                <input
+                  ref={areaInputRef}
+                  type="text"
+                  value={areaQuery}
+                  onChange={(event) => setAreaQuery(event.target.value)}
+                  placeholder={labels.searchAreas}
+                  className={inlineInputClass}
+                />
+              </div>
 
-              {filteredAreas.map((area) => (
-                <button
-                  key={area.id}
-                  type="button"
-                  onClick={() => {
-                    setDraftAreaId(String(area.id))
-                    setAreaQuery('')
-                    setOpenMenu(null)
-                  }}
-                  className={`${itemClass} ${isArabic ? 'text-right' : 'text-left'} ${
-                    String(draftAreaId) === String(area.id)
-                      ? 'bg-gray-100 font-semibold text-gray-900 dark:bg-white/10 dark:text-slate-100'
-                      : ''
-                  }`}
-                >
-                  {getAreaName(area)}
-                </button>
-              ))}
+              {filteredAreas.length > 0
+                ? filteredAreas.map((area) => (
+                    <button
+                      key={area.id}
+                      type="button"
+                      onClick={() => handleAreaSelection(String(area.id))}
+                      className={cn(itemClass, isArabic ? 'text-right' : 'text-left')}
+                    >
+                      {getAreaName(area)}
+                    </button>
+                  ))
+                : renderEmptyState()}
             </div>
           )}
         </div>
 
-        <div className={`${isCompact ? 'pl-1 pr-1' : 'pr-4'} shrink-0`}>
+        <div className="flex shrink-0 items-center p-2">
           <button
             type="button"
-            onClick={() => {
-              if (!draftCityId) {
-                setOpenMenu('city')
-                return
-              }
-
-              if (!draftUniversityId) {
-                setOpenMenu('university')
-                return
-              }
-
-              if (!draftAreaId) {
-                setOpenMenu('area')
-                return
-              }
-
-              applySearch()
-            }}
-            className={`flex items-center justify-center rounded-full bg-[#0047ff] text-white shadow-sm transition-all duration-200 hover:scale-[1.05] dark:bg-[#2563eb] dark:hover:bg-[#1d4ed8] ${
-              isExpandedSearch
-                ? 'h-[44px] gap-2 px-4'
-                : isCompact
-                  ? 'h-[40px] w-[40px]'
-                  : 'h-[48px] w-[48px]'
-            }`}
-          >
-            <SearchIcon />
-            {isExpandedSearch && (
-              <span className="text-[15px] font-semibold leading-none">
-                {searchLabel}
-              </span>
+            onClick={() => applySearch()}
+            aria-label={searchLabel}
+            className={cn(
+              'flex items-center justify-center gap-2 rounded-full bg-[#0a52ff] font-semibold text-white shadow-[0_8px_20px_rgba(10,82,255,0.24)] transition hover:bg-[#0849e6] active:scale-[0.98]',
+              isCompact ? 'h-10 w-10' : 'h-12 px-5'
             )}
+          >
+            <SearchIcon className="h-[18px] w-[18px]" />
+            {!isCompact && <span className="text-sm">{searchLabel}</span>}
           </button>
         </div>
       </div>

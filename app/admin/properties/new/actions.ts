@@ -5,6 +5,13 @@ import { createAdminClient } from '@/src/lib/supabase/admin'
 import { requirePropertyCreatorAccess, isSuperAdmin } from '@/src/lib/admin-auth'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
+const PROPERTY_VIDEOS_BUCKET = 'property-videos'
+const MAX_PROPERTY_VIDEO_BYTES = 200 * 1024 * 1024
+const ALLOWED_PROPERTY_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+])
 
 function toNullableNumber(value: FormDataEntryValue | null) {
   const str = String(value || '').trim()
@@ -45,6 +52,57 @@ function slugifyFileName(fileName: string) {
     .slice(0, 80)
 
   return extension ? `${safeName || 'image'}.${extension}` : safeName || 'image'
+}
+
+
+function sanitizeStorageSegment(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100) || 'property'
+}
+
+function isAllowedPropertyVideoFile(fileName: string, fileType: string) {
+  const normalizedType = fileType.toLowerCase().trim()
+  const extension = fileName.split('.').pop()?.toLowerCase() || ''
+
+  return (
+    ALLOWED_PROPERTY_VIDEO_MIME_TYPES.has(normalizedType) ||
+    ['mp4', 'webm', 'mov'].includes(extension)
+  )
+}
+
+function validateUploadedVideoMetadata(params: {
+  propertyCode: string
+  videoUrl: string
+  storagePath: string
+  mimeType: string
+  fileSizeBytes: number | null
+}) {
+  const { propertyCode, videoUrl, storagePath, mimeType, fileSizeBytes } = params
+
+  if (!videoUrl || !storagePath) {
+    throw new Error('Uploaded video information is incomplete')
+  }
+
+  const expectedPrefix = `properties/pending/${sanitizeStorageSegment(propertyCode)}/`
+  if (!storagePath.startsWith(expectedPrefix)) {
+    throw new Error('Invalid property video storage path')
+  }
+
+  if (!isAllowedPropertyVideoFile(storagePath, mimeType)) {
+    throw new Error('Only MP4, WebM, and MOV videos are allowed')
+  }
+
+  if (
+    fileSizeBytes !== null &&
+    (!Number.isFinite(fileSizeBytes) ||
+      fileSizeBytes <= 0 ||
+      fileSizeBytes > MAX_PROPERTY_VIDEO_BYTES)
+  ) {
+    throw new Error('Property video must be smaller than 200 MB')
+  }
 }
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
@@ -524,6 +582,65 @@ async function createNewOwner({
   return insertedOwner.id as string
 }
 
+
+export async function createPropertyVideoUploadSignedUrlAction(formData: FormData) {
+  await requirePropertyCreatorAccess()
+  const supabase = createAdminClient()
+
+  const propertyCode = String(formData.get('property_code') || '').trim()
+  const originalFileName = String(formData.get('file_name') || '').trim()
+  const fileType = String(formData.get('file_type') || '').trim()
+  const fileSize = Number(String(formData.get('file_size') || '0'))
+
+  if (!propertyCode) {
+    throw new Error('Property code is required before uploading the video')
+  }
+
+  if (!originalFileName) {
+    throw new Error('Video file name is required')
+  }
+
+  if (!isAllowedPropertyVideoFile(originalFileName, fileType)) {
+    throw new Error('Only MP4, WebM, and MOV videos are allowed')
+  }
+
+  if (!Number.isFinite(fileSize) || fileSize <= 0) {
+    throw new Error('Video file size is invalid')
+  }
+
+  if (fileSize > MAX_PROPERTY_VIDEO_BYTES) {
+    throw new Error('Property video must be smaller than 200 MB')
+  }
+
+  const safePropertyCode = sanitizeStorageSegment(propertyCode)
+  const safeFileName = slugifyFileName(originalFileName)
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const filePath = `properties/pending/${safePropertyCode}/${uniqueSuffix}-${safeFileName}`
+
+  const { data: signedUploadData, error: signedUploadError } =
+    await supabase.storage
+      .from(PROPERTY_VIDEOS_BUCKET)
+      .createSignedUploadUrl(filePath)
+
+  if (signedUploadError || !signedUploadData?.token) {
+    throw new Error(
+      `Failed to prepare video upload: ${
+        signedUploadError?.message || 'Upload token was not created'
+      }`
+    )
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from(PROPERTY_VIDEOS_BUCKET)
+    .getPublicUrl(filePath)
+
+  return {
+    video_url: publicUrlData.publicUrl,
+    storage_path: filePath,
+    token: signedUploadData.token,
+  }
+}
+
 export async function createPropertyAction(formData: FormData) {
   const adminContext = await requirePropertyCreatorAccess()
   const supabase = createAdminClient()
@@ -658,6 +775,37 @@ export async function createPropertyAction(formData: FormData) {
   const uploadedImages = formData
     .getAll('images')
     .filter((item): item is File => item instanceof File && item.size > 0)
+
+
+  const uploadedVideoUrl = String(
+    formData.get('uploaded_video_url') || ''
+  ).trim()
+  const uploadedVideoStoragePath = String(
+    formData.get('uploaded_video_storage_path') || ''
+  ).trim()
+  const uploadedVideoMimeType = String(
+    formData.get('uploaded_video_mime_type') || ''
+  ).trim()
+  const uploadedVideoFileSize = toNullableNumber(
+    formData.get('uploaded_video_file_size')
+  )
+
+  const hasUploadedVideo = Boolean(
+    uploadedVideoUrl ||
+      uploadedVideoStoragePath ||
+      uploadedVideoMimeType ||
+      uploadedVideoFileSize !== null
+  )
+
+  if (hasUploadedVideo) {
+    validateUploadedVideoMetadata({
+      propertyCode: property_id,
+      videoUrl: uploadedVideoUrl,
+      storagePath: uploadedVideoStoragePath,
+      mimeType: uploadedVideoMimeType,
+      fileSizeBytes: uploadedVideoFileSize,
+    })
+  }
 
   const roomNames = formData.getAll('room_name').map((v) => String(v).trim())
   const roomNameArs = formData
@@ -1005,6 +1153,35 @@ export async function createPropertyAction(formData: FormData) {
     }
   }
 
+
+  if (hasUploadedVideo) {
+    const { data: publicVideoUrlData } = supabase.storage
+      .from(PROPERTY_VIDEOS_BUCKET)
+      .getPublicUrl(uploadedVideoStoragePath)
+
+    const { error: videoInsertError } = await supabase
+      .from('property_videos')
+      .insert({
+        property_id_ref: propertyIdRef,
+        video_url: publicVideoUrlData.publicUrl,
+        storage_path: uploadedVideoStoragePath,
+        file_mime_type: uploadedVideoMimeType || null,
+        file_size_bytes: uploadedVideoFileSize,
+        is_active: true,
+        sort_order: 0,
+      })
+
+    if (videoInsertError) {
+      await supabase.storage
+        .from(PROPERTY_VIDEOS_BUCKET)
+        .remove([uploadedVideoStoragePath])
+
+      throw new Error(
+        `Failed to save property video: ${videoInsertError.message}`
+      )
+    }
+  }
+
   const amenityIds = formData
     .getAll('amenity_ids')
     .map((v) => String(v).trim())
@@ -1214,6 +1391,7 @@ export async function createPropertyAction(formData: FormData) {
       floor_number,
       admin_status,
       rental_duration,
+      has_video: hasUploadedVideo,
     },
   })
 
