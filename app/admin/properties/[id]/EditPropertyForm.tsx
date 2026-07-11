@@ -2,7 +2,14 @@
 
 import Link from 'next/link'
 import mapboxgl from 'mapbox-gl'
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
@@ -14,7 +21,12 @@ import {
 import AdminLogoutButton from '@/app/admin/components/AdminLogoutButton'
 
 type City = { id: string; name_en: string; name_ar: string }
-type University = { id: string; city_id: string; name_en: string; name_ar: string }
+type University = {
+  id: string
+  city_id: string
+  name_en: string
+  name_ar: string
+}
 type Broker = { id: string; full_name: string; company_name?: string | null }
 
 type OwnerServiceArea = {
@@ -111,16 +123,14 @@ type SeasonalPriceRow = {
   } | null
 }
 
-type SeasonalPriceMap = Partial<Record<PricingSeasonCode, number | string | null>>
+type SeasonalPriceMap = Partial<
+  Record<PricingSeasonCode, number | string | null>
+>
 
 type RoomSellableOption = {
   id: string
   code:
-    | 'single_room'
-    | 'double_room'
-    | 'triple_room'
-    | 'full_apartment'
-    | string
+    'single_room' | 'double_room' | 'triple_room' | 'full_apartment' | string
   name_en?: string | null
   name_ar?: string | null
   occupancy_size?: number | null
@@ -143,6 +153,8 @@ type PropertyRoom = {
   private_room_price_egp?: number | null
   shared_bed_price_egp?: number | null
   private_bathroom: boolean
+  is_reserved_summer_course: boolean
+  is_reserved_academic_year: boolean
   status: 'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
   sort_order: number
   room_beds?: RoomBed[] | null
@@ -162,7 +174,8 @@ type Property = {
   seasonal_prices?: SeasonalPriceMap | null
   property_option_seasonal_prices?: SeasonalPriceRow[] | null
   rental_duration: 'daily' | 'monthly'
-  availability_status: 'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
+  availability_status:
+    'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
   address_en: string | null
   address_ar: string | null
   latitude: number | null
@@ -175,7 +188,8 @@ type Property = {
   airbnb_price_min: number | null
   airbnb_price_max: number | null
   smoking_policy: 'smoking_allowed' | 'non_smoking' | null
-  admin_status: 'draft' | 'pending_review' | 'published' | 'rejected' | 'archived'
+  admin_status:
+    'draft' | 'pending_review' | 'published' | 'rejected' | 'archived'
   is_active: boolean
   floor_number?: number | null
   is_featured?: boolean | null
@@ -197,7 +211,8 @@ type PropertyBookingRequest = {
   preferred_start_date: string | null
   preferred_end_date: string | null
   message: string | null
-  status: 'new' | 'contacted' | 'in_progress' | 'converted' | 'cancelled' | string
+  status:
+    'new' | 'contacted' | 'in_progress' | 'converted' | 'cancelled' | string
   created_at: string
   updated_at: string
 }
@@ -210,7 +225,8 @@ type RoomForm = {
   rental_duration: 'daily' | 'monthly'
   beds_count: string
   private_bathroom: boolean
-  is_reserved: boolean
+  is_reserved_summer_course: boolean
+  is_reserved_academic_year: boolean
   single_room_option_id: string
   single_room_enabled: boolean
   single_room_price_egp: string
@@ -262,8 +278,7 @@ type DisplayStep = {
 }
 
 type CoverSelection =
-  | { kind: 'existing'; index: number }
-  | { kind: 'new'; index: number }
+  { kind: 'existing'; index: number } | { kind: 'new'; index: number }
 
 type RoomOptionCode = 'single_room' | 'double_room' | 'triple_room'
 
@@ -277,7 +292,6 @@ type AmenityCategoryGroup = {
   title: string
   items: Amenity[]
 }
-
 
 type SignedPropertyImageUpload = {
   image_url: string
@@ -303,13 +317,12 @@ function getBrowserSupabaseClient() {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
-      'Supabase browser environment variables are missing. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+      'Supabase browser environment variables are missing. Please check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.',
     )
   }
 
   return createClient(supabaseUrl, supabaseAnonKey)
 }
-
 
 function formatFileSize(bytes?: number | null) {
   if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return 'Unknown size'
@@ -360,9 +373,27 @@ const FORM_STEPS = [
 const DISPLAY_STEPS: DisplayStep[] = [
   { id: 1, title: 'Basic Info', startStep: 1, endStep: 2, navigateStep: 1 },
   { id: 2, title: 'Photos', startStep: 3, endStep: 3, navigateStep: 3 },
-  { id: 3, title: 'Property Details', startStep: 4, endStep: 4, navigateStep: 4 },
-  { id: 4, title: 'Rooms & Pricing', startStep: 5, endStep: 5, navigateStep: 5 },
-  { id: 5, title: 'Property Featured', startStep: 6, endStep: 6, navigateStep: 6 },
+  {
+    id: 3,
+    title: 'Property Details',
+    startStep: 4,
+    endStep: 4,
+    navigateStep: 4,
+  },
+  {
+    id: 4,
+    title: 'Rooms & Pricing',
+    startStep: 5,
+    endStep: 5,
+    navigateStep: 5,
+  },
+  {
+    id: 5,
+    title: 'Property Featured',
+    startStep: 6,
+    endStep: 6,
+    navigateStep: 6,
+  },
   { id: 6, title: 'Review', startStep: 7, endStep: 7, navigateStep: 7 },
 ]
 
@@ -374,7 +405,8 @@ const initialRoom: RoomForm = {
   rental_duration: 'monthly',
   beds_count: '1',
   private_bathroom: false,
-  is_reserved: false,
+  is_reserved_summer_course: false,
+  is_reserved_academic_year: false,
   single_room_option_id: '',
   single_room_enabled: false,
   single_room_price_egp: '',
@@ -424,20 +456,33 @@ function getBedsCountNumber(value: string) {
   return Number.isInteger(num) && num > 0 ? num : 0
 }
 
+function isRoomReservedForAnySeason(room: RoomForm) {
+  return room.is_reserved_summer_course || room.is_reserved_academic_year
+}
+
+function isRoomReservedForEverySeason(room: RoomForm) {
+  return room.is_reserved_summer_course && room.is_reserved_academic_year
+}
+
 function getAvailabilityStatusFromRooms(
-  rooms: RoomForm[]
+  rooms: RoomForm[],
 ): 'available' | 'partially_reserved' | 'fully_reserved' {
   if (rooms.length === 0) return 'available'
 
-  const reservedCount = rooms.filter((room) => room.is_reserved).length
+  const reservedForAnySeasonCount = rooms.filter(
+    isRoomReservedForAnySeason,
+  ).length
+  const reservedForEverySeasonCount = rooms.filter(
+    isRoomReservedForEverySeason,
+  ).length
 
-  if (reservedCount === 0) return 'available'
-  if (reservedCount === rooms.length) return 'fully_reserved'
+  if (reservedForAnySeasonCount === 0) return 'available'
+  if (reservedForEverySeasonCount === rooms.length) return 'fully_reserved'
   return 'partially_reserved'
 }
 
 function formatAvailabilityStatusLabel(
-  status: 'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
+  status: 'available' | 'partially_reserved' | 'fully_reserved' | 'inactive',
 ) {
   switch (status) {
     case 'available':
@@ -469,7 +514,11 @@ function getOwnerServiceAreas(owner: Owner) {
   return Array.isArray(serviceAreas) ? serviceAreas : []
 }
 
-function ownerMatchesLocation(owner: Owner, cityId: string, universityId: string) {
+function ownerMatchesLocation(
+  owner: Owner,
+  cityId: string,
+  universityId: string,
+) {
   if (!cityId || !universityId) return false
 
   return getOwnerServiceAreas(owner).some(
@@ -477,11 +526,14 @@ function ownerMatchesLocation(owner: Owner, cityId: string, universityId: string
       area &&
       String(area.city_id) === String(cityId) &&
       String(area.university_id) === String(universityId) &&
-      area.is_active !== false
+      area.is_active !== false,
   )
 }
 
-function normalizeRoomNumberFieldIfNeeded(field: keyof RoomForm, value: string) {
+function normalizeRoomNumberFieldIfNeeded(
+  field: keyof RoomForm,
+  value: string,
+) {
   if (field === 'beds_count' || String(field).endsWith('_price_egp')) {
     return normalizeNumberString(value)
   }
@@ -491,14 +543,14 @@ function normalizeRoomNumberFieldIfNeeded(field: keyof RoomForm, value: string) 
 
 function getRoomOptionPrice(
   room: PropertyRoom,
-  code: 'single_room' | 'double_room' | 'triple_room'
+  code: 'single_room' | 'double_room' | 'triple_room',
 ) {
   const options = Array.isArray(room?.room_sellable_options)
     ? room.room_sellable_options
     : []
 
   const option = options.find(
-    (item) => item.code === code && item.is_active !== false
+    (item) => item.code === code && item.is_active !== false,
   )
 
   return option?.price_egp != null ? String(option.price_egp) : ''
@@ -506,20 +558,21 @@ function getRoomOptionPrice(
 
 function getActiveRoomSellableOption(
   room: PropertyRoom,
-  code: 'single_room' | 'double_room' | 'triple_room'
+  code: 'single_room' | 'double_room' | 'triple_room',
 ) {
   const options = Array.isArray(room?.room_sellable_options)
     ? room.room_sellable_options
     : []
 
   return (
-    options.find((item) => item.code === code && item.is_active !== false) || null
+    options.find((item) => item.code === code && item.is_active !== false) ||
+    null
   )
 }
 
 function getSeasonalPriceFromRows(
   rows: SeasonalPriceRow[] | null | undefined,
-  seasonCode: PricingSeasonCode
+  seasonCode: PricingSeasonCode,
 ) {
   if (!Array.isArray(rows)) return ''
 
@@ -527,7 +580,7 @@ function getSeasonalPriceFromRows(
     (row) =>
       row?.is_active !== false &&
       row?.property_pricing_seasons?.code === seasonCode &&
-      row?.price_egp != null
+      row?.price_egp != null,
   )
 
   return matchingRow?.price_egp != null ? String(matchingRow.price_egp) : ''
@@ -536,40 +589,53 @@ function getSeasonalPriceFromRows(
 function getRoomOptionSeasonalPrice(
   room: PropertyRoom,
   code: 'single_room' | 'double_room' | 'triple_room',
-  seasonCode: PricingSeasonCode
+  seasonCode: PricingSeasonCode,
 ) {
   const option = getActiveRoomSellableOption(room, code)
-  const fallbackPrice = option?.price_egp != null ? String(option.price_egp) : ''
+  const fallbackPrice =
+    option?.price_egp != null ? String(option.price_egp) : ''
 
   const mappedPrice = option?.seasonal_prices?.[seasonCode]
-  if (mappedPrice !== null && mappedPrice !== undefined && String(mappedPrice).trim()) {
+  if (
+    mappedPrice !== null &&
+    mappedPrice !== undefined &&
+    String(mappedPrice).trim()
+  ) {
     return String(mappedPrice)
   }
 
   return (
-    getSeasonalPriceFromRows(option?.property_option_seasonal_prices, seasonCode) ||
-    fallbackPrice
+    getSeasonalPriceFromRows(
+      option?.property_option_seasonal_prices,
+      seasonCode,
+    ) || fallbackPrice
   )
 }
 
 function getPropertySeasonalPrice(
   property: Property,
-  seasonCode: PricingSeasonCode
+  seasonCode: PricingSeasonCode,
 ) {
   const mappedPrice = property.seasonal_prices?.[seasonCode]
-  if (mappedPrice !== null && mappedPrice !== undefined && String(mappedPrice).trim()) {
+  if (
+    mappedPrice !== null &&
+    mappedPrice !== undefined &&
+    String(mappedPrice).trim()
+  ) {
     return String(mappedPrice)
   }
 
   return (
-    getSeasonalPriceFromRows(property.property_option_seasonal_prices, seasonCode) ||
-    String(property.price_egp || '')
+    getSeasonalPriceFromRows(
+      property.property_option_seasonal_prices,
+      seasonCode,
+    ) || String(property.price_egp || '')
   )
 }
 
 function getRoomOptionEnabled(
   room: PropertyRoom,
-  code: 'single_room' | 'double_room' | 'triple_room'
+  code: 'single_room' | 'double_room' | 'triple_room',
 ) {
   const options = Array.isArray(room?.room_sellable_options)
     ? room.room_sellable_options
@@ -580,14 +646,14 @@ function getRoomOptionEnabled(
 
 function getRoomOptionId(
   room: PropertyRoom,
-  code: 'single_room' | 'double_room' | 'triple_room'
+  code: 'single_room' | 'double_room' | 'triple_room',
 ) {
   const options = Array.isArray(room?.room_sellable_options)
     ? room.room_sellable_options
     : []
 
   const option = options.find(
-    (item) => item.code === code && item.is_active !== false
+    (item) => item.code === code && item.is_active !== false,
   )
 
   return option?.id || ''
@@ -596,7 +662,7 @@ function getRoomOptionId(
 function getRoomSeasonalPriceValue(
   room: RoomForm,
   optionCode: RoomOptionCode,
-  seasonCode: PricingSeasonCode
+  seasonCode: PricingSeasonCode,
 ) {
   if (optionCode === 'single_room') {
     return seasonCode === 'summer_course'
@@ -621,12 +687,19 @@ function getRoomLegacyPriceValue(room: RoomForm, optionCode: RoomOptionCode) {
   return room.triple_room_price_egp
 }
 
-function getRoomOptionBasePriceValue(room: RoomForm, optionCode: RoomOptionCode) {
-  const summerPrice = getRoomSeasonalPriceValue(room, optionCode, 'summer_course')
+function getRoomOptionBasePriceValue(
+  room: RoomForm,
+  optionCode: RoomOptionCode,
+) {
+  const summerPrice = getRoomSeasonalPriceValue(
+    room,
+    optionCode,
+    'summer_course',
+  )
   const academicYearPrice = getRoomSeasonalPriceValue(
     room,
     optionCode,
-    'academic_year'
+    'academic_year',
   )
   const legacyPrice = getRoomLegacyPriceValue(room, optionCode)
 
@@ -637,10 +710,12 @@ function getRoomOptionBasePriceValue(room: RoomForm, optionCode: RoomOptionCode)
 
 function hasValidRoomOptionSeasonalPrices(
   room: RoomForm,
-  optionCode: RoomOptionCode
+  optionCode: RoomOptionCode,
 ) {
   return (
-    isValidPrice(getRoomSeasonalPriceValue(room, optionCode, 'summer_course')) &&
+    isValidPrice(
+      getRoomSeasonalPriceValue(room, optionCode, 'summer_course'),
+    ) &&
     isValidPrice(getRoomSeasonalPriceValue(room, optionCode, 'academic_year'))
   )
 }
@@ -648,21 +723,30 @@ function hasValidRoomOptionSeasonalPrices(
 function getEnabledRoomOptions(room: RoomForm) {
   const options: EnabledRoomOption[] = []
 
-  if (room.single_room_enabled && hasValidRoomOptionSeasonalPrices(room, 'single_room')) {
+  if (
+    room.single_room_enabled &&
+    hasValidRoomOptionSeasonalPrices(room, 'single_room')
+  ) {
     options.push({
       code: 'single_room',
       price: getRoomOptionBasePriceValue(room, 'single_room'),
     })
   }
 
-  if (room.double_room_enabled && hasValidRoomOptionSeasonalPrices(room, 'double_room')) {
+  if (
+    room.double_room_enabled &&
+    hasValidRoomOptionSeasonalPrices(room, 'double_room')
+  ) {
     options.push({
       code: 'double_room',
       price: getRoomOptionBasePriceValue(room, 'double_room'),
     })
   }
 
-  if (room.triple_room_enabled && hasValidRoomOptionSeasonalPrices(room, 'triple_room')) {
+  if (
+    room.triple_room_enabled &&
+    hasValidRoomOptionSeasonalPrices(room, 'triple_room')
+  ) {
     options.push({
       code: 'triple_room',
       price: getRoomOptionBasePriceValue(room, 'triple_room'),
@@ -684,12 +768,16 @@ function getRoomValidationMessage(room: RoomForm) {
 
   if (room.room_name.trim() === '') return 'Room name EN is required.'
   if (room.room_type.trim() === '') return 'Room type is required.'
-  if (!isValidPositiveInt(room.beds_count)) return 'Beds count must be at least 1.'
+  if (!isValidPositiveInt(room.beds_count))
+    return 'Beds count must be at least 1.'
 
   const enabledAnyOption =
-    room.single_room_enabled || room.double_room_enabled || room.triple_room_enabled
+    room.single_room_enabled ||
+    room.double_room_enabled ||
+    room.triple_room_enabled
 
-  if (!enabledAnyOption) return 'Enable at least one booking option for this room.'
+  if (!enabledAnyOption)
+    return 'Enable at least one booking option for this room.'
 
   if (
     room.single_room_enabled &&
@@ -734,7 +822,13 @@ function formatDateTimeLocalInputValue(value?: string | null) {
   return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16)
 }
 
-function IconThumb({ label, iconUrl }: { label: string; iconUrl?: string | null }) {
+function IconThumb({
+  label,
+  iconUrl,
+}: {
+  label: string
+  iconUrl?: string | null
+}) {
   if (iconUrl) {
     return (
       <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#dbe4f0] bg-white shadow-sm">
@@ -789,7 +883,9 @@ function CounterField({
         </button>
       </div>
 
-      {helperText && <p className="mt-2 text-sm text-[#6b7280]">{helperText}</p>}
+      {helperText && (
+        <p className="mt-2 text-sm text-[#6b7280]">{helperText}</p>
+      )}
     </div>
   )
 }
@@ -822,7 +918,9 @@ function RoomOptionField({
   return (
     <div
       className={`rounded-md border p-4 ${
-        disabled ? 'border-[#ececec] bg-[#f7f7f7]' : 'border-[#e5e7eb] bg-[#fafafa]'
+        disabled
+          ? 'border-[#ececec] bg-[#f7f7f7]'
+          : 'border-[#e5e7eb] bg-[#fafafa]'
       }`}
     >
       <label className="flex items-center gap-3">
@@ -842,12 +940,16 @@ function RoomOptionField({
         </span>
       </label>
 
-      <p className={`mt-2 text-sm ${disabled ? 'text-[#9ca3af]' : 'text-[#6b7280]'}`}>
+      <p
+        className={`mt-2 text-sm ${disabled ? 'text-[#9ca3af]' : 'text-[#6b7280]'}`}
+      >
         {description}
       </p>
 
       {disabled && disabledReason && (
-        <p className="mt-2 text-xs font-medium text-[#b45309]">{disabledReason}</p>
+        <p className="mt-2 text-xs font-medium text-[#b45309]">
+          {disabledReason}
+        </p>
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -917,7 +1019,9 @@ function FeatureSelectableCard({
         <IconThumb label={title} iconUrl={iconUrl} />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#162033]">{title}</p>
+          <p className="truncate text-sm font-semibold text-[#162033]">
+            {title}
+          </p>
         </div>
 
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#ccd7e4] bg-white text-transparent transition peer-checked:border-[#0b66c3] peer-checked:bg-[#0b66c3] peer-checked:text-white">
@@ -951,7 +1055,11 @@ function FeatureSection({
 
 function BrandLogo() {
   return (
-    <Link href="/admin/properties" className="navienty-logo" aria-label="Navienty admin home">
+    <Link
+      href="/admin/properties"
+      className="navienty-logo"
+      aria-label="Navienty admin home"
+    >
       <img
         src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
         alt="Navienty icon"
@@ -1018,13 +1126,14 @@ export default function EditPropertyForm({
   const [ownerId, setOwnerId] = useState(property.owner_id || '')
   const [ownerSearch, setOwnerSearch] = useState('')
 
-  const [fullApartmentSummerPriceEgp, setFullApartmentSummerPriceEgp] = useState(
-    getPropertySeasonalPrice(property, 'summer_course')
-  )
-  const [fullApartmentAcademicYearPriceEgp, setFullApartmentAcademicYearPriceEgp] =
-    useState(getPropertySeasonalPrice(property, 'academic_year'))
+  const [fullApartmentSummerPriceEgp, setFullApartmentSummerPriceEgp] =
+    useState(getPropertySeasonalPrice(property, 'summer_course'))
+  const [
+    fullApartmentAcademicYearPriceEgp,
+    setFullApartmentAcademicYearPriceEgp,
+  ] = useState(getPropertySeasonalPrice(property, 'academic_year'))
   const [propertyRentalDuration] = useState<'daily' | 'monthly'>(
-    property.rental_duration || 'monthly'
+    property.rental_duration || 'monthly',
   )
 
   const [availabilityStatus, setAvailabilityStatus] = useState<
@@ -1032,18 +1141,18 @@ export default function EditPropertyForm({
   >(property.availability_status)
 
   const [floorNumber, setFloorNumber] = useState(
-    String(property.floor_number ?? 0)
+    String(property.floor_number ?? 0),
   )
 
   const [bedroomsCount, setBedroomsCount] = useState(
-    String(property.bedrooms_count ?? 0)
+    String(property.bedrooms_count ?? 0),
   )
   const [bathroomsCount, setBathroomsCount] = useState(
-    String(property.bathrooms_count ?? 0)
+    String(property.bathrooms_count ?? 0),
   )
   const [bedsCount, setBedsCount] = useState(String(property.beds_count ?? 0))
   const [guestsCount, setGuestsCount] = useState(
-    String(property.guests_count ?? 0)
+    String(property.guests_count ?? 0),
   )
   const [gender, setGender] = useState(property.gender || '')
   const [smokingPolicy] = useState(property.smoking_policy || '')
@@ -1051,21 +1160,27 @@ export default function EditPropertyForm({
   const [airbnbPriceMax] = useState(String(property.airbnb_price_max ?? ''))
   const [isFeatured, setIsFeatured] = useState(property.is_featured === true)
   const [featuredRank, setFeaturedRank] = useState(
-    String(property.featured_rank ?? 0)
+    String(property.featured_rank ?? 0),
   )
   const [featuredUntil, setFeaturedUntil] = useState(
-    formatDateTimeLocalInputValue(property.featured_until)
+    formatDateTimeLocalInputValue(property.featured_until),
   )
   const [addressSearch, setAddressSearch] = useState('')
-  const [addressSuggestions, setAddressSuggestions] = useState<MapboxAddressSuggestion[]>([])
+  const [addressSuggestions, setAddressSuggestions] = useState<
+    MapboxAddressSuggestion[]
+  >([])
   const [isSearchingAddress, setIsSearchingAddress] = useState(false)
   const [addressSearchError, setAddressSearchError] = useState('')
-  const [selectedLatitude, setSelectedLatitude] = useState(String(property.latitude ?? ''))
-  const [selectedLongitude, setSelectedLongitude] = useState(String(property.longitude ?? ''))
+  const [selectedLatitude, setSelectedLatitude] = useState(
+    String(property.latitude ?? ''),
+  )
+  const [selectedLongitude, setSelectedLongitude] = useState(
+    String(property.longitude ?? ''),
+  )
   const [selectedMapLocationLabel, setSelectedMapLocationLabel] = useState(
     property.latitude != null && property.longitude != null
       ? `${property.latitude}, ${property.longitude}`
-      : ''
+      : '',
   )
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''
@@ -1103,24 +1218,29 @@ export default function EditPropertyForm({
           room_type: room?.room_type || 'single',
           rental_duration: property?.rental_duration || 'monthly',
           beds_count: String(
-            Array.isArray(room?.room_beds) ? room.room_beds.length : 1
+            Array.isArray(room?.room_beds) ? room.room_beds.length : 1,
           ),
           private_bathroom: Boolean(room?.private_bathroom),
-          is_reserved:
-            room?.status === 'fully_reserved' ||
-            room?.status === 'partially_reserved',
+          is_reserved_summer_course:
+            room?.is_reserved_summer_course ??
+            (room?.status === 'fully_reserved' ||
+              room?.status === 'partially_reserved'),
+          is_reserved_academic_year:
+            room?.is_reserved_academic_year ??
+            (room?.status === 'fully_reserved' ||
+              room?.status === 'partially_reserved'),
           single_room_option_id: getRoomOptionId(room, 'single_room'),
           single_room_enabled: getRoomOptionEnabled(room, 'single_room'),
           single_room_price_egp: getRoomOptionPrice(room, 'single_room'),
           single_room_summer_course_price_egp: getRoomOptionSeasonalPrice(
             room,
             'single_room',
-            'summer_course'
+            'summer_course',
           ),
           single_room_academic_year_price_egp: getRoomOptionSeasonalPrice(
             room,
             'single_room',
-            'academic_year'
+            'academic_year',
           ),
           double_room_option_id: getRoomOptionId(room, 'double_room'),
           double_room_enabled: getRoomOptionEnabled(room, 'double_room'),
@@ -1128,12 +1248,12 @@ export default function EditPropertyForm({
           double_room_summer_course_price_egp: getRoomOptionSeasonalPrice(
             room,
             'double_room',
-            'summer_course'
+            'summer_course',
           ),
           double_room_academic_year_price_egp: getRoomOptionSeasonalPrice(
             room,
             'double_room',
-            'academic_year'
+            'academic_year',
           ),
           triple_room_option_id: getRoomOptionId(room, 'triple_room'),
           triple_room_enabled: getRoomOptionEnabled(room, 'triple_room'),
@@ -1141,12 +1261,12 @@ export default function EditPropertyForm({
           triple_room_summer_course_price_egp: getRoomOptionSeasonalPrice(
             room,
             'triple_room',
-            'summer_course'
+            'summer_course',
           ),
           triple_room_academic_year_price_egp: getRoomOptionSeasonalPrice(
             room,
             'triple_room',
-            'academic_year'
+            'academic_year',
           ),
         }))
       : [
@@ -1158,7 +1278,7 @@ export default function EditPropertyForm({
             single_room_enabled: true,
             rental_duration: property?.rental_duration || 'monthly',
           },
-        ]
+        ],
   )
 
   const inputClass =
@@ -1175,7 +1295,6 @@ export default function EditPropertyForm({
     }
   }, [newImageFiles])
 
-
   useEffect(() => {
     return () => {
       if (newVideoPreviewUrl) URL.revokeObjectURL(newVideoPreviewUrl)
@@ -1188,7 +1307,9 @@ export default function EditPropertyForm({
   }, [cityId, universities])
 
   const selectedUniversity = useMemo(() => {
-    return universities.find((university) => university.id === universityId) || null
+    return (
+      universities.find((university) => university.id === universityId) || null
+    )
   }, [universities, universityId])
 
   const selectedCity = useMemo(() => {
@@ -1205,7 +1326,7 @@ export default function EditPropertyForm({
     if (!cityId || !universityId) return []
 
     return activeOwners.filter((owner) =>
-      ownerMatchesLocation(owner, cityId, universityId)
+      ownerMatchesLocation(owner, cityId, universityId),
     )
   }, [activeOwners, cityId, universityId])
 
@@ -1251,17 +1372,23 @@ export default function EditPropertyForm({
 
     activeAmenities.forEach((item) => {
       const rawCategory =
-        item.category_en?.trim() || item.category_ar?.trim() || 'Other Amenities'
+        item.category_en?.trim() ||
+        item.category_ar?.trim() ||
+        'Other Amenities'
 
       if (!groupMap.has(rawCategory)) {
-        groupMap.set(rawCategory, { key: rawCategory, title: rawCategory, items: [] })
+        groupMap.set(rawCategory, {
+          key: rawCategory,
+          title: rawCategory,
+          items: [],
+        })
       }
 
       groupMap.get(rawCategory)!.items.push(item)
     })
 
     return Array.from(groupMap.values()).sort((a, b) =>
-      a.title.localeCompare(b.title)
+      a.title.localeCompare(b.title),
     )
   }, [activeAmenities])
 
@@ -1278,14 +1405,15 @@ export default function EditPropertyForm({
   }, [billTypes])
 
   const hasAtLeastOneImage =
-    existingImages.length > 0 || newImageFiles.some((item) => item.file !== null)
+    existingImages.length > 0 ||
+    newImageFiles.some((item) => item.file !== null)
 
   const totalImageCount =
-    existingImages.length + newImageFiles.filter((item) => item.file !== null).length
-
+    existingImages.length +
+    newImageFiles.filter((item) => item.file !== null).length
 
   const hasFinalVideo = Boolean(
-    newVideoFile || (existingVideo && !isExistingVideoRemoved)
+    newVideoFile || (existingVideo && !isExistingVideoRemoved),
   )
 
   const totalBedsFromRooms = useMemo(() => {
@@ -1304,16 +1432,20 @@ export default function EditPropertyForm({
   const lowestAvailableOptionPrice = useMemo(() => {
     const prices = roomState.flatMap((room) =>
       getEnabledRoomOptions(room).map((option) =>
-        Number(normalizeNumberString(option.price))
-      )
+        Number(normalizeNumberString(option.price)),
+      ),
     )
 
-    const validPrices = prices.filter((price) => Number.isFinite(price) && price > 0)
+    const validPrices = prices.filter(
+      (price) => Number.isFinite(price) && price > 0,
+    )
     if (validPrices.length === 0) return null
     return Math.min(...validPrices)
   }, [roomState])
 
-  const hasValidRoom = roomState.some((room) => getRoomValidationMessage(room) === '')
+  const hasValidRoom = roomState.some(
+    (room) => getRoomValidationMessage(room) === '',
+  )
 
   const hasInvalidCompletedRoom = roomState.some((room) => {
     const hasAnyValue =
@@ -1373,7 +1505,8 @@ export default function EditPropertyForm({
 
   const setSelectedMapLocation = useCallback(
     (longitudeValue: number, latitudeValue: number, label: string) => {
-      if (!Number.isFinite(longitudeValue) || !Number.isFinite(latitudeValue)) return
+      if (!Number.isFinite(longitudeValue) || !Number.isFinite(latitudeValue))
+        return
 
       const normalizedLongitude = Number(longitudeValue.toFixed(7))
       const normalizedLatitude = Number(latitudeValue.toFixed(7))
@@ -1383,7 +1516,7 @@ export default function EditPropertyForm({
       setSelectedLatitude(String(normalizedLatitude))
       setSelectedMapLocationLabel(label || fallbackLabel)
     },
-    []
+    [],
   )
 
   useEffect(() => {
@@ -1411,7 +1544,7 @@ export default function EditPropertyForm({
         showZoom: true,
         visualizePitch: false,
       }),
-      'bottom-right'
+      'bottom-right',
     )
 
     map.on('load', () => {
@@ -1508,7 +1641,9 @@ export default function EditPropertyForm({
     if (!mapboxToken) {
       setAddressSuggestions([])
       setIsSearchingAddress(false)
-      setAddressSearchError('Mapbox token is missing. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to .env.local.')
+      setAddressSearchError(
+        'Mapbox token is missing. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to .env.local.',
+      )
       return
     }
 
@@ -1527,7 +1662,7 @@ export default function EditPropertyForm({
 
         const encodedQuery = encodeURIComponent(queryParts.join(', '))
         const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${encodeURIComponent(
-          mapboxToken
+          mapboxToken,
         )}&country=EG&language=en,ar&limit=6&types=address,poi,place,locality,neighborhood`
 
         const response = await fetch(endpoint, { signal: controller.signal })
@@ -1567,7 +1702,9 @@ export default function EditPropertyForm({
       } catch (error: any) {
         if (error?.name === 'AbortError') return
         setAddressSuggestions([])
-        setAddressSearchError('Could not load address results. Try a more specific address.')
+        setAddressSearchError(
+          'Could not load address results. Try a more specific address.',
+        )
       } finally {
         if (!controller.signal.aborted) {
           setIsSearchingAddress(false)
@@ -1593,7 +1730,9 @@ export default function EditPropertyForm({
     setAddressSearch(value)
   }
 
-  const handleSelectAddressSuggestion = (suggestion: MapboxAddressSuggestion) => {
+  const handleSelectAddressSuggestion = (
+    suggestion: MapboxAddressSuggestion,
+  ) => {
     const [longitude, latitude] = suggestion.center
     const fullAddress = suggestion.place_name
 
@@ -1616,7 +1755,9 @@ export default function EditPropertyForm({
     setCityId(value)
 
     const nextUniversities = universities.filter((u) => u.city_id === value)
-    const universityStillValid = nextUniversities.some((u) => u.id === universityId)
+    const universityStillValid = nextUniversities.some(
+      (u) => u.id === universityId,
+    )
 
     if (!universityStillValid) {
       setUniversityId('')
@@ -1749,7 +1890,11 @@ export default function EditPropertyForm({
     ])
   }
 
-  const updateRoom = (index: number, field: keyof RoomForm, value: string | boolean) => {
+  const updateRoom = (
+    index: number,
+    field: keyof RoomForm,
+    value: string | boolean,
+  ) => {
     setRoomState((prev) =>
       prev.map((room, i) => {
         if (i !== index) return room
@@ -1790,7 +1935,7 @@ export default function EditPropertyForm({
         }
 
         return nextRoom
-      })
+      }),
     )
   }
 
@@ -1825,7 +1970,11 @@ export default function EditPropertyForm({
           return 'Please complete city, university, broker, owner, and gender.'
         }
 
-        if (!filteredUniversities.some((university) => university.id === universityId)) {
+        if (
+          !filteredUniversities.some(
+            (university) => university.id === universityId,
+          )
+        ) {
           return 'Selected university is not available for the selected city.'
         }
 
@@ -1833,7 +1982,10 @@ export default function EditPropertyForm({
           return 'Broker information is missing for this property.'
         }
 
-        if (canChangeBroker && !brokers.some((broker) => broker.id === brokerId)) {
+        if (
+          canChangeBroker &&
+          !brokers.some((broker) => broker.id === brokerId)
+        ) {
           return 'Selected broker was not found.'
         }
 
@@ -1915,7 +2067,8 @@ export default function EditPropertyForm({
 
   const getDisplayStepStatus = (step: DisplayStep) => {
     if (currentStep > step.endStep) return 'done'
-    if (currentStep >= step.startStep && currentStep <= step.endStep) return 'active'
+    if (currentStep >= step.startStep && currentStep <= step.endStep)
+      return 'active'
     return 'upcoming'
   }
 
@@ -1958,19 +2111,25 @@ export default function EditPropertyForm({
     formData.set('owner_id', ownerId)
 
     const normalizedFullApartmentSummerPrice = normalizeNumberString(
-      fullApartmentSummerPriceEgp
+      fullApartmentSummerPriceEgp,
     )
     const normalizedFullApartmentAcademicYearPrice = normalizeNumberString(
-      fullApartmentAcademicYearPriceEgp
+      fullApartmentAcademicYearPriceEgp,
     )
 
     formData.set('price_egp', normalizedFullApartmentSummerPrice)
     formData.set('price_egp_summer_course', normalizedFullApartmentSummerPrice)
-    formData.set('price_egp_academic_year', normalizedFullApartmentAcademicYearPrice)
-    formData.set('full_apartment_price_egp_summer_course', normalizedFullApartmentSummerPrice)
+    formData.set(
+      'price_egp_academic_year',
+      normalizedFullApartmentAcademicYearPrice,
+    )
+    formData.set(
+      'full_apartment_price_egp_summer_course',
+      normalizedFullApartmentSummerPrice,
+    )
     formData.set(
       'full_apartment_price_egp_academic_year',
-      normalizedFullApartmentAcademicYearPrice
+      normalizedFullApartmentAcademicYearPrice,
     )
     formData.set('floor_number', normalizeNumberString(floorNumber))
     formData.set('rental_duration', propertyRentalDuration)
@@ -1991,7 +2150,10 @@ export default function EditPropertyForm({
       formData.set('featured_rank', normalizeNumberString(featuredRank || '0'))
       formData.set('featured_until', featuredUntil)
     } else {
-      formData.set('is_featured', property.is_featured === true ? 'true' : 'false')
+      formData.set(
+        'is_featured',
+        property.is_featured === true ? 'true' : 'false',
+      )
       formData.set('featured_rank', String(property.featured_rank ?? 0))
       formData.set('featured_until', property.featured_until ?? '')
     }
@@ -2035,15 +2197,15 @@ export default function EditPropertyForm({
         ) {
           const batch = filesToUpload.slice(
             batchStart,
-            batchStart + PROPERTY_IMAGE_UPLOAD_BATCH_SIZE
+            batchStart + PROPERTY_IMAGE_UPLOAD_BATCH_SIZE,
           )
           const batchEnd = Math.min(
             batchStart + batch.length,
-            filesToUpload.length
+            filesToUpload.length,
           )
 
           setUploadProgress(
-            `Uploading images ${batchStart + 1}-${batchEnd} of ${filesToUpload.length}...`
+            `Uploading images ${batchStart + 1}-${batchEnd} of ${filesToUpload.length}...`,
           )
 
           const batchResults = await Promise.all(
@@ -2053,31 +2215,33 @@ export default function EditPropertyForm({
               signedUploadFormData.set('file_name', file.name)
               signedUploadFormData.set('file_type', file.type || 'image/jpeg')
 
-              const signedUpload = await createPropertyImageUploadSignedUrlAction(
-                signedUploadFormData
-              )
-
-              const { error: directUploadError } = await supabaseBrowserClient.storage
-                .from(PROPERTY_IMAGES_BUCKET)
-                .uploadToSignedUrl(
-                  signedUpload.storage_path,
-                  signedUpload.token,
-                  file,
-                  {
-                    cacheControl: '3600',
-                    contentType: file.type || undefined,
-                    upsert: false,
-                  }
+              const signedUpload =
+                await createPropertyImageUploadSignedUrlAction(
+                  signedUploadFormData,
                 )
+
+              const { error: directUploadError } =
+                await supabaseBrowserClient.storage
+                  .from(PROPERTY_IMAGES_BUCKET)
+                  .uploadToSignedUrl(
+                    signedUpload.storage_path,
+                    signedUpload.token,
+                    file,
+                    {
+                      cacheControl: '3600',
+                      contentType: file.type || undefined,
+                      upsert: false,
+                    },
+                  )
 
               if (directUploadError) {
                 throw new Error(
-                  `Failed to upload ${file.name}: ${directUploadError.message}`
+                  `Failed to upload ${file.name}: ${directUploadError.message}`,
                 )
               }
 
               return signedUpload
-            })
+            }),
           )
 
           uploadedImages.push(...batchResults)
@@ -2087,7 +2251,7 @@ export default function EditPropertyForm({
           formData.append('uploaded_image_url', uploadedImage.image_url)
           formData.append(
             'uploaded_image_storage_path',
-            uploadedImage.storage_path
+            uploadedImage.storage_path,
           )
         })
       } catch (error: any) {
@@ -2105,7 +2269,7 @@ export default function EditPropertyForm({
     formData.set('existing_video_id', existingVideo?.id || '')
     formData.set(
       'remove_existing_video',
-      isExistingVideoRemoved ? 'true' : 'false'
+      isExistingVideoRemoved ? 'true' : 'false',
     )
 
     if (newVideoFile) {
@@ -2116,10 +2280,7 @@ export default function EditPropertyForm({
         const signedVideoFormData = new FormData()
         signedVideoFormData.set('property_db_id', property.id)
         signedVideoFormData.set('file_name', newVideoFile.name)
-        signedVideoFormData.set(
-          'file_type',
-          getVideoContentType(newVideoFile)
-        )
+        signedVideoFormData.set('file_type', getVideoContentType(newVideoFile))
         signedVideoFormData.set('file_size', String(newVideoFile.size))
 
         const signedVideoUpload: SignedPropertyVideoUpload =
@@ -2137,23 +2298,23 @@ export default function EditPropertyForm({
                 cacheControl: '3600',
                 contentType: getVideoContentType(newVideoFile),
                 upsert: false,
-              }
+              },
             )
 
         if (directVideoUploadError) {
           throw new Error(
-            `Failed to upload ${newVideoFile.name}: ${directVideoUploadError.message}`
+            `Failed to upload ${newVideoFile.name}: ${directVideoUploadError.message}`,
           )
         }
 
         formData.set('uploaded_video_url', signedVideoUpload.video_url)
         formData.set(
           'uploaded_video_storage_path',
-          signedVideoUpload.storage_path
+          signedVideoUpload.storage_path,
         )
         formData.set(
           'uploaded_video_mime_type',
-          getVideoContentType(newVideoFile)
+          getVideoContentType(newVideoFile),
         )
         formData.set('uploaded_video_file_size', String(newVideoFile.size))
       } catch (error: any) {
@@ -2176,6 +2337,8 @@ export default function EditPropertyForm({
     formData.delete('room_beds_count')
     formData.delete('room_private_bathroom')
     formData.delete('room_is_reserved')
+    formData.delete('room_is_reserved_summer_course')
+    formData.delete('room_is_reserved_academic_year')
     formData.delete('room_single_room_option_id')
     formData.delete('room_single_room_enabled')
     formData.delete('room_single_room_price_egp')
@@ -2199,61 +2362,80 @@ export default function EditPropertyForm({
       formData.append('room_type', room.room_type)
       formData.append('room_rental_duration', propertyRentalDuration)
       formData.append('room_beds_count', normalizeNumberString(room.beds_count))
-      formData.append('room_private_bathroom', room.private_bathroom ? 'true' : 'false')
-      formData.append('room_is_reserved', room.is_reserved ? 'true' : 'false')
+      formData.append(
+        'room_private_bathroom',
+        room.private_bathroom ? 'true' : 'false',
+      )
+      formData.append(
+        'room_is_reserved_summer_course',
+        room.is_reserved_summer_course ? 'true' : 'false',
+      )
+      formData.append(
+        'room_is_reserved_academic_year',
+        room.is_reserved_academic_year ? 'true' : 'false',
+      )
 
-      formData.append('room_single_room_option_id', room.single_room_option_id || '')
+      formData.append(
+        'room_single_room_option_id',
+        room.single_room_option_id || '',
+      )
       formData.append(
         'room_single_room_enabled',
-        room.single_room_enabled ? 'true' : 'false'
+        room.single_room_enabled ? 'true' : 'false',
       )
       formData.append(
         'room_single_room_price_egp',
-        normalizeNumberString(getRoomOptionBasePriceValue(room, 'single_room'))
+        normalizeNumberString(getRoomOptionBasePriceValue(room, 'single_room')),
       )
       formData.append(
         'room_single_room_price_egp_summer_course',
-        normalizeNumberString(room.single_room_summer_course_price_egp)
+        normalizeNumberString(room.single_room_summer_course_price_egp),
       )
       formData.append(
         'room_single_room_price_egp_academic_year',
-        normalizeNumberString(room.single_room_academic_year_price_egp)
+        normalizeNumberString(room.single_room_academic_year_price_egp),
       )
 
-      formData.append('room_double_room_option_id', room.double_room_option_id || '')
+      formData.append(
+        'room_double_room_option_id',
+        room.double_room_option_id || '',
+      )
       formData.append(
         'room_double_room_enabled',
-        room.double_room_enabled ? 'true' : 'false'
+        room.double_room_enabled ? 'true' : 'false',
       )
       formData.append(
         'room_double_room_price_egp',
-        normalizeNumberString(getRoomOptionBasePriceValue(room, 'double_room'))
+        normalizeNumberString(getRoomOptionBasePriceValue(room, 'double_room')),
       )
       formData.append(
         'room_double_room_price_egp_summer_course',
-        normalizeNumberString(room.double_room_summer_course_price_egp)
+        normalizeNumberString(room.double_room_summer_course_price_egp),
       )
       formData.append(
         'room_double_room_price_egp_academic_year',
-        normalizeNumberString(room.double_room_academic_year_price_egp)
+        normalizeNumberString(room.double_room_academic_year_price_egp),
       )
 
-      formData.append('room_triple_room_option_id', room.triple_room_option_id || '')
+      formData.append(
+        'room_triple_room_option_id',
+        room.triple_room_option_id || '',
+      )
       formData.append(
         'room_triple_room_enabled',
-        room.triple_room_enabled ? 'true' : 'false'
+        room.triple_room_enabled ? 'true' : 'false',
       )
       formData.append(
         'room_triple_room_price_egp',
-        normalizeNumberString(getRoomOptionBasePriceValue(room, 'triple_room'))
+        normalizeNumberString(getRoomOptionBasePriceValue(room, 'triple_room')),
       )
       formData.append(
         'room_triple_room_price_egp_summer_course',
-        normalizeNumberString(room.triple_room_summer_course_price_egp)
+        normalizeNumberString(room.triple_room_summer_course_price_egp),
       )
       formData.append(
         'room_triple_room_price_egp_academic_year',
-        normalizeNumberString(room.triple_room_academic_year_price_egp)
+        normalizeNumberString(room.triple_room_academic_year_price_egp),
       )
     })
 
@@ -2350,9 +2532,15 @@ export default function EditPropertyForm({
       <input type="hidden" name="property_db_id" value={property.id} />
       <input type="hidden" name="latitude" value={selectedLatitude} />
       <input type="hidden" name="longitude" value={selectedLongitude} />
-      {!canChangeBroker && <input type="hidden" name="broker_id" value={property.broker_id} />}
+      {!canChangeBroker && (
+        <input type="hidden" name="broker_id" value={property.broker_id} />
+      )}
       {!canChangeAdminStatus && (
-        <input type="hidden" name="admin_status" value={property.admin_status} />
+        <input
+          type="hidden"
+          name="admin_status"
+          value={property.admin_status}
+        />
       )}
       {!canChangeAdminStatus && (
         <>
@@ -2412,7 +2600,9 @@ export default function EditPropertyForm({
                         ✓
                       </span>
                     )}
-                    {status === 'active' && <span className="ml-2 text-[#054aff]">◑</span>}
+                    {status === 'active' && (
+                      <span className="ml-2 text-[#054aff]">◑</span>
+                    )}
                   </div>
 
                   <div className="mt-4 flex h-[3px] w-[145px] overflow-hidden rounded-full bg-[#bdbdbd]">
@@ -2480,7 +2670,9 @@ export default function EditPropertyForm({
                   </label>
                   <input
                     value={addressSearch}
-                    onChange={(e) => handleAddressSearchInputChange(e.target.value)}
+                    onChange={(e) =>
+                      handleAddressSearchInputChange(e.target.value)
+                    }
                     placeholder="Search the map location only — this will not change Address EN/AR"
                     className={inputClass}
                     autoComplete="off"
@@ -2504,7 +2696,9 @@ export default function EditPropertyForm({
                         <button
                           key={suggestion.id}
                           type="button"
-                          onClick={() => handleSelectAddressSuggestion(suggestion)}
+                          onClick={() =>
+                            handleSelectAddressSuggestion(suggestion)
+                          }
                           className="block w-full border-b border-[#edf2f7] px-4 py-3 text-left transition last:border-b-0 hover:bg-[#f5f9ff]"
                         >
                           <span className="block text-sm font-semibold text-[#162033]">
@@ -2537,7 +2731,9 @@ export default function EditPropertyForm({
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-[#6b7280]">
-                      Search and select a result, or click on the map and drag the pin to the exact location. This does not change Address EN or Address AR.
+                      Search and select a result, or click on the map and drag
+                      the pin to the exact location. This does not change
+                      Address EN or Address AR.
                     </p>
                   )}
 
@@ -2546,15 +2742,21 @@ export default function EditPropertyForm({
                       <div ref={mapContainerRef} className="h-[340px] w-full" />
                     ) : (
                       <div className="flex h-[240px] items-center justify-center px-6 text-center text-sm font-medium text-[#b42318]">
-                        Mapbox token is missing. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to .env.local.
+                        Mapbox token is missing. Add
+                        NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to .env.local.
                       </div>
                     )}
                   </div>
 
                   <div className="mt-3 rounded-2xl border border-dashed border-[#bdd7f4] bg-[#f5f9ff] px-4 py-3 text-sm text-[#35506b]">
-                    <p className="font-semibold text-[#162033]">Map location only</p>
+                    <p className="font-semibold text-[#162033]">
+                      Map location only
+                    </p>
                     <p className="mt-1 leading-6">
-                      Use search to get near the property, then click the map or drag the pin to the exact building/area. Address EN and Address AR stay separate and are only the written address shown to students.
+                      Use search to get near the property, then click the map or
+                      drag the pin to the exact building/area. Address EN and
+                      Address AR stay separate and are only the written address
+                      shown to students.
                     </p>
                   </div>
                 </div>
@@ -2595,7 +2797,9 @@ export default function EditPropertyForm({
             <div className="mt-6 rounded-md border border-[#e7e7e7] bg-white p-4 shadow-sm md:p-5">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">City</label>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    City
+                  </label>
                   <select
                     value={cityId}
                     onChange={(e) => handleCityChange(e.target.value)}
@@ -2611,7 +2815,9 @@ export default function EditPropertyForm({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">University</label>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    University
+                  </label>
                   <select
                     value={universityId}
                     onChange={(e) => handleUniversityChange(e.target.value)}
@@ -2638,7 +2844,9 @@ export default function EditPropertyForm({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">Broker</label>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Broker
+                  </label>
 
                   {canChangeBroker ? (
                     <select
@@ -2650,7 +2858,9 @@ export default function EditPropertyForm({
                       {brokers.map((broker) => (
                         <option key={broker.id} value={broker.id}>
                           {broker.full_name}
-                          {broker.company_name ? ` - ${broker.company_name}` : ''}
+                          {broker.company_name
+                            ? ` - ${broker.company_name}`
+                            : ''}
                         </option>
                       ))}
                     </select>
@@ -2664,7 +2874,9 @@ export default function EditPropertyForm({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">Gender</label>
+                  <label className="mb-1.5 block text-sm font-medium">
+                    Gender
+                  </label>
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
@@ -2677,7 +2889,9 @@ export default function EditPropertyForm({
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium">Owner</label>
+                  <label className="mb-2 block text-sm font-medium">
+                    Owner
+                  </label>
 
                   <div className="rounded-xl border border-[#dbeafe] bg-[#f8fbff] p-4">
                     <div className="mb-4">
@@ -2685,7 +2899,8 @@ export default function EditPropertyForm({
                         Use Existing Owner
                       </h3>
                       <p className="mt-1 text-xs text-[#6b7280]">
-                        Owner must be assigned to the selected city and university.
+                        Owner must be assigned to the selected city and
+                        university.
                       </p>
                     </div>
 
@@ -2728,7 +2943,9 @@ export default function EditPropertyForm({
                           </option>
 
                           {selectedOwner &&
-                          !displayedOwners.some((owner) => owner.id === selectedOwner.id) ? (
+                          !displayedOwners.some(
+                            (owner) => owner.id === selectedOwner.id,
+                          ) ? (
                             <option value={selectedOwner.id}>
                               {getOwnerLabel(selectedOwner)}
                             </option>
@@ -2745,7 +2962,8 @@ export default function EditPropertyForm({
 
                     {cityId && universityId && eligibleOwners.length === 0 ? (
                       <div className="mt-3 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-xs text-[#92400e]">
-                        No active owners are assigned to this city and university.
+                        No active owners are assigned to this city and
+                        university.
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-[#6b7280]">
@@ -2755,7 +2973,9 @@ export default function EditPropertyForm({
 
                     {selectedOwner ? (
                       <div className="mt-4 rounded-md border border-[#dbeafe] bg-[#f0f7ff] p-4 text-sm text-[#0f3f75]">
-                        <p className="font-semibold text-[#0f3f75]">Selected owner details</p>
+                        <p className="font-semibold text-[#0f3f75]">
+                          Selected owner details
+                        </p>
                         <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
                           <p>Name: {selectedOwner.full_name || '—'}</p>
                           <p>Phone: {selectedOwner.phone_number || '—'}</p>
@@ -2778,13 +2998,15 @@ export default function EditPropertyForm({
                           | 'available'
                           | 'partially_reserved'
                           | 'fully_reserved'
-                          | 'inactive'
+                          | 'inactive',
                       )
                     }
                     className={selectClass}
                   >
                     <option value="available">Available</option>
-                    <option value="partially_reserved">Partially Reserved</option>
+                    <option value="partially_reserved">
+                      Partially Reserved
+                    </option>
                     <option value="fully_reserved">Reserved</option>
                     <option value="inactive">Inactive</option>
                   </select>
@@ -2851,7 +3073,9 @@ export default function EditPropertyForm({
                     </svg>
                   </div>
 
-                  <p className="text-[18px] font-bold text-[#111827]">Drag and drop or</p>
+                  <p className="text-[18px] font-bold text-[#111827]">
+                    Drag and drop or
+                  </p>
 
                   <button
                     type="button"
@@ -2867,7 +3091,8 @@ export default function EditPropertyForm({
                 <div className="mt-6">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-medium text-[#4b5563]">
-                      {totalImageCount} image{totalImageCount === 1 ? '' : 's'} selected
+                      {totalImageCount} image{totalImageCount === 1 ? '' : 's'}{' '}
+                      selected
                     </p>
 
                     <button
@@ -2899,7 +3124,9 @@ export default function EditPropertyForm({
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setCoverSelection({ kind: 'existing', index })}
+                              onClick={() =>
+                                setCoverSelection({ kind: 'existing', index })
+                              }
                               className={`rounded-md px-3 py-2 text-sm font-medium ${
                                 coverSelection.kind === 'existing' &&
                                 coverSelection.index === index &&
@@ -2946,7 +3173,9 @@ export default function EditPropertyForm({
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setCoverSelection({ kind: 'new', index })}
+                              onClick={() =>
+                                setCoverSelection({ kind: 'new', index })
+                              }
                               disabled={!item.file}
                               className={`rounded-md px-3 py-2 text-sm font-medium ${
                                 coverSelection.kind === 'new' &&
@@ -2998,11 +3227,13 @@ export default function EditPropertyForm({
                       Property Video
                     </h2>
                     <p className="mt-1 text-sm text-[#6b7280]">
-                      Optional — keep, replace, or remove the current property video.
+                      Optional — keep, replace, or remove the current property
+                      video.
                     </p>
                   </div>
 
-                  {(newVideoFile || (existingVideo && !isExistingVideoRemoved)) && (
+                  {(newVideoFile ||
+                    (existingVideo && !isExistingVideoRemoved)) && (
                     <button
                       type="button"
                       onClick={() => videoInputRef.current?.click()}
@@ -3078,7 +3309,8 @@ export default function EditPropertyForm({
                         The current video will be deleted when you save.
                       </p>
                       <p className="mt-1 text-sm text-[#7f1d1d]">
-                        You can restore it before saving or upload a replacement.
+                        You can restore it before saving or upload a
+                        replacement.
                       </p>
                     </div>
 
@@ -3151,7 +3383,9 @@ export default function EditPropertyForm({
                         step="any"
                         value={fullApartmentSummerPriceEgp}
                         onChange={(e) => {
-                          const nextValue = normalizeNumberString(e.target.value)
+                          const nextValue = normalizeNumberString(
+                            e.target.value,
+                          )
                           setFullApartmentSummerPriceEgp(nextValue)
                         }}
                         placeholder="Example: 9000"
@@ -3170,7 +3404,7 @@ export default function EditPropertyForm({
                         value={fullApartmentAcademicYearPriceEgp}
                         onChange={(e) =>
                           setFullApartmentAcademicYearPriceEgp(
-                            normalizeNumberString(e.target.value)
+                            normalizeNumberString(e.target.value),
                           )
                         }
                         placeholder="Example: 12000"
@@ -3180,7 +3414,8 @@ export default function EditPropertyForm({
                   </div>
 
                   <p className="mt-2 text-sm text-[#6b7280]">
-                    Use Summer Course for the current short season, and Academic Year for students booking the new year early.
+                    Use Summer Course for the current short season, and Academic
+                    Year for students booking the new year early.
                   </p>
                 </div>
 
@@ -3237,17 +3472,16 @@ export default function EditPropertyForm({
             <div className="mt-6 rounded-md border border-[#e7e7e7] bg-white p-6 shadow-sm">
               {hasBookingRequests && (
                 <div className="mb-6 rounded-md border border-[#f1c86b] bg-[#fff8e7] p-4 text-sm text-[#8a6400]">
-                  This property already has booking requests. Please avoid changing the broker or
-                  room structure unless necessary, so broker-facing requests stay consistent.
+                  This property already has booking requests. Please avoid
+                  changing the broker or room structure unless necessary, so
+                  broker-facing requests stay consistent.
                 </div>
               )}
 
               <div className="mb-6 rounded-md border border-[#dbeafe] bg-[#f0f7ff] p-4 text-sm text-[#0f3f75]">
                 لكل غرفة فعل الخيارات اللي عايزها تتعرض للعميل:
-                <span className="mx-1 font-semibold">Single Room</span>
-                و
-                <span className="mx-1 font-semibold">Double Room</span>
-                و
+                <span className="mx-1 font-semibold">Single Room</span>و
+                <span className="mx-1 font-semibold">Double Room</span>و
                 <span className="mx-1 font-semibold">Triple Room</span>
                 مع سعر مستقل للسمر كورس وسعر مستقل للسنة الجديدة لكل خيار.
               </div>
@@ -3267,12 +3501,37 @@ export default function EditPropertyForm({
                             {room.room_name || `Bedroom ${index + 1}`}
                           </h3>
                           <p className="mt-1 text-sm text-[#6b7280]">
-                            {getRoomOptionCountLabel(room)} • {room.beds_count || '0'} bed(s)
-                            {' • '}
-                            <span className={room.is_reserved ? 'text-[#b42318]' : 'text-[#027a48]'}>
-                              {room.is_reserved ? 'Reserved' : 'Available'}
-                            </span>
+                            {getRoomOptionCountLabel(room)} •{' '}
+                            {room.beds_count || '0'} bed(s)
                           </p>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                room.is_reserved_summer_course
+                                  ? 'bg-[#fef3f2] text-[#b42318]'
+                                  : 'bg-[#ecfdf3] text-[#027a48]'
+                              }`}
+                            >
+                              Summer Course:{' '}
+                              {room.is_reserved_summer_course
+                                ? 'Reserved'
+                                : 'Available'}
+                            </span>
+
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                room.is_reserved_academic_year
+                                  ? 'bg-[#fef3f2] text-[#b42318]'
+                                  : 'bg-[#ecfdf3] text-[#027a48]'
+                              }`}
+                            >
+                              Academic Year:{' '}
+                              {room.is_reserved_academic_year
+                                ? 'Reserved'
+                                : 'Available'}
+                            </span>
+                          </div>
                         </div>
 
                         {roomState.length > 1 && (
@@ -3293,7 +3552,9 @@ export default function EditPropertyForm({
                           </label>
                           <input
                             value={room.room_name}
-                            onChange={(e) => updateRoom(index, 'room_name', e.target.value)}
+                            onChange={(e) =>
+                              updateRoom(index, 'room_name', e.target.value)
+                            }
                             placeholder="Room Name EN"
                             className={inputClass}
                           />
@@ -3327,7 +3588,9 @@ export default function EditPropertyForm({
                             min="1"
                             step="1"
                             value={room.beds_count}
-                            onChange={(e) => updateRoom(index, 'beds_count', e.target.value)}
+                            onChange={(e) =>
+                              updateRoom(index, 'beds_count', e.target.value)
+                            }
                             placeholder="Beds Count"
                             className={inputClass}
                           />
@@ -3339,7 +3602,11 @@ export default function EditPropertyForm({
                               type="checkbox"
                               checked={room.private_bathroom}
                               onChange={(e) =>
-                                updateRoom(index, 'private_bathroom', e.target.checked)
+                                updateRoom(
+                                  index,
+                                  'private_bathroom',
+                                  e.target.checked,
+                                )
                               }
                               className="h-4 w-4"
                             />
@@ -3350,19 +3617,95 @@ export default function EditPropertyForm({
                         </div>
 
                         <div className="md:col-span-2">
-                          <label className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={room.is_reserved}
-                              onChange={(e) =>
-                                updateRoom(index, 'is_reserved', e.target.checked)
-                              }
-                              className="h-4 w-4"
-                            />
-                            <span className="text-sm font-medium text-[#1a1a1a]">
-                              Room is reserved
-                            </span>
-                          </label>
+                          <div className="rounded-2xl border border-[#dbeafe] bg-[#f8fbff] p-4">
+                            <div className="mb-4">
+                              <p className="text-sm font-semibold text-[#162033]">
+                                Room reservation by season
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-[#687385]">
+                                حدد حالة الغرفة لكل موسم بشكل مستقل. حجز موسم
+                                واحد لن يغلق الغرفة في الموسم الآخر.
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              <label
+                                className={`flex cursor-pointer items-center justify-between gap-4 rounded-xl border p-4 transition ${
+                                  room.is_reserved_summer_course
+                                    ? 'border-[#fda29b] bg-[#fff6f5]'
+                                    : 'border-[#d0d5dd] bg-white hover:border-[#84adf4]'
+                                }`}
+                              >
+                                <div>
+                                  <p className="text-sm font-semibold text-[#1a1a1a]">
+                                    Summer Course
+                                  </p>
+                                  <p
+                                    className={`mt-1 text-xs font-medium ${
+                                      room.is_reserved_summer_course
+                                        ? 'text-[#b42318]'
+                                        : 'text-[#027a48]'
+                                    }`}
+                                  >
+                                    {room.is_reserved_summer_course
+                                      ? 'Reserved'
+                                      : 'Available'}
+                                  </p>
+                                </div>
+
+                                <input
+                                  type="checkbox"
+                                  checked={room.is_reserved_summer_course}
+                                  onChange={(e) =>
+                                    updateRoom(
+                                      index,
+                                      'is_reserved_summer_course',
+                                      e.target.checked,
+                                    )
+                                  }
+                                  className="h-5 w-5 accent-[#0b66c3]"
+                                />
+                              </label>
+
+                              <label
+                                className={`flex cursor-pointer items-center justify-between gap-4 rounded-xl border p-4 transition ${
+                                  room.is_reserved_academic_year
+                                    ? 'border-[#fda29b] bg-[#fff6f5]'
+                                    : 'border-[#d0d5dd] bg-white hover:border-[#84adf4]'
+                                }`}
+                              >
+                                <div>
+                                  <p className="text-sm font-semibold text-[#1a1a1a]">
+                                    Academic Year
+                                  </p>
+                                  <p
+                                    className={`mt-1 text-xs font-medium ${
+                                      room.is_reserved_academic_year
+                                        ? 'text-[#b42318]'
+                                        : 'text-[#027a48]'
+                                    }`}
+                                  >
+                                    {room.is_reserved_academic_year
+                                      ? 'Reserved'
+                                      : 'Available'}
+                                  </p>
+                                </div>
+
+                                <input
+                                  type="checkbox"
+                                  checked={room.is_reserved_academic_year}
+                                  onChange={(e) =>
+                                    updateRoom(
+                                      index,
+                                      'is_reserved_academic_year',
+                                      e.target.checked,
+                                    )
+                                  }
+                                  className="h-5 w-5 accent-[#0b66c3]"
+                                />
+                              </label>
+                            </div>
+                          </div>
                         </div>
 
                         <div className="md:col-span-2 grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -3370,8 +3713,12 @@ export default function EditPropertyForm({
                             title="Single Room"
                             description="يعرض خيار حجز الغرفة كاملة لطالب واحد."
                             enabled={room.single_room_enabled}
-                            summerCoursePrice={room.single_room_summer_course_price_egp}
-                            academicYearPrice={room.single_room_academic_year_price_egp}
+                            summerCoursePrice={
+                              room.single_room_summer_course_price_egp
+                            }
+                            academicYearPrice={
+                              room.single_room_academic_year_price_egp
+                            }
                             onToggle={(value) =>
                               updateRoom(index, 'single_room_enabled', value)
                             }
@@ -3379,14 +3726,14 @@ export default function EditPropertyForm({
                               updateRoom(
                                 index,
                                 'single_room_summer_course_price_egp',
-                                value
+                                value,
                               )
                             }
                             onAcademicYearPriceChange={(value) =>
                               updateRoom(
                                 index,
                                 'single_room_academic_year_price_egp',
-                                value
+                                value,
                               )
                             }
                             inputClass={inputClass}
@@ -3396,8 +3743,12 @@ export default function EditPropertyForm({
                             title="Double Room"
                             description="يعرض حجز سرير واحد داخل غرفة دابل، ويتطلب 2 سرير أو أكثر."
                             enabled={room.double_room_enabled}
-                            summerCoursePrice={room.double_room_summer_course_price_egp}
-                            academicYearPrice={room.double_room_academic_year_price_egp}
+                            summerCoursePrice={
+                              room.double_room_summer_course_price_egp
+                            }
+                            academicYearPrice={
+                              room.double_room_academic_year_price_egp
+                            }
                             onToggle={(value) =>
                               updateRoom(index, 'double_room_enabled', value)
                             }
@@ -3405,14 +3756,14 @@ export default function EditPropertyForm({
                               updateRoom(
                                 index,
                                 'double_room_summer_course_price_egp',
-                                value
+                                value,
                               )
                             }
                             onAcademicYearPriceChange={(value) =>
                               updateRoom(
                                 index,
                                 'double_room_academic_year_price_egp',
-                                value
+                                value,
                               )
                             }
                             inputClass={inputClass}
@@ -3424,8 +3775,12 @@ export default function EditPropertyForm({
                             title="Triple Room"
                             description="يعرض حجز سرير واحد داخل غرفة تربل، ويتطلب 3 سراير أو أكثر."
                             enabled={room.triple_room_enabled}
-                            summerCoursePrice={room.triple_room_summer_course_price_egp}
-                            academicYearPrice={room.triple_room_academic_year_price_egp}
+                            summerCoursePrice={
+                              room.triple_room_summer_course_price_egp
+                            }
+                            academicYearPrice={
+                              room.triple_room_academic_year_price_egp
+                            }
                             onToggle={(value) =>
                               updateRoom(index, 'triple_room_enabled', value)
                             }
@@ -3433,14 +3788,14 @@ export default function EditPropertyForm({
                               updateRoom(
                                 index,
                                 'triple_room_summer_course_price_egp',
-                                value
+                                value,
                               )
                             }
                             onAcademicYearPriceChange={(value) =>
                               updateRoom(
                                 index,
                                 'triple_room_academic_year_price_egp',
-                                value
+                                value,
                               )
                             }
                             inputClass={inputClass}
@@ -3483,7 +3838,9 @@ export default function EditPropertyForm({
                       <input
                         type="checkbox"
                         checked={isFeatured}
-                        onChange={(event) => setIsFeatured(event.target.checked)}
+                        onChange={(event) =>
+                          setIsFeatured(event.target.checked)
+                        }
                         className="mt-1 h-4 w-4"
                       />
 
@@ -3492,8 +3849,8 @@ export default function EditPropertyForm({
                           Mark this property as Featured
                         </span>
                         <span className="mt-1 block text-sm text-[#687385]">
-                          Featured properties appear before normal properties in the public
-                          search page.
+                          Featured properties appear before normal properties in
+                          the public search page.
                         </span>
                       </span>
                     </label>
@@ -3509,12 +3866,15 @@ export default function EditPropertyForm({
                             min="0"
                             step="1"
                             value={featuredRank}
-                            onChange={(event) => setFeaturedRank(event.target.value)}
+                            onChange={(event) =>
+                              setFeaturedRank(event.target.value)
+                            }
                             placeholder="100"
                             className={inputClass}
                           />
                           <p className="mt-2 text-xs text-[#687385]">
-                            Higher rank appears first. Example: 100 appears before 50.
+                            Higher rank appears first. Example: 100 appears
+                            before 50.
                           </p>
                         </label>
 
@@ -3525,11 +3885,14 @@ export default function EditPropertyForm({
                           <input
                             type="datetime-local"
                             value={featuredUntil}
-                            onChange={(event) => setFeaturedUntil(event.target.value)}
+                            onChange={(event) =>
+                              setFeaturedUntil(event.target.value)
+                            }
                             className={inputClass}
                           />
                           <p className="mt-2 text-xs text-[#687385]">
-                            Leave empty to keep it featured without an expiry date.
+                            Leave empty to keep it featured without an expiry
+                            date.
                           </p>
                         </label>
                       </div>
@@ -3685,7 +4048,8 @@ export default function EditPropertyForm({
                     </p>
                     <p className="mt-1 font-semibold">
                       {selectedLatitude && selectedLongitude
-                        ? selectedMapLocationLabel || `${selectedLatitude}, ${selectedLongitude}`
+                        ? selectedMapLocationLabel ||
+                          `${selectedLatitude}, ${selectedLongitude}`
                         : '-'}
                     </p>
                     {selectedLatitude && selectedLongitude ? (
@@ -3700,7 +4064,8 @@ export default function EditPropertyForm({
                       City
                     </p>
                     <p className="mt-1 font-semibold">
-                      {cities.find((city) => city.id === cityId)?.name_en || '-'}
+                      {cities.find((city) => city.id === cityId)?.name_en ||
+                        '-'}
                     </p>
                   </div>
 
@@ -3718,7 +4083,8 @@ export default function EditPropertyForm({
                       Broker
                     </p>
                     <p className="mt-1 font-semibold">
-                      {brokers.find((broker) => broker.id === brokerId)?.full_name ||
+                      {brokers.find((broker) => broker.id === brokerId)
+                        ?.full_name ||
                         activeBrokerName ||
                         '-'}
                     </p>
@@ -3785,7 +4151,6 @@ export default function EditPropertyForm({
                     <p className="mt-1 font-semibold">{totalImageCount}</p>
                   </div>
 
-
                   <div className="rounded-md border border-[#ececec] p-3">
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
                       Video
@@ -3812,7 +4177,9 @@ export default function EditPropertyForm({
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
                       Bathrooms
                     </p>
-                    <p className="mt-1 font-semibold">{bathroomsCount || '-'}</p>
+                    <p className="mt-1 font-semibold">
+                      {bathroomsCount || '-'}
+                    </p>
                   </div>
 
                   <div className="rounded-md border border-[#ececec] p-3">
@@ -3840,7 +4207,9 @@ export default function EditPropertyForm({
                     <p className="text-xs uppercase tracking-wide text-[#6b6b6b]">
                       Booking Requests
                     </p>
-                    <p className="mt-1 font-semibold">{safeBookingRequests.length}</p>
+                    <p className="mt-1 font-semibold">
+                      {safeBookingRequests.length}
+                    </p>
                   </div>
                 </div>
 
@@ -3856,19 +4225,19 @@ export default function EditPropertyForm({
 
                         if (room.single_room_enabled) {
                           optionLabels.push(
-                            `Single: ${room.single_room_price_egp || '-'} EGP`
+                            `Single: ${room.single_room_price_egp || '-'} EGP`,
                           )
                         }
 
                         if (room.double_room_enabled) {
                           optionLabels.push(
-                            `Double: ${room.double_room_price_egp || '-'} EGP`
+                            `Double: ${room.double_room_price_egp || '-'} EGP`,
                           )
                         }
 
                         if (room.triple_room_enabled) {
                           optionLabels.push(
-                            `Triple: ${room.triple_room_price_egp || '-'} EGP`
+                            `Triple: ${room.triple_room_price_egp || '-'} EGP`,
                           )
                         }
 
@@ -3881,14 +4250,25 @@ export default function EditPropertyForm({
                               {room.room_name || `Room ${index + 1}`}
                             </p>
                             <p className="mt-2 text-sm text-[#6b7280]">
-                              Type: {room.room_type} | Beds: {room.beds_count || '0'}
+                              Type: {room.room_type} | Beds:{' '}
+                              {room.beds_count || '0'}
                             </p>
                             <p className="mt-1 text-sm text-[#6b7280]">
-                              Status: {room.is_reserved ? 'Reserved' : 'Available'}
+                              Summer Course:{' '}
+                              {room.is_reserved_summer_course
+                                ? 'Reserved'
+                                : 'Available'}
+                              {' | '}
+                              Academic Year:{' '}
+                              {room.is_reserved_academic_year
+                                ? 'Reserved'
+                                : 'Available'}
                             </p>
                             <p className="mt-1 text-sm text-[#6b7280]">
                               Options:{' '}
-                              {optionLabels.length > 0 ? optionLabels.join(' | ') : '-'}
+                              {optionLabels.length > 0
+                                ? optionLabels.join(' | ')
+                                : '-'}
                             </p>
                           </div>
                         )
@@ -3948,7 +4328,13 @@ export default function EditPropertyForm({
                   disabled={isBusy || !propertyCode}
                   className="inline-flex h-[46px] min-w-[160px] items-center justify-center rounded-xl bg-[#0071c2] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005fa3] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isUploadingVideo ? uploadProgress || 'Uploading video...' : isUploadingImages ? uploadProgress || 'Uploading images...' : isPending ? 'Saving...' : 'Update Property'}
+                  {isUploadingVideo
+                    ? uploadProgress || 'Uploading video...'
+                    : isUploadingImages
+                      ? uploadProgress || 'Uploading images...'
+                      : isPending
+                        ? 'Saving...'
+                        : 'Update Property'}
                 </button>
               )}
             </div>

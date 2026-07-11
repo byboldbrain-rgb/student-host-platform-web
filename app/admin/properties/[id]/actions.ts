@@ -3,10 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/src/lib/supabase/admin'
 import { notifyWaitingListStudentsForNewProperty } from '@/src/lib/waiting-list/notify-new-property'
-import {
-  requirePropertyEditorAccess,
-  isSuperAdmin,
-} from '@/src/lib/admin-auth'
+import { requirePropertyEditorAccess, isSuperAdmin } from '@/src/lib/admin-auth'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 const PROPERTY_VIDEOS_BUCKET = 'property-videos'
@@ -17,7 +14,11 @@ const ALLOWED_PROPERTY_VIDEO_MIME_TYPES = new Set([
   'video/quicktime',
 ])
 
-const ACTIVE_RESERVATION_STATUSES = ['pending', 'reserved', 'checked_in'] as const
+const ACTIVE_RESERVATION_STATUSES = [
+  'pending',
+  'reserved',
+  'checked_in',
+] as const
 
 const PRICING_SEASON_CODES = ['summer_course', 'academic_year'] as const
 
@@ -54,7 +55,6 @@ function slugifyFileName(fileName: string) {
   return extension ? `${safeName || 'image'}.${extension}` : safeName || 'image'
 }
 
-
 function isAllowedPropertyVideoFile(fileName: string, fileType: string) {
   const normalizedType = fileType.toLowerCase().trim()
   const extension = fileName.split('.').pop()?.toLowerCase() || ''
@@ -72,7 +72,8 @@ function validateUploadedPropertyVideo(params: {
   mimeType: string
   fileSizeBytes: number | null
 }) {
-  const { propertyDbId, videoUrl, storagePath, mimeType, fileSizeBytes } = params
+  const { propertyDbId, videoUrl, storagePath, mimeType, fileSizeBytes } =
+    params
 
   if (!videoUrl || !storagePath) {
     throw new Error('Uploaded video information is incomplete')
@@ -99,30 +100,16 @@ function validateUploadedPropertyVideo(params: {
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
 type PropertyAvailabilityStatus =
-  | 'available'
-  | 'partially_reserved'
-  | 'fully_reserved'
-  | 'inactive'
+  'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
 
 type PropertyAdminStatus =
-  | 'draft'
-  | 'pending_review'
-  | 'published'
-  | 'rejected'
-  | 'archived'
+  'draft' | 'pending_review' | 'published' | 'rejected' | 'archived'
 
 type RoomStatus =
-  | 'available'
-  | 'partially_reserved'
-  | 'fully_reserved'
-  | 'inactive'
+  'available' | 'partially_reserved' | 'fully_reserved' | 'inactive'
 
 type BedStatus =
-  | 'available'
-  | 'reserved'
-  | 'occupied'
-  | 'maintenance'
-  | 'inactive'
+  'available' | 'reserved' | 'occupied' | 'maintenance' | 'inactive'
 
 type RoomOptionCode = 'single_room' | 'double_room' | 'triple_room'
 
@@ -136,10 +123,7 @@ type PricingSeasonRow = {
 }
 
 type PropertyOptionCode =
-  | 'full_apartment'
-  | 'single_room'
-  | 'double_room'
-  | 'triple_room'
+  'full_apartment' | 'single_room' | 'double_room' | 'triple_room'
 
 type ParsedRoomOption = {
   code: RoomOptionCode
@@ -163,7 +147,8 @@ type ParsedRoomRow = {
   rental_duration: 'daily' | 'monthly'
   beds_count: number
   private_bathroom: boolean
-  is_reserved: boolean
+  is_reserved_summer_course: boolean
+  is_reserved_academic_year: boolean
   is_active: boolean
   sort_order: number
   option_rows: ParsedRoomOption[]
@@ -203,6 +188,8 @@ type ExistingRoomRow = {
   room_name_ar: string | null
   sort_order: number | null
   is_active: boolean
+  is_reserved_summer_course: boolean
+  is_reserved_academic_year: boolean
   status: RoomStatus
 }
 
@@ -224,7 +211,9 @@ type ExistingBedRow = {
   created_at?: string | null
 }
 
-function normalizeAvailabilityStatus(value: string): PropertyAvailabilityStatus {
+function normalizeAvailabilityStatus(
+  value: string,
+): PropertyAvailabilityStatus {
   if (
     value === 'available' ||
     value === 'partially_reserved' ||
@@ -255,7 +244,6 @@ function normalizeRentalDuration(value: string): 'daily' | 'monthly' {
   return value === 'daily' ? 'daily' : 'monthly'
 }
 
-
 function getNullableNumberFromString(value: string | undefined | null) {
   const str = String(value || '').trim()
   if (!str) return null
@@ -265,7 +253,7 @@ function getNullableNumberFromString(value: string | undefined | null) {
 
 function getFirstNullableNumberFromFormData(
   formData: FormData,
-  keys: string[]
+  keys: string[],
 ) {
   for (const key of keys) {
     const value = formData.get(key)
@@ -300,7 +288,9 @@ function assertValidSeasonalPrice(params: {
   const { price, label, allowZero = false } = params
 
   if (!Number.isFinite(price) || price < 0 || (!allowZero && price <= 0)) {
-    throw new Error(`${label} must be a valid ${allowZero ? 'non-negative' : 'positive'} number`)
+    throw new Error(
+      `${label} must be a valid ${allowZero ? 'non-negative' : 'positive'} number`,
+    )
   }
 }
 
@@ -404,12 +394,12 @@ async function getPricingSeasonsByCode(params: {
   }
 
   const missingSeasonCodes = PRICING_SEASON_CODES.filter(
-    (seasonCode) => !seasonsByCode.has(seasonCode)
+    (seasonCode) => !seasonsByCode.has(seasonCode),
   )
 
   if (missingSeasonCodes.length > 0) {
     throw new Error(
-      `Missing pricing seasons: ${missingSeasonCodes.join(', ')}. Please run the pricing seasons SQL migration first.`
+      `Missing pricing seasons: ${missingSeasonCodes.join(', ')}. Please run the pricing seasons SQL migration first.`,
     )
   }
 
@@ -446,7 +436,10 @@ async function upsertSeasonalPrice(params: {
   if (sellableOptionId) {
     existingQuery = existingQuery.eq('sellable_option_id', sellableOptionId)
   } else {
-    existingQuery = existingQuery.eq('room_sellable_option_id', roomSellableOptionId)
+    existingQuery = existingQuery.eq(
+      'room_sellable_option_id',
+      roomSellableOptionId,
+    )
   }
 
   const { data: existingRows, error: existingError } = await existingQuery
@@ -554,7 +547,11 @@ async function deactivateSeasonalPricesForOption(params: {
   sellableOptionId?: string | null
   roomSellableOptionId?: string | null
 }) {
-  const { supabase, sellableOptionId = null, roomSellableOptionId = null } = params
+  const {
+    supabase,
+    sellableOptionId = null,
+    roomSellableOptionId = null,
+  } = params
   const retiredAt = new Date().toISOString()
 
   if (sellableOptionId) {
@@ -676,40 +673,39 @@ function buildRoomOptions(params: {
 }
 
 function derivePropertyAvailabilityStatus(
-  submittedStatus: PropertyAvailabilityStatus
+  submittedStatus: PropertyAvailabilityStatus,
 ): PropertyAvailabilityStatus {
   return submittedStatus
 }
 
 function deriveRoomStatus(params: {
   propertyAvailabilityStatus: PropertyAvailabilityStatus
-  roomIsReserved?: boolean
+  isReservedSummerCourse: boolean
+  isReservedAcademicYear: boolean
 }): RoomStatus {
   if (params.propertyAvailabilityStatus === 'inactive') {
     return 'inactive'
   }
 
-  return params.roomIsReserved ? 'fully_reserved' : 'available'
+  if (params.isReservedSummerCourse && params.isReservedAcademicYear) {
+    return 'fully_reserved'
+  }
+
+  if (params.isReservedSummerCourse || params.isReservedAcademicYear) {
+    return 'partially_reserved'
+  }
+
+  return 'available'
 }
 
 function deriveBedStatus(params: {
   propertyAvailabilityStatus: PropertyAvailabilityStatus
-  roomIsReserved?: boolean
+  isReservedSummerCourse: boolean
+  isReservedAcademicYear: boolean
   existingStatus?: BedStatus | null
 }): BedStatus {
   if (params.propertyAvailabilityStatus === 'inactive') {
     return 'inactive'
-  }
-
-  if (params.roomIsReserved) {
-    if (
-      params.existingStatus === 'occupied' ||
-      params.existingStatus === 'maintenance'
-    ) {
-      return params.existingStatus
-    }
-
-    return 'reserved'
   }
 
   if (
@@ -719,7 +715,9 @@ function deriveBedStatus(params: {
     return params.existingStatus
   }
 
-  return 'available'
+  return params.isReservedSummerCourse && params.isReservedAcademicYear
+    ? 'reserved'
+    : 'available'
 }
 
 function buildPropertySellableOptionRows(params: {
@@ -739,30 +737,30 @@ function buildPropertySellableOptionRows(params: {
 
   const singleOptionPrices = insertedRooms
     .flatMap((room) =>
-      room.option_rows.filter((option) => option.code === 'single_room')
+      room.option_rows.filter((option) => option.code === 'single_room'),
     )
     .map((option) => option.price_egp)
 
   const doubleOptionPrices = insertedRooms
     .flatMap((room) =>
-      room.option_rows.filter((option) => option.code === 'double_room')
+      room.option_rows.filter((option) => option.code === 'double_room'),
     )
     .map((option) => option.price_egp)
 
   const tripleOptionPrices = insertedRooms
     .flatMap((room) =>
-      room.option_rows.filter((option) => option.code === 'triple_room')
+      room.option_rows.filter((option) => option.code === 'triple_room'),
     )
     .map((option) => option.price_egp)
 
   const singleOptions = insertedRooms.flatMap((room) =>
-    room.option_rows.filter((option) => option.code === 'single_room')
+    room.option_rows.filter((option) => option.code === 'single_room'),
   )
   const doubleOptions = insertedRooms.flatMap((room) =>
-    room.option_rows.filter((option) => option.code === 'double_room')
+    room.option_rows.filter((option) => option.code === 'double_room'),
   )
   const tripleOptions = insertedRooms.flatMap((room) =>
-    room.option_rows.filter((option) => option.code === 'triple_room')
+    room.option_rows.filter((option) => option.code === 'triple_room'),
   )
 
   return [
@@ -922,7 +920,7 @@ async function ensureOwnerAvailableForPropertyLocation(params: {
 
   if (insertServiceAreaError) {
     throw new Error(
-      `Failed to link owner to selected city and university: ${insertServiceAreaError.message}`
+      `Failed to link owner to selected city and university: ${insertServiceAreaError.message}`,
     )
   }
 }
@@ -943,12 +941,12 @@ async function syncPrimaryOwnerPropertyLink(params: {
 
   if (existingLinksError) {
     throw new Error(
-      `Failed to load owner-property links: ${existingLinksError.message}`
+      `Failed to load owner-property links: ${existingLinksError.message}`,
     )
   }
 
   const activeLinksForOtherOwners = (existingLinks ?? []).filter(
-    (link) => link.owner_id !== ownerId && link.is_active !== false
+    (link) => link.owner_id !== ownerId && link.is_active !== false,
   )
 
   if (activeLinksForOtherOwners.length > 0) {
@@ -962,18 +960,18 @@ async function syncPrimaryOwnerPropertyLink(params: {
       })
       .in(
         'id',
-        activeLinksForOtherOwners.map((link) => link.id)
+        activeLinksForOtherOwners.map((link) => link.id),
       )
 
     if (deactivateOldLinksError) {
       throw new Error(
-        `Failed to deactivate old owner-property links: ${deactivateOldLinksError.message}`
+        `Failed to deactivate old owner-property links: ${deactivateOldLinksError.message}`,
       )
     }
   }
 
   const existingCurrentOwnerLink = (existingLinks ?? []).find(
-    (link) => link.owner_id === ownerId
+    (link) => link.owner_id === ownerId,
   )
 
   if (existingCurrentOwnerLink) {
@@ -992,7 +990,7 @@ async function syncPrimaryOwnerPropertyLink(params: {
 
     if (updateCurrentLinkError) {
       throw new Error(
-        `Failed to update owner-property link: ${updateCurrentLinkError.message}`
+        `Failed to update owner-property link: ${updateCurrentLinkError.message}`,
       )
     }
 
@@ -1016,7 +1014,7 @@ async function syncPrimaryOwnerPropertyLink(params: {
 
   if (insertOwnerPropertyError) {
     throw new Error(
-      `Failed to create owner-property link: ${insertOwnerPropertyError.message}`
+      `Failed to create owner-property link: ${insertOwnerPropertyError.message}`,
     )
   }
 }
@@ -1073,7 +1071,7 @@ async function assertRoomCanBeRetired(params: {
 
   if ((data || []).length > 0) {
     throw new Error(
-      'Cannot remove a room that has active reservations. Cancel the reservations first.'
+      'Cannot remove a room that has active reservations. Cancel the reservations first.',
     )
   }
 }
@@ -1099,7 +1097,7 @@ async function assertBedCanBeRetired(params: {
 
     if ((data || []).length > 0) {
       throw new Error(
-        'Cannot reduce/remove a bed that has an active reservation. Cancel the reservation first.'
+        'Cannot reduce/remove a bed that has an active reservation. Cancel the reservation first.',
       )
     }
   }
@@ -1117,7 +1115,7 @@ async function assertBedCanBeRetired(params: {
 
   if ((legacyData || []).length > 0) {
     throw new Error(
-      'Cannot reduce/remove a bed that has an active legacy reservation. Cancel the reservation first.'
+      'Cannot reduce/remove a bed that has an active legacy reservation. Cancel the reservation first.',
     )
   }
 }
@@ -1141,7 +1139,7 @@ async function assertOptionCanBeRetired(params: {
 
   if ((data || []).length > 0) {
     throw new Error(
-      'Cannot disable a room booking option that has active reservations. Cancel the reservations first.'
+      'Cannot disable a room booking option that has active reservations. Cancel the reservations first.',
     )
   }
 }
@@ -1153,7 +1151,8 @@ async function syncRoomSellableOptions(params: {
   optionRows: ParsedRoomOption[]
   pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
 }) {
-  const { supabase, propertyDbId, roomId, optionRows, pricingSeasonsByCode } = params
+  const { supabase, propertyDbId, roomId, optionRows, pricingSeasonsByCode } =
+    params
 
   const { data: existingOptions, error: existingOptionsError } = await supabase
     .from('property_room_sellable_options')
@@ -1162,7 +1161,7 @@ async function syncRoomSellableOptions(params: {
 
   if (existingOptionsError) {
     throw new Error(
-      `Failed to load room booking options: ${existingOptionsError.message}`
+      `Failed to load room booking options: ${existingOptionsError.message}`,
     )
   }
 
@@ -1204,7 +1203,7 @@ async function syncRoomSellableOptions(params: {
 
       if (updateError) {
         throw new Error(
-          `Failed to update room option ${option.code}: ${updateError.message}`
+          `Failed to update room option ${option.code}: ${updateError.message}`,
         )
       }
 
@@ -1232,7 +1231,7 @@ async function syncRoomSellableOptions(params: {
 
       if (insertError || !insertedOption) {
         throw new Error(
-          `Failed to insert room option ${option.code}: ${insertError?.message || 'Unknown error'}`
+          `Failed to insert room option ${option.code}: ${insertError?.message || 'Unknown error'}`,
         )
       }
 
@@ -1248,13 +1247,15 @@ async function syncRoomSellableOptions(params: {
     })
   }
 
-  const optionsToRetire = ((existingOptions || []) as ExistingRoomOptionRow[]).filter(
+  const optionsToRetire = (
+    (existingOptions || []) as ExistingRoomOptionRow[]
+  ).filter(
     (option) =>
       option.is_active !== false &&
       (option.code === 'single_room' ||
         option.code === 'double_room' ||
         option.code === 'triple_room') &&
-      !desiredCodes.has(option.code)
+      !desiredCodes.has(option.code),
   )
 
   for (const option of optionsToRetire) {
@@ -1274,7 +1275,7 @@ async function syncRoomSellableOptions(params: {
 
     if (retireError) {
       throw new Error(
-        `Failed to retire room option ${option.code}: ${retireError.message}`
+        `Failed to retire room option ${option.code}: ${retireError.message}`,
       )
     }
 
@@ -1290,7 +1291,8 @@ async function syncRoomBeds(params: {
   roomId: string
   desiredBedsCount: number
   propertyAvailabilityStatus: PropertyAvailabilityStatus
-  roomIsReserved: boolean
+  isReservedSummerCourse: boolean
+  isReservedAcademicYear: boolean
   activeReservationIds: string[]
 }) {
   const {
@@ -1298,7 +1300,8 @@ async function syncRoomBeds(params: {
     roomId,
     desiredBedsCount,
     propertyAvailabilityStatus,
-    roomIsReserved,
+    isReservedSummerCourse,
+    isReservedAcademicYear,
     activeReservationIds,
   } = params
 
@@ -1322,7 +1325,8 @@ async function syncRoomBeds(params: {
 
     const nextStatus = deriveBedStatus({
       propertyAvailabilityStatus,
-      roomIsReserved,
+      isReservedSummerCourse,
+      isReservedAcademicYear,
       existingStatus: bed.status,
     })
 
@@ -1381,21 +1385,22 @@ async function syncRoomBeds(params: {
           bed_label: `Bed ${bedIndex + 1}`,
           bed_type: desiredBedsCount === 1 ? 'single' : 'custom',
           price_egp: null,
-          status:
-            propertyAvailabilityStatus === 'inactive'
-              ? 'inactive'
-              : roomIsReserved
-              ? 'reserved'
-              : 'available',
+          status: deriveBedStatus({
+            propertyAvailabilityStatus,
+            isReservedSummerCourse,
+            isReservedAcademicYear,
+          }),
           is_active: propertyAvailabilityStatus !== 'inactive',
           sort_order: bedIndex,
           deleted_at: null,
           retired_reason: null,
         }
-      }
+      },
     )
 
-    const { error: insertError } = await supabase.from('room_beds').insert(newBedRows)
+    const { error: insertError } = await supabase
+      .from('room_beds')
+      .insert(newBedRows)
 
     if (insertError) {
       throw new Error(`Failed to insert room beds: ${insertError.message}`)
@@ -1425,7 +1430,9 @@ async function recalculatePropertyAvailabilityState(params: {
 
   const { data: rooms, error: roomsError } = await supabase
     .from('property_rooms')
-    .select('id, is_active, status')
+    .select(
+      'id, is_active, status, is_reserved_summer_course, is_reserved_academic_year',
+    )
     .eq('property_id_ref', propertyId)
 
   if (roomsError) {
@@ -1436,13 +1443,20 @@ async function recalculatePropertyAvailabilityState(params: {
     id: string
     is_active: boolean
     status: RoomStatus
+    is_reserved_summer_course: boolean
+    is_reserved_academic_year: boolean
   }>
 
   const roomIds = typedRooms.map((room) => room.id)
 
   const bedsByRoomId = new Map<
     string,
-    Array<{ id: string; room_id: string; is_active: boolean; status: BedStatus }>
+    Array<{
+      id: string
+      room_id: string
+      is_active: boolean
+      status: BedStatus
+    }>
   >()
 
   if (roomIds.length > 0) {
@@ -1467,19 +1481,21 @@ async function recalculatePropertyAvailabilityState(params: {
     }
   }
 
-  const { data: activePropertyReservations, error: activePropertyReservationsError } =
-    await supabase
-      .from('property_reservations')
-      .select('id, status')
-      .eq('property_id', propertyId)
-      .in('status', [...ACTIVE_RESERVATION_STATUSES])
+  const {
+    data: activePropertyReservations,
+    error: activePropertyReservationsError,
+  } = await supabase
+    .from('property_reservations')
+    .select('id, status')
+    .eq('property_id', propertyId)
+    .in('status', [...ACTIVE_RESERVATION_STATUSES])
 
   if (activePropertyReservationsError) {
     throw new Error(activePropertyReservationsError.message)
   }
 
   const activePropertyReservationIds = (activePropertyReservations || []).map(
-    (reservation: any) => reservation.id
+    (reservation: any) => reservation.id,
   )
 
   let activeAllocations: Array<{
@@ -1507,43 +1523,47 @@ async function recalculatePropertyAvailabilityState(params: {
     }>
   }
 
-  const { data: activeLegacyReservations, error: activeLegacyReservationsError } =
-    await supabase
-      .from('bed_reservations')
-      .select('id, room_id, bed_id, status')
-      .eq('property_id', propertyId)
-      .in('status', [...ACTIVE_RESERVATION_STATUSES])
+  const {
+    data: activeLegacyReservations,
+    error: activeLegacyReservationsError,
+  } = await supabase
+    .from('bed_reservations')
+    .select('id, room_id, bed_id, status')
+    .eq('property_id', propertyId)
+    .in('status', [...ACTIVE_RESERVATION_STATUSES])
 
   if (activeLegacyReservationsError) {
     throw new Error(activeLegacyReservationsError.message)
   }
 
   const hasActiveEntirePropertyReservation = activeAllocations.some(
-    (allocation) => allocation.allocation_type === 'property'
+    (allocation) => allocation.allocation_type === 'property',
   )
 
   const activeReservedRoomIds = new Set<string>(
     activeAllocations
       .filter(
         (allocation) =>
-          allocation.allocation_type === 'room' && Boolean(allocation.room_id)
+          allocation.allocation_type === 'room' && Boolean(allocation.room_id),
       )
-      .map((allocation) => allocation.room_id as string)
+      .map((allocation) => allocation.room_id as string),
   )
 
   const activeReservedBedIds = new Set<string>([
     ...activeAllocations
       .filter(
         (allocation) =>
-          allocation.allocation_type === 'bed' && Boolean(allocation.bed_id)
+          allocation.allocation_type === 'bed' && Boolean(allocation.bed_id),
       )
       .map((allocation) => allocation.bed_id as string),
-    ...((activeLegacyReservations || []) as Array<{
-      id: string
-      room_id: string
-      bed_id: string
-      status: string
-    }>)
+    ...(
+      (activeLegacyReservations || []) as Array<{
+        id: string
+        room_id: string
+        bed_id: string
+        status: string
+      }>
+    )
       .filter((reservation) => Boolean(reservation.bed_id))
       .map((reservation) => reservation.bed_id),
   ])
@@ -1555,12 +1575,12 @@ async function recalculatePropertyAvailabilityState(params: {
       const nextBedStatus: BedStatus = !bed.is_active
         ? 'inactive'
         : activeReservedBedIds.has(bed.id)
-        ? 'reserved'
-        : bed.status === 'reserved' ||
-          bed.status === 'occupied' ||
-          bed.status === 'maintenance'
-        ? bed.status
-        : 'available'
+          ? 'reserved'
+          : bed.status === 'reserved' ||
+              bed.status === 'occupied' ||
+              bed.status === 'maintenance'
+            ? bed.status
+            : 'available'
 
       const { error: updateBedError } = await supabase
         .from('room_beds')
@@ -1585,8 +1605,18 @@ async function recalculatePropertyAvailabilityState(params: {
       nextRoomStatus = 'inactive'
     } else if (hasActiveEntirePropertyReservation) {
       nextRoomStatus = 'fully_reserved'
-    } else if (activeReservedRoomIds.has(room.id) || room.status === 'fully_reserved') {
+    } else if (activeReservedRoomIds.has(room.id)) {
       nextRoomStatus = 'fully_reserved'
+    } else if (
+      room.is_reserved_summer_course &&
+      room.is_reserved_academic_year
+    ) {
+      nextRoomStatus = 'fully_reserved'
+    } else if (
+      room.is_reserved_summer_course ||
+      room.is_reserved_academic_year
+    ) {
+      nextRoomStatus = 'partially_reserved'
     } else {
       const roomBeds = bedsByRoomId.get(room.id) || []
       const activeRoomBeds = roomBeds.filter((bed) => bed.is_active)
@@ -1595,7 +1625,8 @@ async function recalculatePropertyAvailabilityState(params: {
         nextRoomStatus = 'available'
       } else {
         const reservedBedsCount = activeRoomBeds.filter(
-          (bed) => activeReservedBedIds.has(bed.id) || bed.status === 'reserved'
+          (bed) =>
+            activeReservedBedIds.has(bed.id) || bed.status === 'reserved',
         ).length
 
         if (reservedBedsCount === 0) {
@@ -1639,10 +1670,10 @@ async function recalculatePropertyAvailabilityState(params: {
       nextPropertyStatus = 'available'
     } else {
       const fullyReservedCount = activeRoomStatuses.filter(
-        (status) => status === 'fully_reserved'
+        (status) => status === 'fully_reserved',
       ).length
       const partiallyReservedCount = activeRoomStatuses.filter(
-        (status) => status === 'partially_reserved'
+        (status) => status === 'partially_reserved',
       ).length
 
       if (fullyReservedCount === 0 && partiallyReservedCount === 0) {
@@ -1692,19 +1723,23 @@ async function syncPropertyRoomsStructure(params: {
 
   const { data: existingRoomsData, error: existingRoomsError } = await supabase
     .from('property_rooms')
-    .select('id, room_name, room_name_ar, sort_order, is_active, status')
+    .select(
+      'id, room_name, room_name_ar, sort_order, is_active, status, is_reserved_summer_course, is_reserved_academic_year',
+    )
     .eq('property_id_ref', propertyDbId)
     .eq('is_active', true)
     .order('sort_order', { ascending: true })
 
   if (existingRoomsError) {
-    throw new Error(`Failed to load existing rooms: ${existingRoomsError.message}`)
+    throw new Error(
+      `Failed to load existing rooms: ${existingRoomsError.message}`,
+    )
   }
 
   const existingRooms = (existingRoomsData || []) as ExistingRoomRow[]
   const existingById = new Map(existingRooms.map((room) => [room.id, room]))
   const existingBySortOrder = new Map(
-    existingRooms.map((room) => [room.sort_order ?? 0, room])
+    existingRooms.map((room) => [room.sort_order ?? 0, room]),
   )
 
   const usedExistingRoomIds = new Set<string>()
@@ -1729,7 +1764,8 @@ async function syncPropertyRoomsStructure(params: {
 
       const roomStatus = deriveRoomStatus({
         propertyAvailabilityStatus: availabilityStatus,
-        roomIsReserved: room.is_reserved,
+        isReservedSummerCourse: room.is_reserved_summer_course,
+        isReservedAcademicYear: room.is_reserved_academic_year,
       })
 
       const { error: updateRoomError } = await supabase
@@ -1743,6 +1779,8 @@ async function syncPropertyRoomsStructure(params: {
           private_room_price_egp: null,
           shared_bed_price_egp: null,
           private_bathroom: room.private_bathroom,
+          is_reserved_summer_course: room.is_reserved_summer_course,
+          is_reserved_academic_year: room.is_reserved_academic_year,
           status: roomStatus,
           is_active: room.is_active,
           sort_order: room.sort_order,
@@ -1753,12 +1791,15 @@ async function syncPropertyRoomsStructure(params: {
         .eq('id', matchedRoom.id)
 
       if (updateRoomError) {
-        throw new Error(`Failed to update property room: ${updateRoomError.message}`)
+        throw new Error(
+          `Failed to update property room: ${updateRoomError.message}`,
+        )
       }
     } else {
       const roomStatus = deriveRoomStatus({
         propertyAvailabilityStatus: availabilityStatus,
-        roomIsReserved: room.is_reserved,
+        isReservedSummerCourse: room.is_reserved_summer_course,
+        isReservedAcademicYear: room.is_reserved_academic_year,
       })
 
       const { data: insertedRoom, error: insertRoomError } = await supabase
@@ -1773,6 +1814,8 @@ async function syncPropertyRoomsStructure(params: {
           private_room_price_egp: null,
           shared_bed_price_egp: null,
           private_bathroom: room.private_bathroom,
+          is_reserved_summer_course: room.is_reserved_summer_course,
+          is_reserved_academic_year: room.is_reserved_academic_year,
           status: roomStatus,
           is_active: room.is_active,
           sort_order: room.sort_order,
@@ -1784,7 +1827,7 @@ async function syncPropertyRoomsStructure(params: {
 
       if (insertRoomError || !insertedRoom) {
         throw new Error(
-          `Failed to insert property room: ${insertRoomError?.message || 'Unknown error'}`
+          `Failed to insert property room: ${insertRoomError?.message || 'Unknown error'}`,
         )
       }
 
@@ -1805,7 +1848,8 @@ async function syncPropertyRoomsStructure(params: {
       roomId,
       desiredBedsCount: room.beds_count,
       propertyAvailabilityStatus: availabilityStatus,
-      roomIsReserved: room.is_reserved,
+      isReservedSummerCourse: room.is_reserved_summer_course,
+      isReservedAcademicYear: room.is_reserved_academic_year,
       activeReservationIds,
     })
 
@@ -1817,7 +1861,7 @@ async function syncPropertyRoomsStructure(params: {
   }
 
   const roomsToRetire = existingRooms.filter(
-    (room) => !usedExistingRoomIds.has(room.id)
+    (room) => !usedExistingRoomIds.has(room.id),
   )
 
   for (const room of roomsToRetire) {
@@ -1897,6 +1941,8 @@ async function syncPropertyRoomsStructure(params: {
       .from('property_rooms')
       .update({
         is_active: false,
+        is_reserved_summer_course: false,
+        is_reserved_academic_year: false,
         status: 'inactive',
         deleted_at: retiredAt,
         retired_reason: 'Removed during property structure update',
@@ -1948,14 +1994,15 @@ async function upsertPropertySellableOptions(params: {
 
   if (existingRowsError) {
     throw new Error(
-      `Failed to load property sellable options: ${existingRowsError.message}`
+      `Failed to load property sellable options: ${existingRowsError.message}`,
     )
   }
 
-  const typedExistingRows = (existingRows ?? []) as ExistingPropertySellableOptionRow[]
+  const typedExistingRows = (existingRows ??
+    []) as ExistingPropertySellableOptionRow[]
 
   const existingByCode = new Map(
-    typedExistingRows.map((row) => [row.code as PropertyOptionCode, row])
+    typedExistingRows.map((row) => [row.code as PropertyOptionCode, row]),
   )
 
   for (const row of desiredRows) {
@@ -1985,7 +2032,7 @@ async function upsertPropertySellableOptions(params: {
 
       if (updateError) {
         throw new Error(
-          `Failed to update property sellable option ${row.code}: ${updateError.message}`
+          `Failed to update property sellable option ${row.code}: ${updateError.message}`,
         )
       }
 
@@ -2003,7 +2050,7 @@ async function upsertPropertySellableOptions(params: {
 
       if (insertError || !insertedOption) {
         throw new Error(
-          `Failed to insert property sellable option ${row.code}: ${insertError?.message || 'Unknown error'}`
+          `Failed to insert property sellable option ${row.code}: ${insertError?.message || 'Unknown error'}`,
         )
       }
 
@@ -2020,7 +2067,7 @@ async function upsertPropertySellableOptions(params: {
   }
 
   const rowsToRetire = typedExistingRows.filter(
-    (row) => !desiredCodes.includes(row.code as PropertyOptionCode)
+    (row) => !desiredCodes.includes(row.code as PropertyOptionCode),
   )
 
   if (rowsToRetire.length > 0) {
@@ -2037,7 +2084,7 @@ async function upsertPropertySellableOptions(params: {
 
     if (retireError) {
       throw new Error(
-        `Failed to retire old property sellable options: ${retireError.message}`
+        `Failed to retire old property sellable options: ${retireError.message}`,
       )
     }
 
@@ -2050,7 +2097,9 @@ async function upsertPropertySellableOptions(params: {
   }
 }
 
-export async function createPropertyImageUploadSignedUrlAction(formData: FormData) {
+export async function createPropertyImageUploadSignedUrlAction(
+  formData: FormData,
+) {
   const adminContext = await requirePropertyEditorAccess()
   const supabase = createAdminClient()
   const admin = adminContext.admin
@@ -2071,11 +2120,12 @@ export async function createPropertyImageUploadSignedUrlAction(formData: FormDat
     throw new Error('Only image files are allowed')
   }
 
-  const { data: existingProperty, error: existingPropertyError } = await supabase
-    .from('properties')
-    .select('id, broker_id')
-    .eq('id', propertyDbId)
-    .maybeSingle()
+  const { data: existingProperty, error: existingPropertyError } =
+    await supabase
+      .from('properties')
+      .select('id, broker_id')
+      .eq('id', propertyDbId)
+      .maybeSingle()
 
   if (existingPropertyError) {
     throw new Error(existingPropertyError.message)
@@ -2108,7 +2158,7 @@ export async function createPropertyImageUploadSignedUrlAction(formData: FormDat
     throw new Error(
       `Failed to prepare image upload: ${
         signedUploadError?.message || 'Upload token was not created'
-      }`
+      }`,
     )
   }
 
@@ -2123,8 +2173,9 @@ export async function createPropertyImageUploadSignedUrlAction(formData: FormDat
   }
 }
 
-
-export async function createPropertyVideoUploadSignedUrlAction(formData: FormData) {
+export async function createPropertyVideoUploadSignedUrlAction(
+  formData: FormData,
+) {
   const adminContext = await requirePropertyEditorAccess()
   const supabase = createAdminClient()
   const admin = adminContext.admin
@@ -2154,11 +2205,12 @@ export async function createPropertyVideoUploadSignedUrlAction(formData: FormDat
     throw new Error('Property video must be smaller than 200 MB')
   }
 
-  const { data: existingProperty, error: existingPropertyError } = await supabase
-    .from('properties')
-    .select('id, broker_id')
-    .eq('id', propertyDbId)
-    .maybeSingle()
+  const { data: existingProperty, error: existingPropertyError } =
+    await supabase
+      .from('properties')
+      .select('id, broker_id')
+      .eq('id', propertyDbId)
+      .maybeSingle()
 
   if (existingPropertyError) {
     throw new Error(existingPropertyError.message)
@@ -2191,7 +2243,7 @@ export async function createPropertyVideoUploadSignedUrlAction(formData: FormDat
     throw new Error(
       `Failed to prepare video upload: ${
         signedUploadError?.message || 'Upload token was not created'
-      }`
+      }`,
     )
   }
 
@@ -2216,13 +2268,14 @@ export async function updatePropertyAction(formData: FormData) {
     throw new Error('Property ID is required')
   }
 
-  const { data: existingProperty, error: existingPropertyError } = await supabase
-    .from('properties')
-    .select(
-      'id, broker_id, owner_id, admin_status, availability_status, property_id, is_featured, featured_rank, featured_until, featured_at, featured_by_admin_id'
-    )
-    .eq('id', propertyDbId)
-    .maybeSingle()
+  const { data: existingProperty, error: existingPropertyError } =
+    await supabase
+      .from('properties')
+      .select(
+        'id, broker_id, owner_id, admin_status, availability_status, property_id, is_featured, featured_rank, featured_until, featured_at, featured_by_admin_id',
+      )
+      .eq('id', propertyDbId)
+      .maybeSingle()
 
   if (existingPropertyError) {
     throw new Error(existingPropertyError.message)
@@ -2242,11 +2295,12 @@ export async function updatePropertyAction(formData: FormData) {
     }
   }
 
-  const { data: existingImagesRows, error: existingImagesError } = await supabase
-    .from('property_images')
-    .select('id, image_url, storage_path')
-    .eq('property_id_ref', propertyDbId)
-    .order('sort_order')
+  const { data: existingImagesRows, error: existingImagesError } =
+    await supabase
+      .from('property_images')
+      .select('id, image_url, storage_path')
+      .eq('property_id_ref', propertyDbId)
+      .order('sort_order')
 
   if (existingImagesError) {
     throw new Error(existingImagesError.message)
@@ -2254,7 +2308,9 @@ export async function updatePropertyAction(formData: FormData) {
 
   const { data: existingVideoRows, error: existingVideoError } = await supabase
     .from('property_videos')
-    .select('id, video_url, storage_path, file_mime_type, file_size_bytes, is_active')
+    .select(
+      'id, video_url, storage_path, file_mime_type, file_size_bytes, is_active',
+    )
     .eq('property_id_ref', propertyDbId)
     .eq('is_active', true)
     .order('sort_order', { ascending: true })
@@ -2275,17 +2331,17 @@ export async function updatePropertyAction(formData: FormData) {
   const submittedOwnerId = String(formData.get('owner_id') || '').trim()
 
   const rental_duration = normalizeRentalDuration(
-    String(formData.get('rental_duration') || 'monthly').trim()
+    String(formData.get('rental_duration') || 'monthly').trim(),
   )
 
   const submittedAdminStatus = normalizeAdminStatus(
-    String(formData.get('admin_status') || 'draft').trim()
+    String(formData.get('admin_status') || 'draft').trim(),
   )
 
   const submittedAvailabilityStatus = String(
     formData.get('availability_status') ||
       existingProperty.availability_status ||
-      'available'
+      'available',
   ).trim()
 
   const broker_id = isSuperAdmin(admin)
@@ -2299,7 +2355,7 @@ export async function updatePropertyAction(formData: FormData) {
   const superAdminCanManageFeatured = isSuperAdmin(admin)
 
   const requestedIsFeatured = toBoolean(
-    String(formData.get('is_featured') || 'false')
+    String(formData.get('is_featured') || 'false'),
   )
 
   const is_featured = superAdminCanManageFeatured
@@ -2315,10 +2371,12 @@ export async function updatePropertyAction(formData: FormData) {
     if (is_featured) {
       featured_rank = Math.max(
         0,
-        Math.trunc(toNumberOrDefault(formData.get('featured_rank'), 0))
+        Math.trunc(toNumberOrDefault(formData.get('featured_rank'), 0)),
       )
 
-      const rawFeaturedUntil = String(formData.get('featured_until') || '').trim()
+      const rawFeaturedUntil = String(
+        formData.get('featured_until') || '',
+      ).trim()
 
       if (rawFeaturedUntil) {
         const featuredUntilDate = new Date(rawFeaturedUntil)
@@ -2339,22 +2397,22 @@ export async function updatePropertyAction(formData: FormData) {
   } else if (is_featured) {
     featured_rank = Math.max(
       0,
-      Math.trunc(Number(existingProperty.featured_rank ?? 0))
+      Math.trunc(Number(existingProperty.featured_rank ?? 0)),
     )
     featured_until = existingProperty.featured_until ?? null
     featured_at = existingProperty.featured_at ?? null
     featured_by_admin_id = existingProperty.featured_by_admin_id ?? null
   }
 
-  const normalizedSubmittedAvailabilityStatus =
-    normalizeAvailabilityStatus(submittedAvailabilityStatus)
+  const normalizedSubmittedAvailabilityStatus = normalizeAvailabilityStatus(
+    submittedAvailabilityStatus,
+  )
 
   if (!property_id) throw new Error('Property code is required')
 
   if (!title_en || !title_ar) {
     throw new Error('Both Arabic and English titles are required')
   }
-
 
   if (!city_id) throw new Error('City is required')
   if (!university_id) throw new Error('University is required')
@@ -2391,7 +2449,9 @@ export async function updatePropertyAction(formData: FormData) {
 
   const roomIds = formData.getAll('room_id').map((v) => String(v).trim())
   const roomNames = formData.getAll('room_name').map((v) => String(v).trim())
-  const roomNameArs = formData.getAll('room_name_ar').map((v) => String(v).trim())
+  const roomNameArs = formData
+    .getAll('room_name_ar')
+    .map((v) => String(v).trim())
   const roomTypes = formData.getAll('room_type').map((v) => String(v).trim())
 
   const roomDurations = formData
@@ -2406,8 +2466,16 @@ export async function updatePropertyAction(formData: FormData) {
     .getAll('room_private_bathroom')
     .map((v) => String(v).trim())
 
-  const roomIsReserved = formData
+  const legacyRoomIsReserved = formData
     .getAll('room_is_reserved')
+    .map((v) => String(v).trim())
+
+  const roomIsReservedSummerCourse = formData
+    .getAll('room_is_reserved_summer_course')
+    .map((v) => String(v).trim())
+
+  const roomIsReservedAcademicYear = formData
+    .getAll('room_is_reserved_academic_year')
     .map((v) => String(v).trim())
 
   const roomSingleEnabled = formData
@@ -2502,7 +2570,7 @@ export async function updatePropertyAction(formData: FormData) {
 
       if (option_rows.length === 0) {
         throw new Error(
-          `Room ${index + 1} must have at least one enabled booking option`
+          `Room ${index + 1} must have at least one enabled booking option`,
         )
       }
 
@@ -2511,14 +2579,23 @@ export async function updatePropertyAction(formData: FormData) {
         room_name: room_name || `Room ${index + 1}`,
         room_name_ar: room_name_ar || null,
         room_type: ['single', 'double', 'triple', 'quad', 'custom'].includes(
-          room_type
+          room_type,
         )
           ? (room_type as 'single' | 'double' | 'triple' | 'quad' | 'custom')
           : 'custom',
         rental_duration: normalizedRentalDuration,
         beds_count: parsedBedsCount,
         private_bathroom: toBoolean(roomPrivateBathrooms[index] || 'false'),
-        is_reserved: toBoolean(roomIsReserved[index] || 'false'),
+        is_reserved_summer_course: toBoolean(
+          roomIsReservedSummerCourse[index] ??
+            legacyRoomIsReserved[index] ??
+            'false',
+        ),
+        is_reserved_academic_year: toBoolean(
+          roomIsReservedAcademicYear[index] ??
+            legacyRoomIsReserved[index] ??
+            'false',
+        ),
         is_active: normalizedSubmittedAvailabilityStatus !== 'inactive',
         sort_order: index,
         option_rows,
@@ -2531,11 +2608,14 @@ export async function updatePropertyAction(formData: FormData) {
   }
 
   const availability_status = derivePropertyAvailabilityStatus(
-    normalizedSubmittedAvailabilityStatus
+    normalizedSubmittedAvailabilityStatus,
   )
 
   const finalBedroomsCount = roomRows.length
-  const finalBedsCount = roomRows.reduce((sum, room) => sum + room.beds_count, 0)
+  const finalBedsCount = roomRows.reduce(
+    (sum, room) => sum + room.beds_count,
+    0,
+  )
   const gender = String(formData.get('gender') || '').trim() || null
 
   const propertyPayload = {
@@ -2594,7 +2674,9 @@ export async function updatePropertyAction(formData: FormData) {
     .eq('property_id_ref', propertyDbId)
 
   if (deleteAmenitiesError) {
-    throw new Error(`Failed to delete property amenities: ${deleteAmenitiesError.message}`)
+    throw new Error(
+      `Failed to delete property amenities: ${deleteAmenitiesError.message}`,
+    )
   }
 
   const { error: deleteFacilitiesError } = await supabase
@@ -2603,7 +2685,9 @@ export async function updatePropertyAction(formData: FormData) {
     .eq('property_id_ref', propertyDbId)
 
   if (deleteFacilitiesError) {
-    throw new Error(`Failed to delete property facilities: ${deleteFacilitiesError.message}`)
+    throw new Error(
+      `Failed to delete property facilities: ${deleteFacilitiesError.message}`,
+    )
   }
 
   const { error: deleteBillIncludesError } = await supabase
@@ -2613,7 +2697,7 @@ export async function updatePropertyAction(formData: FormData) {
 
   if (deleteBillIncludesError) {
     throw new Error(
-      `Failed to delete property bill includes: ${deleteBillIncludesError.message}`
+      `Failed to delete property bill includes: ${deleteBillIncludesError.message}`,
     )
   }
 
@@ -2636,11 +2720,11 @@ export async function updatePropertyAction(formData: FormData) {
   const coverIndex = Number(String(formData.get('cover_index') || '0'))
 
   const existingImagesToKeep = (existingImagesRows ?? []).filter((img) =>
-    keptExistingImageIds.includes(img.id)
+    keptExistingImageIds.includes(img.id),
   )
 
   const existingImagesToDelete = (existingImagesRows ?? []).filter(
-    (img) => !keptExistingImageIds.includes(img.id)
+    (img) => !keptExistingImageIds.includes(img.id),
   )
 
   if (existingImagesToDelete.length > 0) {
@@ -2663,7 +2747,7 @@ export async function updatePropertyAction(formData: FormData) {
       .delete()
       .in(
         'id',
-        existingImagesToDelete.map((img) => img.id)
+        existingImagesToDelete.map((img) => img.id),
       )
 
     if (deleteImagesError) {
@@ -2758,33 +2842,34 @@ export async function updatePropertyAction(formData: FormData) {
     }))
 
   if (newRowsToInsert.length > 0) {
-    const { error } = await supabase.from('property_images').insert(newRowsToInsert)
+    const { error } = await supabase
+      .from('property_images')
+      .insert(newRowsToInsert)
     if (error) {
       throw new Error(error.message)
     }
   }
 
-
   const removeExistingVideo = toBoolean(
-    String(formData.get('remove_existing_video') || 'false')
+    String(formData.get('remove_existing_video') || 'false'),
   )
   const uploadedVideoUrl = String(
-    formData.get('uploaded_video_url') || ''
+    formData.get('uploaded_video_url') || '',
   ).trim()
   const uploadedVideoStoragePath = String(
-    formData.get('uploaded_video_storage_path') || ''
+    formData.get('uploaded_video_storage_path') || '',
   ).trim()
   const uploadedVideoMimeType = String(
-    formData.get('uploaded_video_mime_type') || ''
+    formData.get('uploaded_video_mime_type') || '',
   ).trim()
   const uploadedVideoFileSize = toNullableNumber(
-    formData.get('uploaded_video_file_size')
+    formData.get('uploaded_video_file_size'),
   )
   const hasUploadedVideo = Boolean(
     uploadedVideoUrl ||
-      uploadedVideoStoragePath ||
-      uploadedVideoMimeType ||
-      uploadedVideoFileSize !== null
+    uploadedVideoStoragePath ||
+    uploadedVideoMimeType ||
+    uploadedVideoFileSize !== null,
   )
 
   let videoAction: 'kept' | 'added' | 'replaced' | 'deleted' | 'none' =
@@ -2822,7 +2907,9 @@ export async function updatePropertyAction(formData: FormData) {
         await supabase.storage
           .from(PROPERTY_VIDEOS_BUCKET)
           .remove([uploadedVideoStoragePath])
-        throw new Error(`Failed to replace property video: ${updateVideoError.message}`)
+        throw new Error(
+          `Failed to replace property video: ${updateVideoError.message}`,
+        )
       }
 
       if (
@@ -2834,7 +2921,10 @@ export async function updatePropertyAction(formData: FormData) {
           .remove([existingVideo.storage_path])
 
         if (oldVideoRemoveError) {
-          console.error('Failed to remove replaced property video:', oldVideoRemoveError)
+          console.error(
+            'Failed to remove replaced property video:',
+            oldVideoRemoveError,
+          )
         }
       }
 
@@ -2856,7 +2946,9 @@ export async function updatePropertyAction(formData: FormData) {
         await supabase.storage
           .from(PROPERTY_VIDEOS_BUCKET)
           .remove([uploadedVideoStoragePath])
-        throw new Error(`Failed to save property video: ${insertVideoError.message}`)
+        throw new Error(
+          `Failed to save property video: ${insertVideoError.message}`,
+        )
       }
 
       videoAction = 'added'
@@ -2868,7 +2960,9 @@ export async function updatePropertyAction(formData: FormData) {
       .eq('id', existingVideo.id)
 
     if (deleteVideoError) {
-      throw new Error(`Failed to delete property video: ${deleteVideoError.message}`)
+      throw new Error(
+        `Failed to delete property video: ${deleteVideoError.message}`,
+      )
     }
 
     if (existingVideo.storage_path) {
@@ -2877,7 +2971,10 @@ export async function updatePropertyAction(formData: FormData) {
         .remove([existingVideo.storage_path])
 
       if (removeVideoStorageError) {
-        console.error('Failed to remove property video file:', removeVideoStorageError)
+        console.error(
+          'Failed to remove property video file:',
+          removeVideoStorageError,
+        )
       }
     }
 
@@ -2947,13 +3044,13 @@ export async function updatePropertyAction(formData: FormData) {
 
   if (activeRoomsAfterSyncError) {
     throw new Error(
-      `Failed to verify active rooms after save: ${activeRoomsAfterSyncError.message}`
+      `Failed to verify active rooms after save: ${activeRoomsAfterSyncError.message}`,
     )
   }
 
   if ((activeRoomsAfterSync?.length || 0) !== roomRows.length) {
     throw new Error(
-      `Property rooms verification failed after save. Expected ${roomRows.length} active room(s), found ${activeRoomsAfterSync?.length || 0}.`
+      `Property rooms verification failed after save. Expected ${roomRows.length} active room(s), found ${activeRoomsAfterSync?.length || 0}.`,
     )
   }
 
@@ -2969,7 +3066,7 @@ export async function updatePropertyAction(formData: FormData) {
 
   if (syncPropertyCountsError) {
     throw new Error(
-      `Failed to sync property bedroom and bed counts: ${syncPropertyCountsError.message}`
+      `Failed to sync property bedroom and bed counts: ${syncPropertyCountsError.message}`,
     )
   }
 
@@ -3023,15 +3120,14 @@ export async function updatePropertyAction(formData: FormData) {
       featured_until,
       structure_sync_mode: 'preserve_existing_ids',
       video_action: videoAction,
-      waiting_list_notifications:
-        waitingListNotificationResult || {
-          success: false,
-          sentCount: 0,
-          reason:
-            wasNotPublished && becamePublished && isActiveAfterUpdate
-              ? 'notification_function_failed'
-              : 'property_did_not_become_published',
-        },
+      waiting_list_notifications: waitingListNotificationResult || {
+        success: false,
+        sentCount: 0,
+        reason:
+          wasNotPublished && becamePublished && isActiveAfterUpdate
+            ? 'notification_function_failed'
+            : 'property_did_not_become_published',
+      },
     },
   })
 

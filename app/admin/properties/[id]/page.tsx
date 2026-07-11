@@ -1,10 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/src/lib/supabase/server'
 import { createAdminClient } from '@/src/lib/supabase/admin'
-import {
-  requirePropertyEditorAccess,
-  isSuperAdmin,
-} from '@/src/lib/admin-auth'
+import { requirePropertyEditorAccess, isSuperAdmin } from '@/src/lib/admin-auth'
 import EditPropertyForm from './EditPropertyForm'
 
 type PageProps = {
@@ -47,7 +44,7 @@ function normalizeOwnerRows(rows: any[] | null | undefined) {
   })
 
   return Array.from(uniqueOwners.values()).sort((a, b) =>
-    String(a.full_name || '').localeCompare(String(b.full_name || ''))
+    String(a.full_name || '').localeCompare(String(b.full_name || '')),
   )
 }
 
@@ -59,7 +56,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
   const admin = adminContext.admin
   const propertyRes = await supabase
     .from('properties')
-    .select(`
+    .select(
+      `
       id,
       property_id,
       title_en,
@@ -93,7 +91,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
       featured_until,
       featured_at,
       featured_by_admin_id
-    `)
+    `,
+    )
     .eq('id', id)
     .maybeSingle()
 
@@ -148,7 +147,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
 
     supabase
       .from('property_owner_service_areas')
-      .select(`
+      .select(
+        `
         id,
         owner_id,
         city_id,
@@ -163,14 +163,16 @@ export default async function EditPropertyPage({ params }: PageProps) {
           company_name,
           is_active
         )
-      `)
+      `,
+      )
       .eq('is_active', true)
       .eq('property_owners.is_active', true)
       .order('created_at', { ascending: false }),
 
     supabase
       .from('property_owners')
-      .select(`
+      .select(
+        `
         id,
         full_name,
         phone_number,
@@ -178,14 +180,16 @@ export default async function EditPropertyPage({ params }: PageProps) {
         email,
         company_name,
         is_active
-      `)
+      `,
+      )
       .eq('is_active', true)
       .order('full_name'),
 
     property.owner_id
       ? supabase
           .from('property_owners')
-          .select(`
+          .select(
+            `
             id,
             full_name,
             phone_number,
@@ -193,7 +197,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
             email,
             company_name,
             is_active
-          `)
+          `,
+          )
           .eq('id', property.owner_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -225,7 +230,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
     adminSupabase
       .from('property_videos')
       .select(
-        'id, video_url, storage_path, file_mime_type, file_size_bytes, duration_seconds, sort_order, is_active'
+        'id, video_url, storage_path, file_mime_type, file_size_bytes, duration_seconds, sort_order, is_active',
       )
       .eq('property_id_ref', id)
       .eq('is_active', true)
@@ -249,7 +254,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
 
     supabase
       .from('property_rooms')
-      .select(`
+      .select(
+        `
         id,
         room_name,
         room_name_ar,
@@ -258,6 +264,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
         private_room_price_egp,
         shared_bed_price_egp,
         private_bathroom,
+        is_reserved_summer_course,
+        is_reserved_academic_year,
         status,
         sort_order,
         is_active,
@@ -280,7 +288,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
           is_active,
           sort_order
         )
-      `)
+      `,
+      )
       .eq('property_id_ref', id)
       .eq('is_active', true)
       .order('sort_order'),
@@ -289,7 +298,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
   if (citiesRes.error) throw new Error(citiesRes.error.message)
   if (universitiesRes.error) throw new Error(universitiesRes.error.message)
   if (brokersRes.error) throw new Error(brokersRes.error.message)
-  if (ownerServiceAreasRes.error) throw new Error(ownerServiceAreasRes.error.message)
+  if (ownerServiceAreasRes.error)
+    throw new Error(ownerServiceAreasRes.error.message)
   if (allOwnersRes.error) throw new Error(allOwnersRes.error.message)
   if (currentOwnerRes.error) throw new Error(currentOwnerRes.error.message)
   if (amenitiesRes.error) throw new Error(amenitiesRes.error.message)
@@ -297,13 +307,15 @@ export default async function EditPropertyPage({ params }: PageProps) {
   if (billTypesRes.error) throw new Error(billTypesRes.error.message)
   if (imagesRes.error) throw new Error(imagesRes.error.message)
   if (videosRes.error) throw new Error(videosRes.error.message)
-  if (propertyAmenitiesRes.error) throw new Error(propertyAmenitiesRes.error.message)
-  if (propertyFacilitiesRes.error) throw new Error(propertyFacilitiesRes.error.message)
+  if (propertyAmenitiesRes.error)
+    throw new Error(propertyAmenitiesRes.error.message)
+  if (propertyFacilitiesRes.error)
+    throw new Error(propertyFacilitiesRes.error.message)
   if (propertyBillsRes.error) throw new Error(propertyBillsRes.error.message)
   if (roomsRes.error) throw new Error(roomsRes.error.message)
 
   const brokers = isSuperAdmin(admin)
-    ? brokersRes.data ?? []
+    ? (brokersRes.data ?? [])
     : (brokersRes.data ?? []).filter((broker) => broker.id === admin.broker_id)
 
   const serviceAreaOwners = normalizeOwnerRows(ownerServiceAreasRes.data)
@@ -341,19 +353,20 @@ export default async function EditPropertyPage({ params }: PageProps) {
   }
 
   const owners = Array.from(ownersMap.values()).sort((a, b) =>
-    String(a.full_name || '').localeCompare(String(b.full_name || ''))
+    String(a.full_name || '').localeCompare(String(b.full_name || '')),
   )
 
   const activeRooms = (roomsRes.data ?? []).map((room: any) => ({
     ...room,
     room_beds: Array.isArray(room.room_beds)
       ? room.room_beds.filter(
-          (bed: any) => bed && bed.is_active !== false && bed.status !== 'inactive'
+          (bed: any) =>
+            bed && bed.is_active !== false && bed.status !== 'inactive',
         )
       : [],
     room_sellable_options: Array.isArray(room.room_sellable_options)
       ? room.room_sellable_options.filter(
-          (option: any) => option && option.is_active !== false
+          (option: any) => option && option.is_active !== false,
         )
       : [],
   }))
@@ -362,7 +375,9 @@ export default async function EditPropertyPage({ params }: PageProps) {
     ...property,
     bedrooms_count: activeRooms.length,
     beds_count: activeRooms.reduce((sum: number, room: any) => {
-      const roomBedsCount = Array.isArray(room.room_beds) ? room.room_beds.length : 0
+      const roomBedsCount = Array.isArray(room.room_beds)
+        ? room.room_beds.length
+        : 0
       return sum + roomBedsCount
     }, 0),
   }
@@ -383,13 +398,13 @@ export default async function EditPropertyPage({ params }: PageProps) {
         images={imagesRes.data ?? []}
         video={(videosRes.data ?? [])[0] ?? null}
         selectedAmenityIds={(propertyAmenitiesRes.data ?? []).map(
-          (x: any) => x.amenity_id
+          (x: any) => x.amenity_id,
         )}
         selectedFacilityIds={(propertyFacilitiesRes.data ?? []).map(
-          (x: any) => x.facility_id
+          (x: any) => x.facility_id,
         )}
         selectedBillTypeIds={(propertyBillsRes.data ?? []).map(
-          (x: any) => x.bill_type_id
+          (x: any) => x.bill_type_id,
         )}
         rooms={activeRooms}
         bookingRequests={[]}
