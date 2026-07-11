@@ -83,6 +83,19 @@ function CloseIcon() {
   );
 }
 
+function ClearValueIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M6 6l8 8M14 6l-8 8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function buildSectionedOptions(options: SortOption[]) {
   const genderOrder: GenderValue[] = ["girls", "boys"];
   const sortOrder: SortValue[] = [
@@ -137,10 +150,34 @@ function normalizeSeasonParam(value: string | null): PricingSeasonCode | null {
   return null;
 }
 
-function normalizeNonNegativeNumber(value: string | null) {
-  if (value === null || value.trim() === "") return null;
+function normalizeLocalizedDigits(value: string) {
+  return value
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+    .replace(/[٫,]/g, ".")
+    .replace(/٬/g, "");
+}
 
-  const numberValue = Number(value);
+function sanitizePriceInput(value: string) {
+  const normalizedValue = normalizeLocalizedDigits(value);
+  const cleanedValue = normalizedValue.replace(/[^0-9.]/g, "");
+  const [integerPart = "", ...decimalParts] = cleanedValue.split(".");
+
+  if (decimalParts.length === 0) return integerPart;
+
+  const decimalPart = decimalParts.join("").slice(0, 2);
+  const safeIntegerPart = integerPart === "" ? "0" : integerPart;
+
+  return `${safeIntegerPart}.${decimalPart}`;
+}
+
+function normalizeNonNegativeNumber(value: string | null) {
+  if (value === null) return null;
+
+  const normalizedValue = normalizeLocalizedDigits(value).trim();
+  if (normalizedValue === "") return null;
+
+  const numberValue = Number(normalizedValue);
 
   if (!Number.isFinite(numberValue) || numberValue < 0) return null;
 
@@ -343,6 +380,9 @@ function PriceRangeFilter({
   onMaximumChange: (value: string) => void;
   currencyRate: number;
 }) {
+  const [activeHandle, setActiveHandle] = useState<
+    "minimum" | "maximum" | null
+  >(null);
   const safeRate = getSafeCurrencyRate(currencyRate);
   const defaultMaximum = Math.max(1, Math.round(17000 * safeRate));
   const rawMinimum = normalizeNonNegativeNumber(minimumValue);
@@ -375,13 +415,16 @@ function PriceRangeFilter({
   const maximumPercent = (maximumSliderValue / sliderMaximum) * 100;
   const maximumPlaceholder = `${serializeNumber(sliderMaximum)}+`;
 
+  const hasMinimumValue = minimumValue.trim() !== "";
+  const hasMaximumValue = maximumValue.trim() !== "";
+  const hasTemporarilyReversedRange =
+    rawMinimum !== null &&
+    rawMaximum !== null &&
+    rawMinimum > rawMaximum;
+
   const handleMinimumSliderChange = (nextValue: string) => {
     const parsedValue = Number(nextValue);
-    const clampedValue = clampNumber(
-      parsedValue,
-      0,
-      maximumSliderValue,
-    );
+    const clampedValue = clampNumber(parsedValue, 0, maximumSliderValue);
 
     onMinimumChange(clampedValue <= 0 ? "" : serializeNumber(clampedValue));
   };
@@ -399,42 +442,31 @@ function PriceRangeFilter({
     );
   };
 
+  // لا نقارن الحد الأدنى بالحد الأقصى أثناء الكتابة.
+  // هذا يسمح للمستخدم بمسح الرقم أو تعديله رقمًا رقمًا بدون أن يرجع تلقائيًا.
   const handleMinimumInputChange = (nextValue: string) => {
-    const parsedValue = normalizeNonNegativeNumber(nextValue);
-
-    if (parsedValue === null) {
-      onMinimumChange(nextValue);
-      return;
-    }
-
-    if (rawMaximum !== null && parsedValue > rawMaximum) {
-      onMinimumChange(serializeNumber(rawMaximum));
-      return;
-    }
-
-    onMinimumChange(nextValue);
+    onMinimumChange(sanitizePriceInput(nextValue));
   };
 
   const handleMaximumInputChange = (nextValue: string) => {
-    const parsedValue = normalizeNonNegativeNumber(nextValue);
+    onMaximumChange(sanitizePriceInput(nextValue));
+  };
 
-    if (parsedValue === null) {
-      onMaximumChange(nextValue);
+  const normalizeInputOnBlur = (
+    value: string,
+    onChange: (nextValue: string) => void,
+  ) => {
+    if (value.trim() === "") {
+      onChange("");
       return;
     }
 
-    if (rawMinimum !== null && parsedValue < rawMinimum) {
-      onMaximumChange(serializeNumber(rawMinimum));
-      return;
-    }
-
-    onMaximumChange(nextValue);
+    const parsedValue = normalizeNonNegativeNumber(value);
+    onChange(parsedValue === null ? "" : serializeNumber(parsedValue));
   };
 
   return (
     <div className="price-range-filter" dir={isArabic ? "rtl" : "ltr"}>
-     
-
       <div className="mt-7 px-1 sm:mt-8 sm:px-0" dir="ltr">
         <div className="relative h-[112px] sm:h-[122px]">
           <div className="absolute inset-x-3 bottom-[30px] flex h-[82px] items-end gap-[3px] overflow-hidden sm:inset-x-5 sm:gap-[4px]">
@@ -476,11 +508,15 @@ function PriceRangeFilter({
               max={sliderMaximum}
               step={sliderStep}
               value={minimumSliderValue}
+              onPointerDown={() => setActiveHandle("minimum")}
+              onFocus={() => setActiveHandle("minimum")}
+              onBlur={() => setActiveHandle(null)}
               onChange={(event) =>
                 handleMinimumSliderChange(event.target.value)
               }
               aria-label={minimumLabel}
               className="price-range-filter__slider price-range-filter__slider--minimum"
+              style={{ zIndex: activeHandle === "minimum" ? 30 : 20 }}
             />
 
             <input
@@ -489,11 +525,15 @@ function PriceRangeFilter({
               max={sliderMaximum}
               step={sliderStep}
               value={maximumSliderValue}
+              onPointerDown={() => setActiveHandle("maximum")}
+              onFocus={() => setActiveHandle("maximum")}
+              onBlur={() => setActiveHandle(null)}
               onChange={(event) =>
                 handleMaximumSliderChange(event.target.value)
               }
               aria-label={maximumLabel}
               className="price-range-filter__slider price-range-filter__slider--maximum"
+              style={{ zIndex: activeHandle === "maximum" ? 30 : 21 }}
             />
           </div>
         </div>
@@ -503,38 +543,99 @@ function PriceRangeFilter({
             <span className="mb-2.5 block pl-3 text-[13px] font-semibold text-[#6b6b6b] dark:text-slate-300 sm:text-[14px]">
               {minimumLabel}
             </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              value={minimumValue}
-              onChange={(event) =>
-                handleMinimumInputChange(event.target.value)
-              }
-              placeholder="0"
-              className="h-[60px] w-full max-w-[122px] rounded-full border border-[#d9d9d9] bg-white px-5 text-center text-[17px] font-normal text-[#222222] outline-none transition placeholder:text-[#222222] focus:border-[#0A46FF] focus:ring-4 focus:ring-[#0A46FF]/10 dark:border-white/15 dark:bg-[#111827] dark:text-slate-100 dark:placeholder:text-slate-300 dark:focus:border-[#60a5fa] dark:focus:ring-[#60a5fa]/10"
-            />
+
+            <div className="relative w-full max-w-[122px]">
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={minimumValue}
+                onChange={(event) =>
+                  handleMinimumInputChange(event.target.value)
+                }
+                onBlur={() =>
+                  normalizeInputOnBlur(minimumValue, onMinimumChange)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                placeholder="0"
+                dir="ltr"
+                aria-invalid={hasTemporarilyReversedRange}
+                className={`h-[60px] w-full rounded-full border bg-white px-10 text-center text-[17px] font-normal text-[#222222] outline-none transition duration-200 placeholder:text-[#222222] focus:ring-4 dark:bg-[#111827] dark:text-slate-100 dark:placeholder:text-slate-300 ${
+                  hasTemporarilyReversedRange
+                    ? "border-[#ef4444] focus:border-[#ef4444] focus:ring-[#ef4444]/10 dark:border-[#f87171]"
+                    : "border-[#d9d9d9] focus:border-[#0A46FF] focus:ring-[#0A46FF]/10 dark:border-white/15 dark:focus:border-[#60a5fa] dark:focus:ring-[#60a5fa]/10"
+                }`}
+              />
+
+              {hasMinimumValue && (
+                <button
+                  type="button"
+                  onClick={() => onMinimumChange("")}
+                  className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#8b8b8b] transition hover:bg-[#f2f4f7] hover:text-[#222222] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A46FF]/30 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                  aria-label={isArabic ? "مسح السعر الأدنى" : "Clear minimum price"}
+                >
+                  <ClearValueIcon />
+                </button>
+              )}
+            </div>
           </label>
 
           <label className="flex min-w-0 flex-col items-end text-right">
             <span className="mb-2.5 block pr-3 text-[13px] font-semibold text-[#6b6b6b] dark:text-slate-300 sm:text-[14px]">
               {maximumLabel}
             </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              value={maximumValue}
-              onChange={(event) =>
-                handleMaximumInputChange(event.target.value)
-              }
-              placeholder={maximumPlaceholder}
-              className="h-[60px] w-full max-w-[122px] rounded-full border border-[#d9d9d9] bg-white px-5 text-center text-[17px] font-normal text-[#222222] outline-none transition placeholder:text-[#222222] focus:border-[#0A46FF] focus:ring-4 focus:ring-[#0A46FF]/10 dark:border-white/15 dark:bg-[#111827] dark:text-slate-100 dark:placeholder:text-slate-300 dark:focus:border-[#60a5fa] dark:focus:ring-[#60a5fa]/10"
-            />
+
+            <div className="relative w-full max-w-[122px]">
+              <input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={maximumValue}
+                onChange={(event) =>
+                  handleMaximumInputChange(event.target.value)
+                }
+                onBlur={() =>
+                  normalizeInputOnBlur(maximumValue, onMaximumChange)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                placeholder={maximumPlaceholder}
+                dir="ltr"
+                aria-invalid={hasTemporarilyReversedRange}
+                className={`h-[60px] w-full rounded-full border bg-white px-10 text-center text-[17px] font-normal text-[#222222] outline-none transition duration-200 placeholder:text-[#222222] focus:ring-4 dark:bg-[#111827] dark:text-slate-100 dark:placeholder:text-slate-300 ${
+                  hasTemporarilyReversedRange
+                    ? "border-[#ef4444] focus:border-[#ef4444] focus:ring-[#ef4444]/10 dark:border-[#f87171]"
+                    : "border-[#d9d9d9] focus:border-[#0A46FF] focus:ring-[#0A46FF]/10 dark:border-white/15 dark:focus:border-[#60a5fa] dark:focus:ring-[#60a5fa]/10"
+                }`}
+              />
+
+              {hasMaximumValue && (
+                <button
+                  type="button"
+                  onClick={() => onMaximumChange("")}
+                  className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#8b8b8b] transition hover:bg-[#f2f4f7] hover:text-[#222222] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A46FF]/30 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                  aria-label={isArabic ? "مسح السعر الأقصى" : "Clear maximum price"}
+                >
+                  <ClearValueIcon />
+                </button>
+              )}
+            </div>
           </label>
         </div>
+
+        {hasTemporarilyReversedRange && (
+          <p
+            className="mt-3 text-center text-[12px] font-medium text-[#dc2626] dark:text-[#fca5a5]"
+            dir={isArabic ? "rtl" : "ltr"}
+          >
+            {isArabic
+              ? "السعر من يجب أن يكون أقل من أو يساوي السعر إلى"
+              : "Minimum price must be less than or equal to maximum price"}
+          </p>
+        )}
       </div>
 
       <style>{`
@@ -549,14 +650,6 @@ function PriceRangeFilter({
           background: transparent;
           pointer-events: none;
           outline: none;
-        }
-
-        .price-range-filter__slider--minimum {
-          z-index: 20;
-        }
-
-        .price-range-filter__slider--maximum {
-          z-index: 21;
         }
 
         .price-range-filter__slider::-webkit-slider-runnable-track {
