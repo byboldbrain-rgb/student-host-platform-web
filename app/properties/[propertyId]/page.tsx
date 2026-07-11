@@ -129,6 +129,8 @@ type PropertyRoom = {
     | "fully_reserved"
     | "inactive"
     | null;
+  is_reserved_summer_course?: boolean | null;
+  is_reserved_academic_year?: boolean | null;
   private_bathroom?: boolean | null;
   sort_order?: number | null;
   room_beds?: RoomBed[];
@@ -146,6 +148,8 @@ type PropertyReservation = {
     | "cancelled"
     | null;
   room_sellable_option_id?: string | null;
+  season_id?: string | null;
+  season_code?: string | null;
 };
 
 type Property = {
@@ -213,12 +217,14 @@ type OptionCode =
   | "single_room"
   | "full_apartment";
 
+type BookingSeasonCode = "academic_year" | "summer_course";
+
 type DisplayOption = {
   code: OptionCode;
   label: string;
   price: number | null;
   seasonalPrices: DisplaySeasonalPrice[];
-  isBooked: boolean;
+  isBookedBySeason: Record<BookingSeasonCode, boolean>;
 };
 
 type RoomOccupancyState = {
@@ -730,8 +736,6 @@ function getSeasonBookingOrder(code?: string | null) {
   return 99;
 }
 
-type BookingSeasonCode = "academic_year" | "summer_course";
-
 function SeasonBookingButton({
   option,
   seasonCode,
@@ -784,7 +788,9 @@ function SeasonBookingButton({
     ? `${option.label} - ${seasonPrice?.label || seasonCode} - ${formattedPrice} ${durationLabel}`
     : `${option.label} - ${seasonPrice?.label || seasonCode}`;
 
-  if (option.isBooked) {
+  const isBookedForSelectedSeason = option.isBookedBySeason[seasonCode];
+
+  if (isBookedForSelectedSeason) {
     return (
       <button
         type="button"
@@ -1117,6 +1123,8 @@ async function getPublishedPropertyForSeo(propertyId: string) {
       property_rooms (
         status,
         is_active,
+        is_reserved_summer_course,
+        is_reserved_academic_year,
         property_room_sellable_options (
           price_egp,
           is_active
@@ -1364,10 +1372,63 @@ function isActiveReservationStatus(status?: PropertyReservation["status"]) {
   );
 }
 
+function normalizeBookingSeasonCode(
+  value?: string | null,
+): BookingSeasonCode | null {
+  if (value === "academic_year" || value === "summer_course") {
+    return value;
+  }
+
+  return null;
+}
+
+function reservationMatchesSeason(
+  reservation: PropertyReservation,
+  seasonCode: BookingSeasonCode,
+) {
+  const reservationSeasonCode = normalizeBookingSeasonCode(
+    reservation.season_code,
+  );
+
+  // الحجوزات القديمة التي لا تحتوي على season_code تُعامل كحجز عام
+  // حتى لا تظهر الوحدة متاحة بالخطأ في أي موسم.
+  return reservationSeasonCode === null || reservationSeasonCode === seasonCode;
+}
+
+function roomHasExplicitSeasonReservationFlags(room: PropertyRoom) {
+  return (
+    typeof room.is_reserved_summer_course === "boolean" ||
+    typeof room.is_reserved_academic_year === "boolean"
+  );
+}
+
+function isRoomReservedForSeason(
+  room: PropertyRoom,
+  seasonCode: BookingSeasonCode,
+) {
+  const seasonFlag =
+    seasonCode === "summer_course"
+      ? room.is_reserved_summer_course
+      : room.is_reserved_academic_year;
+
+  if (seasonFlag === true) return true;
+
+  // دعم البيانات القديمة قبل إضافة أعمدة الحجز الموسمية.
+  if (
+    !roomHasExplicitSeasonReservationFlags(room) &&
+    room.status === "fully_reserved"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function buildRoomOccupancyState(
   room: PropertyRoom,
   reservations: PropertyReservation[],
   roomSellableOptionIdToCode: Map<string, OptionCode>,
+  seasonCode: BookingSeasonCode,
 ): RoomOccupancyState {
   const roomOptionIds = new Set(
     (room.room_sellable_options || []).map((option) => option.id),
@@ -1375,6 +1436,7 @@ function buildRoomOccupancyState(
 
   const activeRoomReservations = reservations.filter((reservation) => {
     if (!isActiveReservationStatus(reservation.status)) return false;
+    if (!reservationMatchesSeason(reservation, seasonCode)) return false;
     if (!reservation.room_sellable_option_id) return false;
     return roomOptionIds.has(reservation.room_sellable_option_id);
   });
@@ -1388,6 +1450,24 @@ function buildRoomOccupancyState(
       roomId: room.id,
       lockedMode: "single_room",
       activeReservationsCount: 1,
+      maxCapacity: 1,
+      hasAvailability: false,
+      blocksEntireProperty: true,
+    };
+  }
+
+  const singleCount = activeRoomReservations.filter((reservation) => {
+    const optionCode = roomSellableOptionIdToCode.get(
+      reservation.room_sellable_option_id || "",
+    );
+    return optionCode === "single_room";
+  }).length;
+
+  if (singleCount > 0) {
+    return {
+      roomId: room.id,
+      lockedMode: "single_room",
+      activeReservationsCount: singleCount,
       maxCapacity: 1,
       hasAvailability: false,
       blocksEntireProperty: true,
@@ -1432,16 +1512,19 @@ function buildRoomOccupancyState(
     };
   }
 
-  const roomIsInactive =
-    room.status === "inactive" || room.status === "fully_reserved";
+  const roomIsInactive = room.status === "inactive";
+  const roomIsReservedForSelectedSeason = isRoomReservedForSeason(
+    room,
+    seasonCode,
+  );
 
   return {
     roomId: room.id,
     lockedMode: null,
     activeReservationsCount: 0,
     maxCapacity: 0,
-    hasAvailability: !roomIsInactive,
-    blocksEntireProperty: false,
+    hasAvailability: !roomIsInactive && !roomIsReservedForSelectedSeason,
+    blocksEntireProperty: roomIsReservedForSelectedSeason,
   };
 }
 
@@ -1449,8 +1532,12 @@ function isRoomAvailableForOption(
   room: PropertyRoom,
   optionCode: Exclude<OptionCode, "full_apartment">,
   roomState: RoomOccupancyState,
+  seasonCode: BookingSeasonCode,
 ) {
-  if (room.status === "inactive" || room.status === "fully_reserved") {
+  if (
+    room.status === "inactive" ||
+    isRoomReservedForSeason(room, seasonCode)
+  ) {
     return false;
   }
 
@@ -1913,6 +2000,8 @@ export default async function PropertyPage({
       room_type,
       base_price_egp,
       status,
+      is_reserved_summer_course,
+      is_reserved_academic_year,
       private_bathroom,
       sort_order,
       room_beds (
@@ -2061,7 +2150,9 @@ export default async function PropertyPage({
         id,
         reservation_scope,
         status,
-        room_sellable_option_id
+        room_sellable_option_id,
+        season_id,
+        season_code
       `,
       )
       .eq("property_id", typedProperty.id);
@@ -2070,8 +2161,23 @@ export default async function PropertyPage({
     throw new Error(propertyReservationsError.message);
   }
 
-  const propertyReservations = (propertyReservationsData ||
-    []) as PropertyReservation[];
+  const pricingSeasonIdToCode = new Map<string, BookingSeasonCode>();
+  for (const season of activePricingSeasons) {
+    const normalizedSeasonCode = normalizeBookingSeasonCode(season.code);
+    if (normalizedSeasonCode) {
+      pricingSeasonIdToCode.set(season.id, normalizedSeasonCode);
+    }
+  }
+
+  const propertyReservations = (
+    (propertyReservationsData || []) as PropertyReservation[]
+  ).map((reservation) => ({
+    ...reservation,
+    season_code:
+      normalizeBookingSeasonCode(reservation.season_code) ||
+      pricingSeasonIdToCode.get(reservation.season_id || "") ||
+      null,
+  }));
 
   const roomSellableOptionIdToCode = new Map<string, OptionCode>();
   for (const room of rooms) {
@@ -2083,26 +2189,48 @@ export default async function PropertyPage({
     }
   }
 
-  const hasActiveFullApartmentReservation = propertyReservations.some(
-    (reservation) =>
-      isActiveReservationStatus(reservation.status) &&
-      reservation.reservation_scope === "entire_property",
-  );
+  const bookingSeasonCodes: BookingSeasonCode[] = [
+    "academic_year",
+    "summer_course",
+  ];
 
-  const roomOccupancyByRoomId = new Map<string, RoomOccupancyState>(
-    rooms.map((room) => [
-      room.id,
-      buildRoomOccupancyState(
-        room,
-        propertyReservations,
-        roomSellableOptionIdToCode,
+  const hasActiveFullApartmentReservationBySeason = Object.fromEntries(
+    bookingSeasonCodes.map((seasonCode) => [
+      seasonCode,
+      propertyReservations.some(
+        (reservation) =>
+          isActiveReservationStatus(reservation.status) &&
+          reservation.reservation_scope === "entire_property" &&
+          reservationMatchesSeason(reservation, seasonCode),
       ),
     ]),
-  );
+  ) as Record<BookingSeasonCode, boolean>;
 
-  const hasAnyActiveRoomReservation = Array.from(
-    roomOccupancyByRoomId.values(),
-  ).some((roomState) => roomState.blocksEntireProperty);
+  const roomOccupancyBySeason = Object.fromEntries(
+    bookingSeasonCodes.map((seasonCode) => [
+      seasonCode,
+      new Map<string, RoomOccupancyState>(
+        rooms.map((room) => [
+          room.id,
+          buildRoomOccupancyState(
+            room,
+            propertyReservations,
+            roomSellableOptionIdToCode,
+            seasonCode,
+          ),
+        ]),
+      ),
+    ]),
+  ) as Record<BookingSeasonCode, Map<string, RoomOccupancyState>>;
+
+  const hasAnyActiveRoomReservationBySeason = Object.fromEntries(
+    bookingSeasonCodes.map((seasonCode) => [
+      seasonCode,
+      Array.from(roomOccupancyBySeason[seasonCode].values()).some(
+        (roomState) => roomState.blocksEntireProperty,
+      ),
+    ]),
+  ) as Record<BookingSeasonCode, boolean>;
 
   const [
     allAmenitiesResponse,
@@ -2277,6 +2405,8 @@ export default async function PropertyPage({
         property_rooms (
           status,
           is_active,
+          is_reserved_summer_course,
+          is_reserved_academic_year,
           property_room_sellable_options (
             price_egp,
             is_active
@@ -2541,50 +2671,52 @@ export default async function PropertyPage({
     fullApartmentSeasonalPrices,
   );
 
-  const hasAvailableTriple = rooms.some((room) =>
-    isRoomAvailableForOption(
-      room,
-      "triple_room",
-      roomOccupancyByRoomId.get(room.id) || {
-        roomId: room.id,
-        lockedMode: null,
-        activeReservationsCount: 0,
-        maxCapacity: 0,
-        hasAvailability: false,
-        blocksEntireProperty: false,
-      },
-    ),
-  );
+  const emptyRoomOccupancyState = (roomId: string): RoomOccupancyState => ({
+    roomId,
+    lockedMode: null,
+    activeReservationsCount: 0,
+    maxCapacity: 0,
+    hasAvailability: false,
+    blocksEntireProperty: false,
+  });
 
-  const hasAvailableDouble = rooms.some((room) =>
-    isRoomAvailableForOption(
-      room,
-      "double_room",
-      roomOccupancyByRoomId.get(room.id) || {
-        roomId: room.id,
-        lockedMode: null,
-        activeReservationsCount: 0,
-        maxCapacity: 0,
-        hasAvailability: false,
-        blocksEntireProperty: false,
-      },
-    ),
-  );
+  const getOptionAvailabilityBySeason = (
+    optionCode: Exclude<OptionCode, "full_apartment">,
+  ): Record<BookingSeasonCode, boolean> =>
+    Object.fromEntries(
+      bookingSeasonCodes.map((seasonCode) => [
+        seasonCode,
+        rooms.some((room) =>
+          isRoomAvailableForOption(
+            room,
+            optionCode,
+            roomOccupancyBySeason[seasonCode].get(room.id) ||
+              emptyRoomOccupancyState(room.id),
+            seasonCode,
+          ),
+        ),
+      ]),
+    ) as Record<BookingSeasonCode, boolean>;
 
-  const hasAvailableSingle = rooms.some((room) =>
-    isRoomAvailableForOption(
-      room,
-      "single_room",
-      roomOccupancyByRoomId.get(room.id) || {
-        roomId: room.id,
-        lockedMode: null,
-        activeReservationsCount: 0,
-        maxCapacity: 0,
-        hasAvailability: false,
-        blocksEntireProperty: false,
-      },
-    ),
-  );
+  const tripleAvailabilityBySeason =
+    getOptionAvailabilityBySeason("triple_room");
+  const doubleAvailabilityBySeason =
+    getOptionAvailabilityBySeason("double_room");
+  const singleAvailabilityBySeason =
+    getOptionAvailabilityBySeason("single_room");
+
+  const fullApartmentBookedBySeason = Object.fromEntries(
+    bookingSeasonCodes.map((seasonCode) => [
+      seasonCode,
+      !fullApartmentOption ||
+        fullApartmentOption.is_active === false ||
+        hasActiveFullApartmentReservationBySeason[seasonCode] ||
+        hasAnyActiveRoomReservationBySeason[seasonCode] ||
+        typedProperty.availability_status === "inactive" ||
+        (rooms.length === 0 &&
+          typedProperty.availability_status === "fully_reserved"),
+    ]),
+  ) as Record<BookingSeasonCode, boolean>;
 
   const optionCards: DisplayOption[] = [
     {
@@ -2592,34 +2724,37 @@ export default async function PropertyPage({
       label: getDisplayOptionLabel("triple_room", t),
       price: tripleDisplayPrice,
       seasonalPrices: tripleSeasonalPrices,
-      isBooked: !hasAvailableTriple,
+      isBookedBySeason: {
+        academic_year: !tripleAvailabilityBySeason.academic_year,
+        summer_course: !tripleAvailabilityBySeason.summer_course,
+      },
     },
     {
       code: "double_room",
       label: getDisplayOptionLabel("double_room", t),
       price: doubleDisplayPrice,
       seasonalPrices: doubleSeasonalPrices,
-      isBooked: !hasAvailableDouble,
+      isBookedBySeason: {
+        academic_year: !doubleAvailabilityBySeason.academic_year,
+        summer_course: !doubleAvailabilityBySeason.summer_course,
+      },
     },
     {
       code: "single_room",
       label: getDisplayOptionLabel("single_room", t),
       price: singleDisplayPrice,
       seasonalPrices: singleSeasonalPrices,
-      isBooked: !hasAvailableSingle,
+      isBookedBySeason: {
+        academic_year: !singleAvailabilityBySeason.academic_year,
+        summer_course: !singleAvailabilityBySeason.summer_course,
+      },
     },
     {
       code: "full_apartment",
       label: getDisplayOptionLabel("full_apartment", t),
       price: fullApartmentDisplayPrice,
       seasonalPrices: fullApartmentSeasonalPrices,
-      isBooked:
-        !fullApartmentOption ||
-        fullApartmentOption.is_active === false ||
-        hasActiveFullApartmentReservation ||
-        hasAnyActiveRoomReservation ||
-        typedProperty.availability_status === "fully_reserved" ||
-        typedProperty.availability_status === "inactive",
+      isBookedBySeason: fullApartmentBookedBySeason,
     },
   ];
 
