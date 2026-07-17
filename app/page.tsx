@@ -2194,48 +2194,6 @@ export default async function HomePage({
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        <section
-          aria-labelledby="navienty-home-heading"
-          className="mb-10 overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-8 dark:border-white/10 dark:bg-[#0b1220] md:mb-14 md:rounded-[36px] md:px-10 md:py-12"
-        >
-          <div className="max-w-4xl">
-            <p className="mb-3 text-sm font-extrabold tracking-[0.12em] text-[#054aff]">
-              NAVIENTY
-            </p>
-
-            <h1
-              id="navienty-home-heading"
-              className="text-3xl font-black leading-tight tracking-[-0.04em] text-slate-950 dark:text-white md:text-5xl"
-            >
-              {isArabic
-                ? 'منصة سكن الطلاب في مصر بدون عمولة'
-                : 'Student housing in Egypt, without student commission'}
-            </h1>
-
-            <p className="mt-5 max-w-3xl text-[16px] leading-8 text-slate-600 dark:text-slate-300 md:text-lg md:leading-9">
-              {isArabic
-                ? 'ابحث عن سكن طلاب أو سكن طالبات حسب المدينة والمنطقة، قارن الأسعار والصور والموقع، وتواصل مباشرة مع المضيف.'
-                : 'Search student accommodation by city and area, compare prices, photos and location, then contact the host directly.'}
-            </p>
-
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                href={buildSimpleNavLink('/properties')}
-                className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#054aff] px-6 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                {isArabic ? 'استكشف كل السكن' : 'Explore all stays'}
-              </Link>
-
-              <Link
-                href={buildSimpleNavLink('/about')}
-                className="inline-flex min-h-12 items-center justify-center rounded-full border border-slate-300 bg-white px-6 text-sm font-bold text-slate-900 transition hover:border-[#054aff]/50 hover:text-[#054aff] dark:border-white/15 dark:bg-white/[0.04] dark:text-white"
-              >
-                {isArabic ? 'اعرف أكثر عن Navienty' : 'About Navienty'}
-              </Link>
-            </div>
-          </div>
-        </section>
-
         {showcaseSections.length > 0 && (
           <section className="mb-10 space-y-10 md:mb-14 md:space-y-12">
             {showcaseSections.map((section) => (
@@ -2344,6 +2302,26 @@ export default async function HomePage({
             </nav>
           </section>
         )}
+
+        <section
+          aria-labelledby="navienty-home-heading"
+          className="mt-12 max-w-3xl border-t border-slate-200 pb-2 pt-8 dark:border-white/10 md:mt-16 md:pt-10"
+        >
+          <h1
+            id="navienty-home-heading"
+            className="text-[22px] font-black leading-9 tracking-[-0.03em] text-slate-950 dark:text-white md:text-[28px]"
+          >
+            {isArabic
+              ? 'Navienty | منصة سكن الطلاب في مصر'
+              : 'Navienty | Student housing in Egypt'}
+          </h1>
+
+          <p className="mt-3 max-w-2xl text-[14px] leading-7 text-slate-600 dark:text-slate-300 md:text-[15px]">
+            {isArabic
+              ? 'ابحث عن سكن طلاب أو سكن طالبات حسب المدينة والمنطقة، وقارن الأسعار والصور والموقع، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.'
+              : 'Find student accommodation by city and area, compare prices, photos and location, and contact the host directly without student commission.'}
+          </p>
+        </section>
       </div>
 
       <footer className="footer-esaf hidden md:block">
