@@ -1218,29 +1218,119 @@ export default async function SakanSeoPage({
     })
     .slice(0, 8);
 
+  /*
+    Breadcrumbs ديناميكية مبنية على المسار الحقيقي للصفحة.
+    نستخدم صفحات /sakan الأب الموجودة فعلًا، مع fallback لصفحة المدينة.
+  */
+  const getSeoPageBreadcrumbLabel = (page: any, language: "ar" | "en") => {
+    if (language === "ar") {
+      return (
+        page.seo_h1_ar ||
+        page.entity_name_ar ||
+        page.entity_name_en ||
+        "سكن الطلاب"
+      );
+    }
+
+    return (
+      page.seo_h1_en ||
+      page.entity_name_en ||
+      page.entity_name_ar ||
+      "Student housing"
+    );
+  };
+
+  const pathSegments = String(seoPage.path || "")
+    .split("/")
+    .filter(Boolean);
+
+  const ancestorPaths = Array.from(
+    { length: Math.max(0, pathSegments.length - 2) },
+    (_, index) => `/${pathSegments.slice(0, index + 2).join("/")}`,
+  ).filter((ancestorPath) => ancestorPath !== seoPage.path);
+
+  const indexedSeoPagesByPath = new Map(
+    allSakanSeoPages
+      .filter(
+        (page) =>
+          page.is_indexable &&
+          page.published_properties_count >= MIN_INDEXABLE_RESULTS &&
+          Boolean(page.path),
+      )
+      .map((page) => [page.path, page]),
+  );
+
+  const breadcrumbParentPages = ancestorPaths
+    .map((ancestorPath) => indexedSeoPagesByPath.get(ancestorPath))
+    .filter((page): page is NonNullable<typeof page> => Boolean(page));
+
+  if (
+    breadcrumbParentPages.length === 0 &&
+    currentPageType !== "city" &&
+    currentCityId
+  ) {
+    const cityParentPage = allSakanSeoPages.find(
+      (page) =>
+        page.path !== seoPage.path &&
+        page.is_indexable &&
+        page.published_properties_count >= MIN_INDEXABLE_RESULTS &&
+        String(page.page_type || "").toLowerCase() === "city" &&
+        String(page.city_id || "") === currentCityId,
+    );
+
+    if (cityParentPage) {
+      breadcrumbParentPages.push(cityParentPage);
+    }
+  }
+
+  const uniqueBreadcrumbParentPages = breadcrumbParentPages.filter(
+    (page, index, pages) =>
+      pages.findIndex((candidate) => candidate.path === page.path) === index,
+  );
+
+  const breadcrumbItems = [
+    {
+      href: "/",
+      absoluteUrl: SITE_URL,
+      labelAr: "الرئيسية",
+      labelEn: "Home",
+    },
+    {
+      href: "/properties",
+      absoluteUrl: `${SITE_URL}/properties`,
+      labelAr: "سكن الطلاب",
+      labelEn: "Student housing",
+    },
+    ...uniqueBreadcrumbParentPages.map((page) => ({
+      href: page.path,
+      absoluteUrl: `${SITE_URL}${page.path}`,
+      labelAr: getSeoPageBreadcrumbLabel(page, "ar"),
+      labelEn: getSeoPageBreadcrumbLabel(page, "en"),
+    })),
+    {
+      href: seoPage.path,
+      absoluteUrl: `${SITE_URL}${seoPage.path}`,
+      labelAr: seoH1,
+      labelEn:
+        seoPage.seo_h1_en ||
+        seoPage.entity_name_en ||
+        seoPage.entity_name_ar ||
+        "Student housing",
+    },
+  ].filter(
+    (item, index, items) =>
+      items.findIndex((candidate) => candidate.href === item.href) === index,
+  );
+
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "الرئيسية",
-        item: SITE_URL,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "سكن الطلاب",
-        item: `${SITE_URL}/sakan/asyut`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: seoH1,
-        item: `${SITE_URL}${seoPage.path}`,
-      },
-    ],
+    itemListElement: breadcrumbItems.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.labelAr,
+      item: item.absoluteUrl,
+    })),
   };
 
   const faqJsonLd =
@@ -2404,6 +2494,57 @@ export default async function SakanSeoPage({
           </p>
         </div>
       </Link>
+    );
+  };
+
+  const renderSakanBreadcrumbs = () => {
+    if (breadcrumbItems.length <= 1) return null;
+
+    return (
+      <nav
+        aria-label={selectedLanguage === "ar" ? "مسار التنقل" : "Breadcrumb"}
+        className="mb-5"
+      >
+        <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] font-medium text-slate-500 dark:text-slate-400">
+          {breadcrumbItems.map((item, index) => {
+            const isLastItem = index === breadcrumbItems.length - 1;
+            const label =
+              selectedLanguage === "ar" ? item.labelAr : item.labelEn;
+
+            return (
+              <li
+                key={item.href}
+                className="flex min-w-0 items-center gap-2"
+              >
+                {index > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="text-slate-300 dark:text-slate-600"
+                  >
+                    {selectedLanguage === "ar" ? "‹" : "›"}
+                  </span>
+                )}
+
+                {isLastItem ? (
+                  <span
+                    aria-current="page"
+                    className="max-w-[240px] truncate font-bold text-slate-800 dark:text-slate-200"
+                  >
+                    {label}
+                  </span>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className="max-w-[220px] truncate transition hover:text-[#054aff] dark:hover:text-[#73a0ff]"
+                  >
+                    {label}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
     );
   };
 
@@ -4076,6 +4217,8 @@ export default async function SakanSeoPage({
                   aria-labelledby="sakan-mobile-seo-heading"
                 >
                   <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-[#0b1220]">
+                    {renderSakanBreadcrumbs()}
+
                     <h1
                       id="sakan-mobile-seo-heading"
                       className="text-[22px] font-extrabold leading-tight tracking-[-0.03em] text-slate-950 dark:text-white"
@@ -4162,6 +4305,8 @@ export default async function SakanSeoPage({
         aria-labelledby="sakan-desktop-seo-heading"
       >
         <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-[#0b1220] md:rounded-[32px] md:p-8">
+          {renderSakanBreadcrumbs()}
+
           <h1
             id="sakan-desktop-seo-heading"
             className="text-[22px] font-extrabold leading-tight tracking-[-0.03em] text-slate-950 dark:text-white md:text-2xl"
