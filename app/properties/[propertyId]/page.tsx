@@ -183,6 +183,11 @@ type Property = {
   property_images?: PropertyImage[];
 };
 
+type LocalizedEntityName = {
+  name_en?: string | null;
+  name_ar?: string | null;
+};
+
 type SimilarProperty = {
   id: string;
   property_id: string;
@@ -1924,6 +1929,50 @@ export default async function PropertyPage({
 
   const typedProperty = property as Property;
 
+  const [cityResult, areaResult, universityResult] = await Promise.all([
+    typedProperty.city_id
+      ? supabase
+          .from("cities")
+          .select("name_en, name_ar")
+          .eq("id", typedProperty.city_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    typedProperty.area_id
+      ? supabase
+          .from("property_areas")
+          .select("name_en, name_ar")
+          .eq("id", typedProperty.area_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    typedProperty.university_id
+      ? supabase
+          .from("universities")
+          .select("name_en, name_ar")
+          .eq("id", typedProperty.university_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  if (cityResult.error) {
+    console.error("Failed to load property city:", cityResult.error.message);
+  }
+
+  if (areaResult.error) {
+    console.error("Failed to load property area:", areaResult.error.message);
+  }
+
+  if (universityResult.error) {
+    console.error(
+      "Failed to load property university:",
+      universityResult.error.message,
+    );
+  }
+
+  const propertyCity = (cityResult.data || null) as LocalizedEntityName | null;
+  const propertyArea = (areaResult.data || null) as LocalizedEntityName | null;
+  const propertyUniversity = (universityResult.data ||
+    null) as LocalizedEntityName | null;
+
   const { data: propertyVideoData, error: propertyVideoError } = await supabase
     .from("property_videos")
     .select("video_url, thumbnail_url")
@@ -2797,27 +2846,143 @@ export default async function PropertyPage({
   ];
 
   const canonicalUrl = getCanonicalPropertyUrl(typedProperty.property_id);
+  const apartmentNodeId = `${canonicalUrl}#apartment`;
+  const aggregateOfferNodeId = `${canonicalUrl}#offers`;
+
   const structuredImages = desktopGalleryImages
     .filter(Boolean)
     .slice(0, 8)
     .map((imageUrl) => getAbsoluteUrl(imageUrl));
 
-  const seoPriceCandidates = optionCards
-    .map((option) => option.price)
-    .filter((price): price is number => typeof price === "number" && price > 0);
+  const structuredOffers: Array<Record<string, unknown>> = [];
 
-  const seoPriceEgp =
-    seoPriceCandidates.length > 0
-      ? Math.min(...seoPriceCandidates)
-      : toNumber(typedProperty.price_egp);
+  for (const option of optionCards) {
+    const seasonalOffers = option.seasonalPrices.filter(
+      (seasonPrice) =>
+        typeof seasonPrice.price === "number" && seasonPrice.price > 0,
+    );
+
+    if (seasonalOffers.length > 0) {
+      for (const seasonPrice of seasonalOffers) {
+        const bookingSeasonCode = normalizeBookingSeasonCode(
+          seasonPrice.seasonCode,
+        );
+        const isBooked = bookingSeasonCode
+          ? option.isBookedBySeason[bookingSeasonCode]
+          : false;
+
+        structuredOffers.push({
+          "@type": "Offer",
+          name: `${option.label} - ${seasonPrice.label}`,
+          url: canonicalUrl,
+          priceCurrency: "EGP",
+          price: seasonPrice.price,
+          availability: isBooked
+            ? "https://schema.org/SoldOut"
+            : "https://schema.org/InStock",
+          itemOffered: {
+            "@id": apartmentNodeId,
+          },
+          seller: {
+            "@id": `${SITE_URL}/#organization`,
+          },
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: seasonPrice.price,
+            priceCurrency: "EGP",
+            unitText:
+              typedProperty.rental_duration === "daily" ? "DAY" : "MONTH",
+          },
+        });
+      }
+
+      continue;
+    }
+
+    if (typeof option.price === "number" && option.price > 0) {
+      const isBookedInEverySeason = bookingSeasonCodes.every(
+        (seasonCode) => option.isBookedBySeason[seasonCode],
+      );
+
+      structuredOffers.push({
+        "@type": "Offer",
+        name: option.label,
+        url: canonicalUrl,
+        priceCurrency: "EGP",
+        price: option.price,
+        availability: isBookedInEverySeason
+          ? "https://schema.org/SoldOut"
+          : "https://schema.org/InStock",
+        itemOffered: {
+          "@id": apartmentNodeId,
+        },
+        seller: {
+          "@id": `${SITE_URL}/#organization`,
+        },
+        priceSpecification: {
+          "@type": "UnitPriceSpecification",
+          price: option.price,
+          priceCurrency: "EGP",
+          unitText:
+            typedProperty.rental_duration === "daily" ? "DAY" : "MONTH",
+        },
+      });
+    }
+  }
+
+  if (structuredOffers.length === 0) {
+    const fallbackPrice = toNumber(typedProperty.price_egp);
+
+    if (fallbackPrice !== null && fallbackPrice > 0) {
+      structuredOffers.push({
+        "@type": "Offer",
+        name: propertyTitle,
+        url: canonicalUrl,
+        priceCurrency: "EGP",
+        price: fallbackPrice,
+        availability:
+          typedProperty.availability_status === "inactive"
+            ? "https://schema.org/OutOfStock"
+            : typedProperty.availability_status === "fully_reserved"
+              ? "https://schema.org/SoldOut"
+              : "https://schema.org/InStock",
+        itemOffered: {
+          "@id": apartmentNodeId,
+        },
+        seller: {
+          "@id": `${SITE_URL}/#organization`,
+        },
+        priceSpecification: {
+          "@type": "UnitPriceSpecification",
+          price: fallbackPrice,
+          priceCurrency: "EGP",
+          unitText:
+            typedProperty.rental_duration === "daily" ? "DAY" : "MONTH",
+        },
+      });
+    }
+  }
+
+  const seoPriceCandidates = structuredOffers
+    .map((offer) => Number(offer.price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+
+  const seoLowPriceEgp =
+    seoPriceCandidates.length > 0 ? Math.min(...seoPriceCandidates) : null;
+  const seoHighPriceEgp =
+    seoPriceCandidates.length > 0 ? Math.max(...seoPriceCandidates) : null;
+
+  const hasAvailableStructuredOffer = structuredOffers.some(
+    (offer) => offer.availability === "https://schema.org/InStock",
+  );
 
   const propertyAvailability =
-    typedProperty.availability_status === "fully_reserved"
-      ? "https://schema.org/SoldOut"
-      : typedProperty.availability_status === "partially_reserved"
-        ? "https://schema.org/LimitedAvailability"
-        : typedProperty.availability_status === "inactive"
-          ? "https://schema.org/OutOfStock"
+    typedProperty.availability_status === "inactive"
+      ? "https://schema.org/OutOfStock"
+      : structuredOffers.length > 0 && !hasAvailableStructuredOffer
+        ? "https://schema.org/SoldOut"
+        : typedProperty.availability_status === "partially_reserved"
+          ? "https://schema.org/LimitedAvailability"
           : "https://schema.org/InStock";
 
   const propertyDescription = getPropertySeoDescription({
@@ -2829,39 +2994,124 @@ export default async function PropertyPage({
     property_sellable_options: propertySellableOptions,
   });
 
-  const propertyJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
+  const structuredCityName =
+    propertyCity?.name_ar || propertyCity?.name_en || undefined;
+  const structuredAreaName =
+    propertyArea?.name_ar || propertyArea?.name_en || undefined;
+  const structuredUniversityName =
+    propertyUniversity?.name_ar ||
+    propertyUniversity?.name_en ||
+    undefined;
+  const structuredStreetAddress =
+    typedProperty.address_ar || typedProperty.address_en || undefined;
+  const structuredFloorLevel = toNumber(typedProperty.floor_number);
+
+  const hasValidStructuredCoordinates =
+    mapLatitude !== null &&
+    mapLongitude !== null &&
+    mapLatitude >= -90 &&
+    mapLatitude <= 90 &&
+    mapLongitude >= -180 &&
+    mapLongitude <= 180;
+
+  const structuredAddress =
+    structuredStreetAddress || structuredCityName || structuredAreaName
+      ? {
+          "@type": "PostalAddress",
+          streetAddress: structuredStreetAddress,
+          addressLocality: structuredCityName,
+          addressRegion: structuredAreaName,
+          addressCountry: "EG",
+        }
+      : undefined;
+
+  const structuredAmenities = offers
+    .filter((offer) => offer.is_available)
+    .slice(0, 30)
+    .map((offer) => ({
+      "@type": "LocationFeatureSpecification",
+      name:
+        offer.name_ar ||
+        offer.name_en ||
+        offer.category_ar ||
+        offer.category_en ||
+        "ميزة متاحة",
+      value: true,
+    }));
+
+  const apartmentJsonLd = {
+    "@type": "Apartment",
+    "@id": apartmentNodeId,
+    identifier: typedProperty.property_id,
+    url: canonicalUrl,
     name: propertyTitle,
+    description: propertyDescription,
     image:
       structuredImages.length > 0
         ? structuredImages
         : [getAbsoluteUrl(coverImage)],
-    description: propertyDescription,
-    brand: {
-      "@type": "Brand",
-      name: "Navienty",
+    mainEntityOfPage: {
+      "@id": canonicalUrl,
     },
-    audience: {
-      "@type": "Audience",
-      audienceType: "University students",
-    },
-    category: "Student accommodation",
-    offers: seoPriceEgp
+    address: structuredAddress,
+    geo: hasValidStructuredCoordinates
       ? {
-          "@type": "Offer",
-          url: canonicalUrl,
-          priceCurrency: "EGP",
-          price: seoPriceEgp,
-          availability: propertyAvailability,
+          "@type": "GeoCoordinates",
+          latitude: mapLatitude,
+          longitude: mapLongitude,
         }
       : undefined,
+    numberOfBedrooms: bedroomsCount > 0 ? bedroomsCount : undefined,
+    numberOfBathroomsTotal:
+      bathroomsCount > 0 ? bathroomsCount : undefined,
+    occupancy:
+      bedsCount > 0
+        ? {
+            "@type": "QuantitativeValue",
+            maxValue: bedsCount,
+            unitText: "people",
+          }
+        : undefined,
+    floorLevel:
+      structuredFloorLevel !== null ? structuredFloorLevel : undefined,
+    amenityFeature:
+      structuredAmenities.length > 0 ? structuredAmenities : undefined,
+    audience: {
+      "@type": "Audience",
+      audienceType:
+        normalizeGender(typedProperty.gender) === "girls"
+          ? "Female university students"
+          : normalizeGender(typedProperty.gender) === "boys"
+            ? "Male university students"
+            : "University students",
+    },
     additionalProperty: [
       {
         "@type": "PropertyValue",
         name: "بدون عمولة على الطالب",
         value: "نعم",
       },
+      structuredCityName
+        ? {
+            "@type": "PropertyValue",
+            name: "المدينة",
+            value: structuredCityName,
+          }
+        : undefined,
+      structuredAreaName
+        ? {
+            "@type": "PropertyValue",
+            name: "المنطقة",
+            value: structuredAreaName,
+          }
+        : undefined,
+      structuredUniversityName
+        ? {
+            "@type": "PropertyValue",
+            name: "الجامعة",
+            value: structuredUniversityName,
+          }
+        : undefined,
       typedProperty.gender
         ? {
             "@type": "PropertyValue",
@@ -2882,9 +3132,64 @@ export default async function PropertyPage({
     ].filter(Boolean),
   };
 
+  const aggregateOfferJsonLd =
+    seoLowPriceEgp !== null && seoHighPriceEgp !== null
+      ? {
+          "@type": "AggregateOffer",
+          "@id": aggregateOfferNodeId,
+          url: canonicalUrl,
+          priceCurrency: "EGP",
+          lowPrice: seoLowPriceEgp,
+          highPrice: seoHighPriceEgp,
+          offerCount: structuredOffers.length,
+          availability: propertyAvailability,
+          itemOffered: {
+            "@id": apartmentNodeId,
+          },
+          seller: {
+            "@id": `${SITE_URL}/#organization`,
+          },
+          offers: structuredOffers,
+        }
+      : undefined;
+
+  const propertyWebPageJsonLd = {
+    "@type": "WebPage",
+    "@id": canonicalUrl,
+    url: canonicalUrl,
+    name: propertyTitle,
+    description: propertyDescription,
+    inLanguage: isArabic ? "ar-EG" : "en",
+    mainEntity: {
+      "@id": apartmentNodeId,
+    },
+    primaryImageOfPage: {
+      "@type": "ImageObject",
+      url:
+        structuredImages[0] ||
+        getAbsoluteUrl(coverImage),
+    },
+    isPartOf: {
+      "@id": `${SITE_URL}/#website`,
+    },
+    breadcrumb: {
+      "@id": `${canonicalUrl}#breadcrumb`,
+    },
+  };
+
+  const propertyJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      apartmentJsonLd,
+      aggregateOfferJsonLd,
+      propertyWebPageJsonLd,
+    ].filter(Boolean),
+  };
+
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
+    "@id": `${canonicalUrl}#breadcrumb`,
     itemListElement: [
       {
         "@type": "ListItem",
