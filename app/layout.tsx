@@ -117,9 +117,6 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
   category: 'Student housing marketplace',
-  alternates: {
-    canonical: SITE_URL,
-  },
   openGraph: {
     title: 'Navienty - سكن طلاب قريب من جامعتك بدون عمولة',
     description:
