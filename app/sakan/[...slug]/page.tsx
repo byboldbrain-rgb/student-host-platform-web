@@ -255,6 +255,7 @@ type Property = {
   latitude?: number | string | null;
   longitude?: number | string | null;
   created_at?: string | null;
+  updated_at?: string | null;
   is_featured?: boolean | null;
   featured_rank?: number | null;
   featured_until?: string | null;
@@ -664,6 +665,34 @@ function getDisplayPriceEgp(property: Property): number {
   return normalizePositivePrice(property.price_egp) ?? 0;
 }
 
+function getAllActivePropertyPrices(property: Property): number[] {
+  const propertyOptionPrices =
+    property.property_sellable_options
+      ?.filter(isUsablePriceOption)
+      .map((option) => normalizePositivePrice(option.price_egp))
+      .filter((price): price is number => price !== null) ?? [];
+
+  const roomOptionPrices =
+    property.property_rooms
+      ?.filter((room) => room.is_active !== false && !room.deleted_at)
+      .flatMap((room) =>
+        (room.property_room_sellable_options ?? [])
+          .filter(isUsablePriceOption)
+          .map((option) => normalizePositivePrice(option.price_egp))
+          .filter((price): price is number => price !== null),
+      ) ?? [];
+
+  const optionPrices = [...propertyOptionPrices, ...roomOptionPrices];
+
+  if (optionPrices.length > 0) {
+    return optionPrices;
+  }
+
+  const fallbackPrice = normalizePositivePrice(property.price_egp);
+
+  return fallbackPrice === null ? [] : [fallbackPrice];
+}
+
 function getSortablePropertyPrice(property: Property): number | null {
   return normalizePositivePrice(getDisplayPriceEgp(property));
 }
@@ -1063,21 +1092,6 @@ export default async function SakanSeoPage({
     ? seoPage.seo_faq_ar.filter((item: any) => item?.q && item?.a)
     : [];
 
-  const collectionJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    name: seoH1,
-    description:
-      seoPage.seo_description_ar ||
-      "صفحة تجمع أماكن سكن طلابية مناسبة على Navienty.",
-    url: `${SITE_URL}${seoPage.path}`,
-    isPartOf: {
-      "@type": "WebSite",
-      name: "Navienty",
-      url: SITE_URL,
-    },
-  };
-
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -1148,6 +1162,253 @@ export default async function SakanSeoPage({
   } = await supabase.auth.getUser();
 
   const isLoggedIn = !!user;
+
+  /*
+    إحصائيات GEO تُحسب من صفحة الـCanonical نفسها فقط.
+    لذلك لا تتأثر بفلتر السعر أو النوع أو الدور أو الموسم أو الترتيب
+    الذي يختاره الزائر داخل الصفحة.
+  */
+  const canonicalStatsSelect = `
+      id,
+      property_id,
+      title_en,
+      title_ar,
+      price_egp,
+      availability_status,
+      city_id,
+      university_id,
+      area_id,
+      updated_at,
+      property_sellable_options(
+        id,
+        code,
+        option_code,
+        price_egp,
+        is_active,
+        deleted_at
+      ),
+      property_rooms(
+        is_active,
+        deleted_at,
+        property_room_sellable_options(
+          id,
+          code,
+          price_egp,
+          is_active,
+          deleted_at
+        )
+      ),
+      ${
+        seoPage.university_id
+          ? "property_universities!inner(university_id)"
+          : "property_universities(university_id)"
+      }
+    `;
+
+  let canonicalStatsQuery = supabase
+    .from("properties")
+    .select(canonicalStatsSelect)
+    .eq("admin_status", "published")
+    .eq("is_active", true)
+    .neq("availability_status", "unavailable")
+    .neq("availability_status", "inactive")
+    .limit(5000);
+
+  if (seoPage.city_id) {
+    canonicalStatsQuery = canonicalStatsQuery.eq(
+      "city_id",
+      String(seoPage.city_id),
+    );
+  }
+
+  if (seoPage.university_id) {
+    canonicalStatsQuery = canonicalStatsQuery.eq(
+      "property_universities.university_id",
+      String(seoPage.university_id),
+    );
+  }
+
+  if (seoPage.area_id) {
+    canonicalStatsQuery = canonicalStatsQuery.eq(
+      "area_id",
+      String(seoPage.area_id),
+    );
+  }
+
+  const {
+    data: canonicalStatsData,
+    error: canonicalStatsError,
+  } = await canonicalStatsQuery;
+
+  if (canonicalStatsError) {
+    console.error(
+      "Failed to load canonical GEO statistics:",
+      canonicalStatsError.message,
+    );
+  }
+
+  const canonicalStatsProperties =
+    !canonicalStatsError && Array.isArray(canonicalStatsData)
+      ? (canonicalStatsData as unknown as Property[])
+      : [];
+
+  const canonicalStatsTotal = canonicalStatsError
+    ? Number(seoPage.published_properties_count ?? 0)
+    : canonicalStatsProperties.length;
+
+  const canonicalStatsAvailable = canonicalStatsProperties.filter(
+    (property) =>
+      normalizeAvailabilityStatusForUi(property.availability_status) ===
+      "available",
+  ).length;
+
+  const canonicalStatsReserved = canonicalStatsProperties.filter(
+    (property) =>
+      normalizeAvailabilityStatusForUi(property.availability_status) ===
+      "reserved",
+  ).length;
+
+  const canonicalStatsPrices = canonicalStatsProperties
+    .flatMap((property) => getAllActivePropertyPrices(property))
+    .filter((price) => Number.isFinite(price) && price > 0);
+
+  const canonicalStatsMinPrice =
+    canonicalStatsPrices.length > 0
+      ? Math.min(...canonicalStatsPrices)
+      : null;
+
+  const canonicalStatsMaxPrice =
+    canonicalStatsPrices.length > 0
+      ? Math.max(...canonicalStatsPrices)
+      : null;
+
+  const latestPropertyUpdateTimestamp = canonicalStatsProperties.reduce(
+    (latestTimestamp, property) => {
+      const timestamp = property.updated_at
+        ? new Date(property.updated_at).getTime()
+        : Number.NaN;
+
+      return Number.isFinite(timestamp)
+        ? Math.max(latestTimestamp, timestamp)
+        : latestTimestamp;
+    },
+    0,
+  );
+
+  const seoUpdatedTimestamp = seoPage.seo_updated_at
+    ? new Date(seoPage.seo_updated_at).getTime()
+    : Number.NaN;
+
+  const canonicalStatsUpdatedTimestamp = Math.max(
+    latestPropertyUpdateTimestamp,
+    Number.isFinite(seoUpdatedTimestamp) ? seoUpdatedTimestamp : 0,
+  );
+
+  const canonicalStatsUpdatedAt =
+    canonicalStatsUpdatedTimestamp > 0
+      ? new Date(canonicalStatsUpdatedTimestamp)
+      : null;
+
+  const canonicalStatsNumberFormatter = new Intl.NumberFormat(
+    selectedLanguage === "ar" ? "ar-EG" : "en-US",
+  );
+
+  const canonicalStatsPriceFormatter = new Intl.NumberFormat(
+    selectedLanguage === "ar" ? "ar-EG" : "en-US",
+    {
+      style: "currency",
+      currency: "EGP",
+      maximumFractionDigits: 0,
+    },
+  );
+
+  const canonicalStatsDateFormatter = new Intl.DateTimeFormat(
+    selectedLanguage === "ar" ? "ar-EG" : "en-GB",
+    {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Africa/Cairo",
+    },
+  );
+
+  const formattedCanonicalStatsTotal =
+    canonicalStatsNumberFormatter.format(canonicalStatsTotal);
+
+  const formattedCanonicalStatsAvailable =
+    canonicalStatsNumberFormatter.format(canonicalStatsAvailable);
+
+  const formattedCanonicalStatsReserved =
+    canonicalStatsNumberFormatter.format(canonicalStatsReserved);
+
+  const formattedCanonicalStatsMinPrice =
+    canonicalStatsMinPrice !== null
+      ? canonicalStatsPriceFormatter.format(canonicalStatsMinPrice)
+      : null;
+
+  const formattedCanonicalStatsMaxPrice =
+    canonicalStatsMaxPrice !== null
+      ? canonicalStatsPriceFormatter.format(canonicalStatsMaxPrice)
+      : null;
+
+  const formattedCanonicalStatsUpdatedAt = canonicalStatsUpdatedAt
+    ? canonicalStatsDateFormatter.format(canonicalStatsUpdatedAt)
+    : null;
+
+  const seoStatsSummary =
+    selectedLanguage === "ar"
+      ? formattedCanonicalStatsMinPrice &&
+        formattedCanonicalStatsMaxPrice
+        ? canonicalStatsMinPrice === canonicalStatsMaxPrice
+          ? `تضم هذه الصفحة حاليًا ${formattedCanonicalStatsTotal} وحدة سكنية منشورة على Navienty، وتبدأ الأسعار المعلنة من ${formattedCanonicalStatsMinPrice}.`
+          : `تضم هذه الصفحة حاليًا ${formattedCanonicalStatsTotal} وحدة سكنية منشورة على Navienty، وتتراوح الأسعار المعلنة بين ${formattedCanonicalStatsMinPrice} و${formattedCanonicalStatsMaxPrice}.`
+        : `تضم هذه الصفحة حاليًا ${formattedCanonicalStatsTotal} وحدة سكنية منشورة على Navienty.`
+      : formattedCanonicalStatsMinPrice &&
+          formattedCanonicalStatsMaxPrice
+        ? canonicalStatsMinPrice === canonicalStatsMaxPrice
+          ? `This page currently includes ${formattedCanonicalStatsTotal} published student housing listing on Navienty, with advertised prices starting from ${formattedCanonicalStatsMinPrice}.`
+          : `This page currently includes ${formattedCanonicalStatsTotal} published student housing listings on Navienty, with advertised prices ranging from ${formattedCanonicalStatsMinPrice} to ${formattedCanonicalStatsMaxPrice}.`
+        : `This page currently includes ${formattedCanonicalStatsTotal} published student housing listings on Navienty.`;
+
+  const collectionJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": `${SITE_URL}${seoPage.path}#collection`,
+    name: seoH1,
+    description: `${seoPage.seo_description_ar || "صفحة تجمع أماكن سكن طلابية مناسبة على Navienty."} ${seoStatsSummary}`,
+    url: `${SITE_URL}${seoPage.path}`,
+    inLanguage: "ar-EG",
+    ...(canonicalStatsUpdatedAt
+      ? { dateModified: canonicalStatsUpdatedAt.toISOString() }
+      : {}),
+    isPartOf: {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Navienty",
+      url: SITE_URL,
+    },
+    provider: {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Navienty",
+      url: SITE_URL,
+    },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: canonicalStatsTotal,
+      itemListElement: canonicalStatsProperties
+        .slice(0, 100)
+        .map((property, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          url: `${SITE_URL}/properties/${property.property_id}`,
+          name:
+            property.title_ar ||
+            property.title_en ||
+            `سكن طلاب ${property.property_id}`,
+        })),
+    },
+  };
 
   const { data: cities } = await supabase
     .from("cities")
@@ -2101,6 +2362,68 @@ export default async function SakanSeoPage({
       </div>
     );
   };
+
+  const renderSeoStatistics = () => (
+    <div className="mt-6">
+      <p className="rounded-[18px] bg-white px-4 py-4 text-[15px] font-medium leading-8 text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.05)] dark:bg-white/[0.04] dark:text-slate-200">
+        {seoStatsSummary}
+      </p>
+
+      <dl className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-[18px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+          <dt className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+            {selectedLanguage === "ar" ? "العقارات المنشورة" : "Published homes"}
+          </dt>
+          <dd className="mt-2 text-[22px] font-extrabold text-slate-950 dark:text-white">
+            {formattedCanonicalStatsTotal}
+          </dd>
+        </div>
+
+        <div className="rounded-[18px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+          <dt className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+            {selectedLanguage === "ar" ? "متاح حاليًا" : "Currently available"}
+          </dt>
+          <dd className="mt-2 text-[22px] font-extrabold text-slate-950 dark:text-white">
+            {formattedCanonicalStatsAvailable}
+          </dd>
+        </div>
+
+        <div className="rounded-[18px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+          <dt className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+            {selectedLanguage === "ar" ? "أقل سعر معلن" : "Lowest advertised price"}
+          </dt>
+          <dd className="mt-2 text-[17px] font-extrabold leading-7 text-slate-950 dark:text-white">
+            {formattedCanonicalStatsMinPrice ||
+              (selectedLanguage === "ar" ? "غير متاح" : "Unavailable")}
+          </dd>
+        </div>
+
+        <div className="rounded-[18px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]">
+          <dt className="text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+            {selectedLanguage === "ar" ? "أعلى سعر معلن" : "Highest advertised price"}
+          </dt>
+          <dd className="mt-2 text-[17px] font-extrabold leading-7 text-slate-950 dark:text-white">
+            {formattedCanonicalStatsMaxPrice ||
+              (selectedLanguage === "ar" ? "غير متاح" : "Unavailable")}
+          </dd>
+        </div>
+      </dl>
+
+      <p className="mt-4 text-[12px] leading-6 text-slate-500 dark:text-slate-400">
+        {selectedLanguage === "ar"
+          ? `المصدر: بيانات العقارات المنشورة على Navienty${
+              formattedCanonicalStatsUpdatedAt
+                ? ` — آخر تحديث: ${formattedCanonicalStatsUpdatedAt}`
+                : ""
+            }. عدد العقارات المحجوزة بالكامل حاليًا: ${formattedCanonicalStatsReserved}.`
+          : `Source: Published property data on Navienty${
+              formattedCanonicalStatsUpdatedAt
+                ? ` — Last updated: ${formattedCanonicalStatsUpdatedAt}`
+                : ""
+            }. Fully reserved homes currently: ${formattedCanonicalStatsReserved}.`}
+      </p>
+    </div>
+  );
 
   return (
     <main
@@ -3560,6 +3883,8 @@ export default async function SakanSeoPage({
                       {seoIntro}
                     </p>
 
+                    {renderSeoStatistics()}
+
                     {seoFaqItems.length > 0 && (
                       <div className="mt-8">
                         <h2 className="mb-4 text-xl font-extrabold text-slate-950 dark:text-white">
@@ -3642,6 +3967,8 @@ export default async function SakanSeoPage({
           <p className="mt-4 text-[15px] leading-8 text-slate-600 dark:text-slate-300 md:text-base">
             {seoIntro}
           </p>
+
+          {renderSeoStatistics()}
 
           {seoFaqItems.length > 0 && (
             <div className="mt-8">
