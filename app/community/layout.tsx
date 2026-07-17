@@ -1,42 +1,37 @@
 import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
+import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from '@/src/lib/site'
 
 export const metadata: Metadata = {
-  title: 'Community',
+  title: 'دليل السكن الطلابي',
   description:
-    'Explore Navienty community updates, student housing tips, and guides that help students choose better accommodation.',
+    'استكشف دليل Navienty للنصائح والمعلومات التي تساعد الطلاب على اختيار السكن المناسب والاستعداد للحياة الجامعية.',
   alternates: {
-    canonical: 'https://navienty.com/community',
+    canonical: `${SITE_URL}/community`,
   },
   openGraph: {
-    title: 'Community | Navienty',
+    title: 'دليل السكن الطلابي | Navienty',
     description:
-      'Explore Navienty community updates, student housing tips, and guides that help students choose better accommodation.',
-    url: 'https://navienty.com/community',
-    siteName: 'Navienty',
-    type: 'website',
+      'نصائح ومعلومات تساعد الطلاب على اختيار السكن المناسب والاستعداد للحياة الجامعية.',
+    url: `${SITE_URL}/community`,
+    siteName: SITE_NAME,
     locale: 'ar_EG',
-    images: [
-      {
-        url: '/og-image.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'Navienty Community',
-      },
-    ],
+    type: 'website',
+    images: [DEFAULT_OG_IMAGE],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Community | Navienty',
+    title: 'دليل السكن الطلابي | Navienty',
     description:
-      'Explore Navienty community updates, student housing tips, and guides that help students choose better accommodation.',
-    images: ['/og-image.jpg'],
+      'نصائح ومعلومات تساعد الطلاب على اختيار السكن المناسب والاستعداد للحياة الجامعية.',
+    images: [DEFAULT_OG_IMAGE],
   },
 }
 
 export default function CommunityLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: ReactNode
+}>) {
   return <>{children}</>
 }

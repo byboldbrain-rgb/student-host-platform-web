@@ -1,42 +1,37 @@
 import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
+import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from '@/src/lib/site'
 
 export const metadata: Metadata = {
-  title: 'About us',
+  title: 'من نحن',
   description:
-    'Learn more about Navienty, Egypt’s student housing platform helping students discover trusted accommodation near universities without commission.',
+    'تعرف على Navienty ورؤيتنا لتسهيل العثور على سكن طلاب مناسب وقريب من الجامعات بدون عمولة على الطالب.',
   alternates: {
-    canonical: 'https://navienty.com/about',
+    canonical: `${SITE_URL}/about`,
   },
   openGraph: {
-    title: 'About us | Navienty',
+    title: 'من نحن | Navienty',
     description:
-      'Learn more about Navienty, Egypt’s student housing platform helping students discover trusted accommodation near universities without commission.',
-    url: 'https://navienty.com/about',
-    siteName: 'Navienty',
-    type: 'website',
+      'تعرف على Navienty ورؤيتنا لتسهيل العثور على سكن طلاب مناسب وقريب من الجامعات.',
+    url: `${SITE_URL}/about`,
+    siteName: SITE_NAME,
     locale: 'ar_EG',
-    images: [
-      {
-        url: '/og-image.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'About Navienty',
-      },
-    ],
+    type: 'website',
+    images: [DEFAULT_OG_IMAGE],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'About us | Navienty',
+    title: 'من نحن | Navienty',
     description:
-      'Learn more about Navienty, Egypt’s student housing platform helping students discover trusted accommodation near universities without commission.',
-    images: ['/og-image.jpg'],
+      'تعرف على Navienty ورؤيتنا لتسهيل العثور على سكن طلاب مناسب وقريب من الجامعات.',
+    images: [DEFAULT_OG_IMAGE],
   },
 }
 
 export default function AboutLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: ReactNode
+}>) {
   return <>{children}</>
 }
