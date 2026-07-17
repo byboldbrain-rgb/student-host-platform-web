@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import { getCachedSakanSeoPages } from './properties/data'
 import { SITE_URL } from '@/src/lib/site'
 
+const STATIC_PAGES_LAST_MODIFIED = new Date('2026-07-17T00:00:00.000Z')
+
 function createPublicSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -25,6 +27,25 @@ function createPublicSupabaseClient() {
   })
 }
 
+function getValidDate(
+  primaryValue?: string | null,
+  fallbackValue?: string | null,
+) {
+  const primaryDate = primaryValue ? new Date(primaryValue) : null
+
+  if (primaryDate && !Number.isNaN(primaryDate.getTime())) {
+    return primaryDate
+  }
+
+  const fallbackDate = fallbackValue ? new Date(fallbackValue) : null
+
+  if (fallbackDate && !Number.isNaN(fallbackDate.getTime())) {
+    return fallbackDate
+  }
+
+  return STATIC_PAGES_LAST_MODIFIED
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicSupabaseClient()
   const sakanSeoPages = await getCachedSakanSeoPages()
@@ -36,51 +57,54 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .eq('is_active', true)
     .neq('availability_status', 'unavailable')
     .neq('availability_status', 'inactive')
-    .order('updated_at', { ascending: false, nullsFirst: false })
+    .order('updated_at', {
+      ascending: false,
+      nullsFirst: false,
+    })
     .limit(5000)
 
   if (error) {
-    throw new Error(`Failed to load properties sitemap: ${error.message}`)
+    throw new Error(
+      `Failed to load properties sitemap: ${error.message}`,
+    )
   }
-
-  const now = new Date()
 
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: SITE_URL,
-      lastModified: now,
-      changeFrequency: 'daily',
+      lastModified: STATIC_PAGES_LAST_MODIFIED,
+      changeFrequency: 'weekly',
       priority: 1,
     },
     {
       url: `${SITE_URL}/properties`,
-      lastModified: now,
+      lastModified: STATIC_PAGES_LAST_MODIFIED,
       changeFrequency: 'daily',
       priority: 0.95,
     },
     {
       url: `${SITE_URL}/about`,
-      lastModified: now,
+      lastModified: STATIC_PAGES_LAST_MODIFIED,
       changeFrequency: 'monthly',
-      priority: 0.9,
+      priority: 0.8,
     },
     {
       url: `${SITE_URL}/board`,
-      lastModified: now,
+      lastModified: STATIC_PAGES_LAST_MODIFIED,
       changeFrequency: 'monthly',
-      priority: 0.85,
+      priority: 0.7,
     },
     {
       url: `${SITE_URL}/contact`,
-      lastModified: now,
+      lastModified: STATIC_PAGES_LAST_MODIFIED,
       changeFrequency: 'monthly',
-      priority: 0.85,
+      priority: 0.7,
     },
     {
       url: `${SITE_URL}/community`,
-      lastModified: now,
+      lastModified: STATIC_PAGES_LAST_MODIFIED,
       changeFrequency: 'weekly',
-      priority: 0.75,
+      priority: 0.65,
     },
   ]
 
@@ -89,13 +113,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       (page) =>
         page.is_indexable &&
         page.published_properties_count >= 3 &&
-        Boolean(page.path)
+        Boolean(page.path),
     )
     .map((page) => ({
       url: `${SITE_URL}${page.path}`,
-      lastModified: page.seo_updated_at
-        ? new Date(page.seo_updated_at)
-        : now,
+      lastModified: getValidDate(page.seo_updated_at),
       changeFrequency: 'daily' as const,
       priority:
         page.page_type === 'city'
@@ -108,14 +130,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const propertyPages: MetadataRoute.Sitemap =
     properties?.map((property) => ({
       url: `${SITE_URL}/properties/${property.property_id}`,
-      lastModified: property.updated_at
-        ? new Date(property.updated_at)
-        : property.created_at
-          ? new Date(property.created_at)
-          : now,
+      lastModified: getValidDate(
+        property.updated_at,
+        property.created_at,
+      ),
       changeFrequency: 'daily' as const,
       priority: 0.8,
     })) ?? []
 
-  return [...staticPages, ...sakanPages, ...propertyPages]
+  return [
+    ...staticPages,
+    ...sakanPages,
+    ...propertyPages,
+  ]
 }
