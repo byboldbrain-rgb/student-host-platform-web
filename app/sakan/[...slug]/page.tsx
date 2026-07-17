@@ -1233,9 +1233,9 @@ export default async function SakanSeoPage({
     }
 
     return (
-      page.seo_h1_en ||
       page.entity_name_en ||
       page.entity_name_ar ||
+      page.seo_h1_ar ||
       "Student housing"
     );
   };
@@ -1312,9 +1312,9 @@ export default async function SakanSeoPage({
       absoluteUrl: `${SITE_URL}${seoPage.path}`,
       labelAr: seoH1,
       labelEn:
-        seoPage.seo_h1_en ||
         seoPage.entity_name_en ||
         seoPage.entity_name_ar ||
+        seoPage.seo_h1_ar ||
         "Student housing",
     },
   ].filter(
