@@ -52,11 +52,6 @@ const websiteJsonLd = {
     '@id': `${SITE_URL}/#organization`,
   },
   inLanguage: ['ar-EG', 'en'],
-  potentialAction: {
-    '@type': 'SearchAction',
-    target: `${SITE_URL}/properties?search={search_term_string}`,
-    'query-input': 'required name=search_term_string',
-  },
 }
 
 const siteNavigationJsonLd = {
