@@ -1,4 +1,3 @@
-// app/sitemap.ts
 import type { MetadataRoute } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import { getCachedSakanSeoPages } from './properties/data'
@@ -46,6 +45,65 @@ function getValidDate(
   return STATIC_PAGES_LAST_MODIFIED
 }
 
+function getLatestDate(
+  dates: Array<Date | string | null | undefined>,
+  fallback = STATIC_PAGES_LAST_MODIFIED,
+) {
+  const validDates = dates
+    .map((value) => {
+      if (!value) return null
+
+      const date = value instanceof Date ? value : new Date(value)
+
+      return Number.isNaN(date.getTime()) ? null : date
+    })
+    .filter((date): date is Date => Boolean(date))
+
+  if (validDates.length === 0) {
+    return fallback
+  }
+
+  return validDates.reduce((latestDate, currentDate) =>
+    currentDate.getTime() > latestDate.getTime()
+      ? currentDate
+      : latestDate,
+  )
+}
+
+function normalizePublicPath(path?: string | null) {
+  const normalizedPath = String(path ?? '').trim()
+
+  if (!normalizedPath) return null
+
+  return normalizedPath.startsWith('/')
+    ? normalizedPath
+    : `/${normalizedPath}`
+}
+
+function removeDuplicateUrls(
+  entries: MetadataRoute.Sitemap,
+): MetadataRoute.Sitemap {
+  const uniqueEntries = new Map<
+    string,
+    MetadataRoute.Sitemap[number]
+  >()
+
+  for (const entry of entries) {
+    if (!entry.url) continue
+
+    const normalizedUrl = entry.url.replace(/\/$/, '')
+
+    if (!uniqueEntries.has(normalizedUrl)) {
+      uniqueEntries.set(normalizedUrl, {
+        ...entry,
+        url: normalizedUrl,
+      })
+    }
+  }
+
+  return Array.from(uniqueEntries.values())
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicSupabaseClient()
   const sakanSeoPages = await getCachedSakanSeoPages()
@@ -69,18 +127,39 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     )
   }
 
+  const indexableSakanPages = sakanSeoPages.filter(
+    (page) =>
+      page.is_indexable &&
+      page.published_properties_count >= 3 &&
+      Boolean(normalizePublicPath(page.path)),
+  )
+
+  const latestPropertyUpdate = getLatestDate(
+    (properties ?? []).flatMap((property) => [
+      property.updated_at,
+      property.created_at,
+    ]),
+  )
+
+  const latestSakanUpdate = getLatestDate(
+    indexableSakanPages.map((page) => page.seo_updated_at),
+  )
+
+  const propertiesPageLastModified = getLatestDate([
+    latestPropertyUpdate,
+    latestSakanUpdate,
+  ])
+
+  /*
+    لا نضع SITE_URL نفسه داخل الـSitemap لأن المسار /
+    يقوم بتحويل دائم إلى /properties.
+  */
   const staticPages: MetadataRoute.Sitemap = [
     {
-      url: SITE_URL,
-      lastModified: STATIC_PAGES_LAST_MODIFIED,
-      changeFrequency: 'weekly',
-      priority: 1,
-    },
-    {
       url: `${SITE_URL}/properties`,
-      lastModified: STATIC_PAGES_LAST_MODIFIED,
+      lastModified: propertiesPageLastModified,
       changeFrequency: 'daily',
-      priority: 0.95,
+      priority: 1,
     },
     {
       url: `${SITE_URL}/about`,
@@ -108,39 +187,47 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ]
 
-  const sakanPages: MetadataRoute.Sitemap = sakanSeoPages
-    .filter(
-      (page) =>
-        page.is_indexable &&
-        page.published_properties_count >= 3 &&
-        Boolean(page.path),
-    )
-    .map((page) => ({
-      url: `${SITE_URL}${page.path}`,
-      lastModified: getValidDate(page.seo_updated_at),
-      changeFrequency: 'daily' as const,
-      priority:
-        page.page_type === 'city'
-          ? 0.95
-          : page.page_type === 'university'
-            ? 0.9
-            : 0.85,
-    }))
+  const sakanPages = indexableSakanPages.reduce<MetadataRoute.Sitemap>(
+    (entries, page) => {
+      const normalizedPath = normalizePublicPath(page.path)
+
+      if (!normalizedPath) {
+        return entries
+      }
+
+      entries.push({
+        url: `${SITE_URL}${normalizedPath}`,
+        lastModified: getValidDate(page.seo_updated_at),
+        changeFrequency: 'daily',
+        priority:
+          page.page_type === 'city'
+            ? 0.95
+            : page.page_type === 'university'
+              ? 0.9
+              : 0.85,
+      })
+
+      return entries
+    },
+    [],
+  )
 
   const propertyPages: MetadataRoute.Sitemap =
-    properties?.map((property) => ({
-      url: `${SITE_URL}/properties/${property.property_id}`,
-      lastModified: getValidDate(
-        property.updated_at,
-        property.created_at,
-      ),
-      changeFrequency: 'daily' as const,
-      priority: 0.8,
-    })) ?? []
+    properties
+      ?.filter((property) => Boolean(property.property_id))
+      .map((property) => ({
+        url: `${SITE_URL}/properties/${property.property_id}`,
+        lastModified: getValidDate(
+          property.updated_at,
+          property.created_at,
+        ),
+        changeFrequency: 'daily' as const,
+        priority: 0.8,
+      })) ?? []
 
-  return [
+  return removeDuplicateUrls([
     ...staticPages,
     ...sakanPages,
     ...propertyPages,
-  ]
+  ])
 }
