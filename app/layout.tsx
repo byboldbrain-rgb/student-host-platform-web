@@ -5,10 +5,11 @@ import SplashScreen from '@/components/SplashScreen'
 import AnalyticsInitializer from '@/components/AnalyticsInitializer'
 import PushNotificationInitializer from './PushNotificationInitializer'
 import 'mapbox-gl/dist/mapbox-gl.css'
-
-const SITE_URL = 'https://navienty.com'
-const SITE_NAME = 'Navienty'
-const DEFAULT_OG_IMAGE = '/og-image.jpg'
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_NAME,
+  SITE_URL,
+} from '@/src/lib/site'
 
 const GA_MEASUREMENT_ID =
   process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID

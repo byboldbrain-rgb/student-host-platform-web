@@ -11,6 +11,7 @@ import PropertyEnquireButton from "./PropertyEnquireButton";
 import PropertyShareButton from "./PropertyShareButton";
 import PropertyVideoButton from "./PropertyVideoButton";
 import SwipeableSheetWrapper from "./SwipeableSheetWrapper";
+import { DEFAULT_OG_IMAGE, SITE_URL } from "@/src/lib/site";
 import "./property-page.css";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +29,6 @@ const LOCATION_PIN_ICON_URL =
 const BROKER_CARD_FRONT_IMAGE = "https://i.ibb.co/tWJsRpw/Avery-Davis-2.png";
 
 const BROKER_CARD_BACK_IMAGE = "https://i.ibb.co/hJgSfrJC/Avery-Davis.png";
-
-const SITE_URL = "https://navienty.com";
-const DEFAULT_OG_IMAGE = "/og-image.jpg";
 
 type SearchParams = {
   rental_duration?: string;

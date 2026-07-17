@@ -2,8 +2,7 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import { getCachedSakanSeoPages } from './properties/data'
-
-const SITE_URL = 'https://navienty.com'
+import { SITE_URL } from '@/src/lib/site'
 
 function createPublicSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

@@ -15,8 +15,7 @@ import {
   getCachedSakanPageData,
   getCachedSakanSeoPages,
 } from "../../properties/data";
-
-const SITE_URL = "https://navienty.com";
+import { SITE_URL } from "@/src/lib/site";
 const MIN_INDEXABLE_RESULTS = 3;
 
 function buildPath(slug: string[]) {
