@@ -7,7 +7,10 @@ import PushNotificationInitializer from './PushNotificationInitializer'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import {
   DEFAULT_OG_IMAGE,
+  SITE_EMAIL,
   SITE_NAME,
+  SITE_PHONE,
+  SITE_SOCIAL_PROFILES,
   SITE_URL,
 } from '@/src/lib/site'
 
@@ -21,17 +24,17 @@ const organizationJsonLd = {
   name: SITE_NAME,
   url: SITE_URL,
   logo: `${SITE_URL}/icon.png`,
-  sameAs: [
-    'https://www.facebook.com/',
-    'https://www.instagram.com/',
-    'https://www.linkedin.com/',
-  ],
+  email: SITE_EMAIL,
+  telephone: SITE_PHONE,
+  ...(SITE_SOCIAL_PROFILES.length > 0
+    ? { sameAs: SITE_SOCIAL_PROFILES }
+    : {}),
   contactPoint: [
     {
       '@type': 'ContactPoint',
       contactType: 'customer support',
-      email: 'contact@navienty.com',
-      telephone: '+201018668663',
+      email: SITE_EMAIL,
+      telephone: SITE_PHONE,
       areaServed: 'EG',
       availableLanguage: ['Arabic', 'English'],
     },
