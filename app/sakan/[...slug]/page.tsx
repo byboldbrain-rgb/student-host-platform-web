@@ -3541,9 +3541,60 @@ export default async function SakanSeoPage({
                   )}
                 </div>
 
-                {renderPagination(
-                  "pb-[calc(env(safe-area-inset-bottom,0px)+128px)]",
-                )}
+                {renderPagination()}
+
+                <section
+                  className="mt-8 px-1 pb-[calc(env(safe-area-inset-bottom,0px)+128px)] lg:hidden"
+                  dir="rtl"
+                  aria-labelledby="sakan-mobile-seo-heading"
+                >
+                  <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-[#0b1220]">
+                    <h1
+                      id="sakan-mobile-seo-heading"
+                      className="text-[22px] font-extrabold leading-tight tracking-[-0.03em] text-slate-950 dark:text-white"
+                    >
+                      {seoH1}
+                    </h1>
+
+                    <p className="mt-4 text-[15px] leading-8 text-slate-600 dark:text-slate-300">
+                      {seoIntro}
+                    </p>
+
+                    {seoFaqItems.length > 0 && (
+                      <div className="mt-8">
+                        <h2 className="mb-4 text-xl font-extrabold text-slate-950 dark:text-white">
+                          أسئلة شائعة
+                        </h2>
+
+                        <div className="space-y-3">
+                          {seoFaqItems
+                            .slice(0, 6)
+                            .map((item: any, index: number) => (
+                              <details
+                                key={`${item.q}-${index}`}
+                                className="group rounded-[20px] border border-slate-200 bg-white px-4 py-1 dark:border-white/10 dark:bg-white/[0.04]"
+                              >
+                                <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 py-3 text-[16px] font-bold text-slate-900 marker:hidden dark:text-slate-100">
+                                  <span>{item.q}</span>
+
+                                  <span
+                                    aria-hidden="true"
+                                    className="text-xl font-medium text-[#054aff] transition-transform group-open:rotate-45"
+                                  >
+                                    +
+                                  </span>
+                                </summary>
+
+                                <p className="border-t border-slate-100 pb-4 pt-3 text-[15px] leading-8 text-slate-600 dark:border-white/10 dark:text-slate-300">
+                                  {item.a}
+                                </p>
+                              </details>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
               </div>
             </MobileSearchMapSheet>
 
@@ -3576,13 +3627,13 @@ export default async function SakanSeoPage({
       </section>
 
       <section
-        className="mx-auto max-w-5xl px-4 pb-[calc(env(safe-area-inset-bottom,0px)+128px)] pt-5 md:px-6 md:pb-12 md:pt-0 lg:px-8"
+        className="mx-auto hidden max-w-5xl px-4 pb-12 lg:block lg:px-8"
         dir="rtl"
-        aria-labelledby="sakan-seo-heading"
+        aria-labelledby="sakan-desktop-seo-heading"
       >
         <div className="rounded-[26px] border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-[#0b1220] md:rounded-[32px] md:p-8">
           <h1
-            id="sakan-seo-heading"
+            id="sakan-desktop-seo-heading"
             className="text-[22px] font-extrabold leading-tight tracking-[-0.03em] text-slate-950 dark:text-white md:text-2xl"
           >
             {seoH1}
