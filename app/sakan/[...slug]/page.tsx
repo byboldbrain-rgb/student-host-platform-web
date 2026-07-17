@@ -1092,6 +1092,132 @@ export default async function SakanSeoPage({
     ? seoPage.seo_faq_ar.filter((item: any) => item?.q && item?.a)
     : [];
 
+  /*
+    روابط داخلية ذكية بين صفحات /sakan.
+    لا نعرض إلا الصفحات القابلة للفهرسة والتي تحتوي على 3 عقارات منشورة على الأقل.
+  */
+  const allSakanSeoPages = await getCachedSakanSeoPages();
+  const currentCityId = seoPage.city_id ? String(seoPage.city_id) : null;
+  const currentUniversityId = seoPage.university_id
+    ? String(seoPage.university_id)
+    : null;
+  const currentAreaId = seoPage.area_id ? String(seoPage.area_id) : null;
+  const currentPageType = String(seoPage.page_type || "").toLowerCase();
+
+  const relatedSakanPages = allSakanSeoPages
+    .filter(
+      (page) =>
+        page.path !== seoPage.path &&
+        page.is_indexable &&
+        page.published_properties_count >= MIN_INDEXABLE_RESULTS &&
+        Boolean(page.path),
+    )
+    .map((page) => {
+      const candidateCityId = page.city_id ? String(page.city_id) : null;
+      const candidateUniversityId = page.university_id
+        ? String(page.university_id)
+        : null;
+      const candidateAreaId = page.area_id ? String(page.area_id) : null;
+      const candidatePageType = String(page.page_type || "").toLowerCase();
+
+      let relevanceScore = 0;
+
+      if (currentCityId && candidateCityId === currentCityId) {
+        relevanceScore += 100;
+      }
+
+      if (
+        currentUniversityId &&
+        candidateUniversityId === currentUniversityId
+      ) {
+        relevanceScore += 80;
+      }
+
+      if (currentAreaId && candidateAreaId === currentAreaId) {
+        relevanceScore += 80;
+      }
+
+      if (
+        page.path.startsWith(`${seoPage.path}/`) ||
+        seoPage.path.startsWith(`${page.path}/`)
+      ) {
+        relevanceScore += 70;
+      }
+
+      if (
+        currentPageType === "city" &&
+        (candidatePageType === "area" ||
+          candidatePageType === "university") &&
+        currentCityId &&
+        candidateCityId === currentCityId
+      ) {
+        relevanceScore += 50;
+      }
+
+      if (
+        (currentPageType === "area" || currentPageType === "university") &&
+        candidatePageType === "city" &&
+        currentCityId &&
+        candidateCityId === currentCityId
+      ) {
+        relevanceScore += 45;
+      }
+
+      if (
+        currentPageType === "area" &&
+        candidatePageType === "university" &&
+        currentCityId &&
+        candidateCityId === currentCityId
+      ) {
+        relevanceScore += 35;
+      }
+
+      if (
+        currentPageType === "university" &&
+        candidatePageType === "area" &&
+        currentCityId &&
+        candidateCityId === currentCityId
+      ) {
+        relevanceScore += 35;
+      }
+
+      relevanceScore += Math.min(
+        20,
+        Number(page.published_properties_count || 0),
+      );
+
+      return {
+        path: page.path,
+        title:
+          page.seo_h1_ar ||
+          page.entity_name_ar ||
+          page.entity_name_en ||
+          "سكن طلاب",
+        pageType: candidatePageType,
+        publishedPropertiesCount: Number(
+          page.published_properties_count || 0,
+        ),
+        relevanceScore,
+      };
+    })
+    .filter((page) => page.relevanceScore > 20)
+    .sort((a, b) => {
+      if (b.relevanceScore !== a.relevanceScore) {
+        return b.relevanceScore - a.relevanceScore;
+      }
+
+      if (
+        b.publishedPropertiesCount !== a.publishedPropertiesCount
+      ) {
+        return (
+          b.publishedPropertiesCount - a.publishedPropertiesCount
+        );
+      }
+
+      return a.title.localeCompare(b.title, "ar");
+    })
+    .slice(0, 8);
+
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -1393,6 +1519,13 @@ export default async function SakanSeoPage({
       name: "Navienty",
       url: SITE_URL,
     },
+    ...(relatedSakanPages.length > 0
+      ? {
+          relatedLink: relatedSakanPages.map(
+            (page) => `${SITE_URL}${page.path}`,
+          ),
+        }
+      : {}),
     mainEntity: {
       "@type": "ItemList",
       numberOfItems: canonicalStatsTotal,
@@ -2271,6 +2404,77 @@ export default async function SakanSeoPage({
           </p>
         </div>
       </Link>
+    );
+  };
+
+  const renderRelatedSakanPages = () => {
+    if (relatedSakanPages.length === 0) return null;
+
+    return (
+      <div className="mt-8">
+        <h2 className="mb-4 text-xl font-extrabold text-slate-950 dark:text-white">
+          {selectedLanguage === "ar"
+            ? "استكشف سكنًا قريبًا"
+            : "Explore nearby student housing"}
+        </h2>
+
+        <nav
+          aria-label={
+            selectedLanguage === "ar"
+              ? "روابط سكن طلاب ذات صلة"
+              : "Related student housing pages"
+          }
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          {relatedSakanPages.map((page) => (
+            <Link
+              key={page.path}
+              href={page.path}
+              className="group flex min-h-[66px] items-center justify-between gap-4 rounded-[18px] border border-slate-200 bg-white px-4 py-3 transition hover:-translate-y-0.5 hover:border-[#054aff]/40 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-[#73a0ff]/40"
+            >
+              <span className="min-w-0">
+                <span className="block text-[15px] font-bold leading-6 text-slate-900 dark:text-slate-100">
+                  {page.title}
+                </span>
+
+                <span className="mt-1 block text-[12px] font-medium text-slate-500 dark:text-slate-400">
+                  {selectedLanguage === "ar"
+                    ? `${new Intl.NumberFormat("ar-EG").format(
+                        page.publishedPropertiesCount,
+                      )} سكن منشور`
+                    : `${new Intl.NumberFormat("en-US").format(
+                        page.publishedPropertiesCount,
+                      )} published listings`}
+                </span>
+              </span>
+
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#054aff]/10 text-[#054aff] transition group-hover:bg-[#054aff] group-hover:text-white dark:bg-[#73a0ff]/15 dark:text-[#73a0ff]"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.2}
+                  stroke="currentColor"
+                  className="h-4 w-4"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d={
+                      selectedLanguage === "ar"
+                        ? "M15.75 19.5 8.25 12l7.5-7.5"
+                        : "m8.25 4.5 7.5 7.5-7.5 7.5"
+                    }
+                  />
+                </svg>
+              </span>
+            </Link>
+          ))}
+        </nav>
+      </div>
     );
   };
 
@@ -3918,6 +4122,7 @@ export default async function SakanSeoPage({
                         </div>
                       </div>
                     )}
+                                    {renderRelatedSakanPages()}
                   </div>
                 </section>
               </div>
@@ -4001,6 +4206,7 @@ export default async function SakanSeoPage({
               </div>
             </div>
           )}
+                {renderRelatedSakanPages()}
         </div>
       </section>
 
