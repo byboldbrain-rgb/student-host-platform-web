@@ -1,12 +1,17 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import SplashScreen from '@/components/SplashScreen'
+import AnalyticsInitializer from '@/components/AnalyticsInitializer'
 import PushNotificationInitializer from './PushNotificationInitializer'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 const SITE_URL = 'https://navienty.com'
 const SITE_NAME = 'Navienty'
 const DEFAULT_OG_IMAGE = '/og-image.jpg'
+
+const GA_MEASUREMENT_ID =
+  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 
 const organizationJsonLd = {
   '@context': 'https://schema.org',
@@ -143,7 +148,11 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.ico' },
-      { url: '/icon.png', sizes: '512x512', type: 'image/png' },
+      {
+        url: '/icon.png',
+        sizes: '512x512',
+        type: 'image/png',
+      },
     ],
     apple: [
       {
@@ -186,11 +195,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html
+      lang="ar"
+      dir="rtl"
+      suppressHydrationWarning
+    >
       <body>
         <PushNotificationInitializer />
 
         <SplashScreen />
+
+        <AnalyticsInitializer />
 
         <script
           type="application/ld+json"
@@ -214,6 +229,11 @@ export default function RootLayout({
         />
 
         {children}
+
+        {process.env.NODE_ENV === 'production' &&
+        GA_MEASUREMENT_ID ? (
+          <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
+        ) : null}
       </body>
     </html>
   )
