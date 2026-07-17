@@ -226,15 +226,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ])
 
   /*
-    لا نضع SITE_URL نفسه داخل الـSitemap لأن المسار /
-    يقوم بتحويل دائم إلى /properties.
+    الصفحة الرئيسية أصبحت صفحة فعلية للبراند، لذلك نضيفها إلى
+    الـSitemap مع إبقاء /properties كصفحة مستقلة لاستعراض السكن.
   */
   const staticPages: MetadataRoute.Sitemap = [
+    {
+      url: SITE_URL,
+      lastModified: propertiesPageLastModified,
+      changeFrequency: 'daily',
+      priority: 1,
+    },
     {
       url: `${SITE_URL}/properties`,
       lastModified: propertiesPageLastModified,
       changeFrequency: 'daily',
-      priority: 1,
+      priority: 0.95,
     },
     {
       url: `${SITE_URL}/about`,
