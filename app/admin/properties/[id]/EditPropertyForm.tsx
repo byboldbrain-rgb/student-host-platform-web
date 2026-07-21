@@ -428,6 +428,39 @@ function normalizeNumberString(value: string) {
   return value.replace(/,/g, '').trim()
 }
 
+function normalizeCoordinateInput(value: string) {
+  const arabicDigits = '٠١٢٣٤٥٦٧٨٩'
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹'
+
+  return value
+    .trim()
+    .replace(/[٠-٩]/g, (digit) => String(arabicDigits.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String(persianDigits.indexOf(digit)))
+    .replace(/[−–—]/g, '-')
+    .replace(/[٫,]/g, '.')
+    .replace(/٬/g, '')
+}
+
+function parseCoordinateInput(value: string) {
+  const normalized = normalizeCoordinateInput(value)
+  if (!normalized) return null
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function isValidLatitudeCoordinate(
+  value: number | null,
+): value is number {
+  return value !== null && value >= -90 && value <= 90
+}
+
+function isValidLongitudeCoordinate(
+  value: number | null,
+): value is number {
+  return value !== null && value >= -180 && value <= 180
+}
+
 function isValidPrice(value: string) {
   const normalized = normalizeNumberString(value)
   if (!normalized) return false
@@ -1182,6 +1215,14 @@ export default function EditPropertyForm({
       ? `${property.latitude}, ${property.longitude}`
       : '',
   )
+  const [manualLatitude, setManualLatitude] = useState(
+    String(property.latitude ?? ''),
+  )
+  const [manualLongitude, setManualLongitude] = useState(
+    String(property.longitude ?? ''),
+  )
+  const [coordinateLookupError, setCoordinateLookupError] = useState('')
+  const [isResolvingCoordinates, setIsResolvingCoordinates] = useState(false)
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ''
 
@@ -1520,6 +1561,94 @@ export default function EditPropertyForm({
   )
 
   useEffect(() => {
+    setManualLatitude(selectedLatitude)
+    setManualLongitude(selectedLongitude)
+  }, [selectedLatitude, selectedLongitude])
+
+  const handleUseCoordinates = useCallback(async () => {
+    const parsedLatitude = parseCoordinateInput(manualLatitude)
+    const parsedLongitude = parseCoordinateInput(manualLongitude)
+
+    if (!isValidLatitudeCoordinate(parsedLatitude)) {
+      setCoordinateLookupError('Latitude must be a number between -90 and 90.')
+      return
+    }
+
+    if (!isValidLongitudeCoordinate(parsedLongitude)) {
+      setCoordinateLookupError(
+        'Longitude must be a number between -180 and 180.',
+      )
+      return
+    }
+
+    // Explicit number aliases keep TypeScript narrowed after validation.
+    const latitude: number = parsedLatitude
+    const longitude: number = parsedLongitude
+
+    const normalizedLatitude = Number(latitude.toFixed(7))
+    const normalizedLongitude = Number(longitude.toFixed(7))
+    const fallbackLabel = `${normalizedLatitude}, ${normalizedLongitude}`
+
+    setCoordinateLookupError('')
+    setAddressSuggestions([])
+    setAddressSearchError('')
+    setAddressSearch(fallbackLabel)
+    setSelectedMapLocation(
+      normalizedLongitude,
+      normalizedLatitude,
+      fallbackLabel,
+    )
+
+    if (!mapboxToken) {
+      setCoordinateLookupError(
+        'Coordinates were applied, but the Mapbox token is missing so the place name could not be loaded.',
+      )
+      return
+    }
+
+    setIsResolvingCoordinates(true)
+
+    try {
+      const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${normalizedLongitude},${normalizedLatitude}.json?access_token=${encodeURIComponent(
+        mapboxToken,
+      )}&language=en,ar&limit=1&types=address,poi,place,locality,neighborhood`
+
+      const response = await fetch(endpoint)
+
+      if (!response.ok) {
+        throw new Error('Mapbox reverse geocoding request failed')
+      }
+
+      const data = await response.json()
+      const firstFeature = Array.isArray(data?.features)
+        ? data.features[0]
+        : null
+      const resolvedLabel =
+        firstFeature?.place_name && String(firstFeature.place_name).trim()
+          ? String(firstFeature.place_name)
+          : fallbackLabel
+
+      setAddressSearch(resolvedLabel)
+      setSelectedMapLocation(
+        normalizedLongitude,
+        normalizedLatitude,
+        resolvedLabel,
+      )
+    } catch {
+      setCoordinateLookupError(
+        'Coordinates were applied, but the place name could not be loaded. You can still save this map location.',
+      )
+    } finally {
+      setIsResolvingCoordinates(false)
+    }
+  }, [
+    manualLatitude,
+    manualLongitude,
+    mapboxToken,
+    setSelectedMapLocation,
+  ])
+
+  useEffect(() => {
     if (!mapboxToken || !mapContainerRef.current || mapRef.current) return
 
     mapboxgl.accessToken = mapboxToken
@@ -1746,9 +1875,12 @@ export default function EditPropertyForm({
     setSelectedLatitude('')
     setSelectedLongitude('')
     setSelectedMapLocationLabel('')
+    setManualLatitude('')
+    setManualLongitude('')
     setAddressSearch('')
     setAddressSuggestions([])
     setAddressSearchError('')
+    setCoordinateLookupError('')
   }
 
   const handleCityChange = (value: string) => {
@@ -2712,6 +2844,89 @@ export default function EditPropertyForm({
                     </div>
                   )}
 
+                  <div className="mt-4 rounded-2xl border border-[#dbe4f0] bg-[#f8fbff] p-4">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-semibold text-[#162033]">
+                        Find location using coordinates
+                      </p>
+                      <p className="text-xs leading-5 text-[#687385]">
+                        Enter latitude and longitude, then click Find location.
+                        The address search above will remain available.
+                      </p>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-[#35506b]">
+                          Latitude
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={manualLatitude}
+                          onChange={(e) => {
+                            setManualLatitude(e.target.value)
+                            setCoordinateLookupError('')
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              void handleUseCoordinates()
+                            }
+                          }}
+                          placeholder="27.1809"
+                          className={inputClass}
+                          autoComplete="off"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-[#35506b]">
+                          Longitude
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={manualLongitude}
+                          onChange={(e) => {
+                            setManualLongitude(e.target.value)
+                            setCoordinateLookupError('')
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              void handleUseCoordinates()
+                            }
+                          }}
+                          placeholder="31.1837"
+                          className={inputClass}
+                          autoComplete="off"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => void handleUseCoordinates()}
+                        disabled={isResolvingCoordinates}
+                        className="h-[42px] rounded-md bg-[#054aff] px-5 text-sm font-semibold text-white transition hover:bg-[#043bd1] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isResolvingCoordinates
+                          ? 'Finding...'
+                          : 'Find location'}
+                      </button>
+                    </div>
+
+                    {coordinateLookupError && (
+                      <p className="mt-2 text-xs font-medium text-[#b42318]">
+                        {coordinateLookupError}
+                      </p>
+                    )}
+
+                    <p className="mt-2 text-xs text-[#687385]">
+                      Coordinate order: latitude first, longitude second.
+                    </p>
+                  </div>
+
                   {selectedLatitude && selectedLongitude ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <div className="inline-flex items-center gap-2 rounded-full bg-[#ecfdf3] px-3 py-1.5 text-xs font-semibold text-[#027a48]">
@@ -2731,9 +2946,9 @@ export default function EditPropertyForm({
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-[#6b7280]">
-                      Search and select a result, or click on the map and drag
-                      the pin to the exact location. This does not change
-                      Address EN or Address AR.
+                      Search and select a result, enter coordinates, or click
+                      on the map and drag the pin to the exact location. This
+                      does not change Address EN or Address AR.
                     </p>
                   )}
 
@@ -2753,10 +2968,10 @@ export default function EditPropertyForm({
                       Map location only
                     </p>
                     <p className="mt-1 leading-6">
-                      Use search to get near the property, then click the map or
-                      drag the pin to the exact building/area. Address EN and
-                      Address AR stay separate and are only the written address
-                      shown to students.
+                      Use search or coordinates to get near the property, then
+                      click the map or drag the pin to the exact building/area.
+                      Address EN and Address AR stay separate and are only the
+                      written address shown to students.
                     </p>
                   </div>
                 </div>

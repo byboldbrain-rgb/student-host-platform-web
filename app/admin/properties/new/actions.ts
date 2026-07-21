@@ -12,6 +12,7 @@ const ALLOWED_PROPERTY_VIDEO_MIME_TYPES = new Set([
   'video/webm',
   'video/quicktime',
 ])
+const PRICING_SEASON_CODES = ['summer_course', 'academic_year'] as const
 
 function toNullableNumber(value: FormDataEntryValue | null) {
   const str = String(value || '').trim()
@@ -106,6 +107,12 @@ function validateUploadedVideoMetadata(params: {
 }
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
+type PricingSeasonCode = (typeof PRICING_SEASON_CODES)[number]
+type SeasonalPriceMap = Record<PricingSeasonCode, number>
+type PricingSeasonRow = {
+  id: string
+  code: PricingSeasonCode
+}
 
 type RoomSellableOptionInput = {
   code: 'single_room' | 'double_room' | 'triple_room'
@@ -116,6 +123,7 @@ type RoomSellableOptionInput = {
   consumes_beds_count: number
   is_exclusive: boolean
   price_egp: number
+  seasonal_prices: SeasonalPriceMap
   sort_order: number
 }
 
@@ -152,6 +160,7 @@ type PropertySellableOptionRow = {
   sell_mode: 'entire_property' | 'bed'
   occupancy_size: number | null
   price_egp: number
+  seasonal_prices: SeasonalPriceMap
   rental_duration: 'daily' | 'monthly'
   is_active: boolean
   sort_order: number
@@ -172,32 +181,281 @@ function getOptionLabel(code: RoomSellableOptionInput['code']) {
   }
 }
 
+function getNullableNumberFromString(value: string | undefined | null) {
+  const str = String(value || '').trim()
+  if (!str) return null
+  const num = Number(str)
+  return Number.isNaN(num) ? null : num
+}
+
+function getFirstNullableNumberFromFormData(formData: FormData, keys: string[]) {
+  for (const key of keys) {
+    const value = formData.get(key)
+    const parsed = toNullableNumber(value)
+    if (parsed !== null) return parsed
+  }
+
+  return null
+}
+
+function getFirstIndexedNullableNumberFromFormData(params: {
+  formData: FormData
+  keys: string[]
+  index: number
+}) {
+  const { formData, keys, index } = params
+
+  for (const key of keys) {
+    const values = formData.getAll(key)
+    const parsed = getNullableNumberFromString(String(values[index] || ''))
+    if (parsed !== null) return parsed
+  }
+
+  return null
+}
+
+function assertValidSeasonalPrice(params: {
+  price: number
+  label: string
+  allowZero?: boolean
+}) {
+  const { price, label, allowZero = false } = params
+
+  if (!Number.isFinite(price) || price < 0 || (!allowZero && price <= 0)) {
+    throw new Error(
+      `${label} must be a valid ${allowZero ? 'non-negative' : 'positive'} number`
+    )
+  }
+}
+
+function buildFullApartmentSeasonalPrices(params: {
+  formData: FormData
+  fallbackPrice: number
+}) {
+  const { formData, fallbackPrice } = params
+  const prices = {} as SeasonalPriceMap
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const price =
+      getFirstNullableNumberFromFormData(formData, [
+        `price_egp_${seasonCode}`,
+        `full_apartment_price_egp_${seasonCode}`,
+        `property_price_egp_${seasonCode}`,
+      ]) ?? fallbackPrice
+
+    assertValidSeasonalPrice({
+      price,
+      label:
+        seasonCode === 'summer_course'
+          ? 'Summer course full apartment price'
+          : 'Academic year full apartment price',
+      allowZero: fallbackPrice <= 0,
+    })
+
+    prices[seasonCode] = price
+  }
+
+  return prices
+}
+
+function buildRoomOptionSeasonalPrices(params: {
+  formData: FormData
+  optionCode: RoomSellableOptionInput['code']
+  index: number
+  fallbackPrice: number
+}) {
+  const { formData, optionCode, index, fallbackPrice } = params
+  const prices = {} as SeasonalPriceMap
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const price =
+      getFirstIndexedNullableNumberFromFormData({
+        formData,
+        index,
+        keys: [
+          `room_${optionCode}_price_egp_${seasonCode}`,
+          `room_${optionCode}_${seasonCode}_price_egp`,
+        ],
+      }) ?? fallbackPrice
+
+    assertValidSeasonalPrice({
+      price,
+      label: `${optionCode} ${seasonCode} price for room ${index + 1}`,
+      allowZero: fallbackPrice <= 0,
+    })
+
+    prices[seasonCode] = price
+  }
+
+  return prices
+}
+
+function getMinimumSeasonalPrices(options: RoomSellableOptionInput[]) {
+  const prices = {} as SeasonalPriceMap
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const seasonPrices = options
+      .map((option) => option.seasonal_prices[seasonCode])
+      .filter((price) => Number.isFinite(price) && price > 0)
+
+    prices[seasonCode] = seasonPrices.length > 0 ? Math.min(...seasonPrices) : 0
+  }
+
+  return prices
+}
+
+async function getPricingSeasonsByCode(params: {
+  supabase: AdminSupabaseClient
+}) {
+  const { supabase } = params
+  const { data, error } = await supabase
+    .from('property_pricing_seasons')
+    .select('id, code')
+    .in('code', [...PRICING_SEASON_CODES])
+    .eq('is_active', true)
+
+  if (error) {
+    throw new Error(`Failed to load pricing seasons: ${error.message}`)
+  }
+
+  const seasonsByCode = new Map<PricingSeasonCode, PricingSeasonRow>()
+
+  for (const season of (data || []) as PricingSeasonRow[]) {
+    if (PRICING_SEASON_CODES.includes(season.code)) {
+      seasonsByCode.set(season.code, season)
+    }
+  }
+
+  const missingSeasonCodes = PRICING_SEASON_CODES.filter(
+    (seasonCode) => !seasonsByCode.has(seasonCode)
+  )
+
+  if (missingSeasonCodes.length > 0) {
+    throw new Error(
+      `Missing pricing seasons: ${missingSeasonCodes.join(', ')}. Please run the pricing seasons SQL migration first.`
+    )
+  }
+
+  return seasonsByCode
+}
+
+async function insertSeasonalPrice(params: {
+  supabase: AdminSupabaseClient
+  propertyDbId: string
+  seasonId: string
+  priceEgp: number
+  sellableOptionId?: string | null
+  roomSellableOptionId?: string | null
+}) {
+  const {
+    supabase,
+    propertyDbId,
+    seasonId,
+    priceEgp,
+    sellableOptionId = null,
+    roomSellableOptionId = null,
+  } = params
+
+  if (!sellableOptionId && !roomSellableOptionId) {
+    throw new Error('Seasonal price must be linked to one booking option')
+  }
+
+  const { error } = await supabase.from('property_option_seasonal_prices').insert({
+    property_id: propertyDbId,
+    sellable_option_id: sellableOptionId,
+    room_sellable_option_id: roomSellableOptionId,
+    season_id: seasonId,
+    price_egp: priceEgp,
+    is_active: true,
+  })
+
+  if (error) {
+    throw new Error(`Failed to insert seasonal price: ${error.message}`)
+  }
+}
+
+async function syncSeasonalPricesForSellableOption(params: {
+  supabase: AdminSupabaseClient
+  propertyDbId: string
+  sellableOptionId: string
+  seasonalPrices: SeasonalPriceMap
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
+}) {
+  const {
+    supabase,
+    propertyDbId,
+    sellableOptionId,
+    seasonalPrices,
+    pricingSeasonsByCode,
+  } = params
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const season = pricingSeasonsByCode.get(seasonCode)
+    if (!season) continue
+
+    await insertSeasonalPrice({
+      supabase,
+      propertyDbId,
+      sellableOptionId,
+      seasonId: season.id,
+      priceEgp: seasonalPrices[seasonCode],
+    })
+  }
+}
+
+async function syncSeasonalPricesForRoomSellableOption(params: {
+  supabase: AdminSupabaseClient
+  propertyDbId: string
+  roomSellableOptionId: string
+  seasonalPrices: SeasonalPriceMap
+  pricingSeasonsByCode: Map<PricingSeasonCode, PricingSeasonRow>
+}) {
+  const {
+    supabase,
+    propertyDbId,
+    roomSellableOptionId,
+    seasonalPrices,
+    pricingSeasonsByCode,
+  } = params
+
+  for (const seasonCode of PRICING_SEASON_CODES) {
+    const season = pricingSeasonsByCode.get(seasonCode)
+    if (!season) continue
+
+    await insertSeasonalPrice({
+      supabase,
+      propertyDbId,
+      roomSellableOptionId,
+      seasonId: season.id,
+      priceEgp: seasonalPrices[seasonCode],
+    })
+  }
+}
+
 function buildPropertySellableOptionRows(params: {
   propertyIdRef: string
   rentalDuration: 'daily' | 'monthly'
   fullApartmentPrice: number
+  fullApartmentSeasonalPrices: SeasonalPriceMap
   insertedRooms: InsertedRoomSummary[]
 }) {
-  const { propertyIdRef, rentalDuration, fullApartmentPrice, insertedRooms } =
-    params
+  const {
+    propertyIdRef,
+    rentalDuration,
+    fullApartmentPrice,
+    fullApartmentSeasonalPrices,
+    insertedRooms,
+  } = params
 
-  const singleOptionPrices = insertedRooms
-    .flatMap((room) =>
-      room.enabled_options.filter((option) => option.code === 'single_room')
-    )
-    .map((option) => option.price_egp)
-
-  const doubleOptionPrices = insertedRooms
-    .flatMap((room) =>
-      room.enabled_options.filter((option) => option.code === 'double_room')
-    )
-    .map((option) => option.price_egp)
-
-  const tripleOptionPrices = insertedRooms
-    .flatMap((room) =>
-      room.enabled_options.filter((option) => option.code === 'triple_room')
-    )
-    .map((option) => option.price_egp)
+  const singleOptions = insertedRooms.flatMap((room) =>
+    room.enabled_options.filter((option) => option.code === 'single_room')
+  )
+  const doubleOptions = insertedRooms.flatMap((room) =>
+    room.enabled_options.filter((option) => option.code === 'double_room')
+  )
+  const tripleOptions = insertedRooms.flatMap((room) =>
+    room.enabled_options.filter((option) => option.code === 'triple_room')
+  )
 
   return [
     {
@@ -209,13 +467,14 @@ function buildPropertySellableOptionRows(params: {
       sell_mode: 'entire_property',
       occupancy_size: null,
       price_egp: fullApartmentPrice,
+      seasonal_prices: fullApartmentSeasonalPrices,
       rental_duration: rentalDuration,
       is_active: true,
       sort_order: 0,
       source_scope: 'property',
       pricing_mode: 'per_room',
     },
-    ...(singleOptionPrices.length > 0
+    ...(singleOptions.length > 0
       ? [
           {
             property_id: propertyIdRef,
@@ -225,7 +484,8 @@ function buildPropertySellableOptionRows(params: {
             name_ar: 'غرفة سينجل',
             sell_mode: 'bed',
             occupancy_size: 1,
-            price_egp: Math.min(...singleOptionPrices),
+            price_egp: Math.min(...singleOptions.map((option) => option.price_egp)),
+            seasonal_prices: getMinimumSeasonalPrices(singleOptions),
             rental_duration: rentalDuration,
             is_active: true,
             sort_order: 1,
@@ -234,7 +494,7 @@ function buildPropertySellableOptionRows(params: {
           } satisfies PropertySellableOptionRow,
         ]
       : []),
-    ...(doubleOptionPrices.length > 0
+    ...(doubleOptions.length > 0
       ? [
           {
             property_id: propertyIdRef,
@@ -244,7 +504,8 @@ function buildPropertySellableOptionRows(params: {
             name_ar: 'غرفة دابل',
             sell_mode: 'bed',
             occupancy_size: 2,
-            price_egp: Math.min(...doubleOptionPrices),
+            price_egp: Math.min(...doubleOptions.map((option) => option.price_egp)),
+            seasonal_prices: getMinimumSeasonalPrices(doubleOptions),
             rental_duration: rentalDuration,
             is_active: true,
             sort_order: 2,
@@ -253,7 +514,7 @@ function buildPropertySellableOptionRows(params: {
           } satisfies PropertySellableOptionRow,
         ]
       : []),
-    ...(tripleOptionPrices.length > 0
+    ...(tripleOptions.length > 0
       ? [
           {
             property_id: propertyIdRef,
@@ -263,7 +524,8 @@ function buildPropertySellableOptionRows(params: {
             name_ar: 'غرفة تربل',
             sell_mode: 'bed',
             occupancy_size: 3,
-            price_egp: Math.min(...tripleOptionPrices),
+            price_egp: Math.min(...tripleOptions.map((option) => option.price_egp)),
+            seasonal_prices: getMinimumSeasonalPrices(tripleOptions),
             rental_duration: rentalDuration,
             is_active: true,
             sort_order: 3,
@@ -752,6 +1014,10 @@ export async function createPropertyAction(formData: FormData) {
   }
 
   const price_egp = toNullableNumber(formData.get('price_egp'))
+  const fullApartmentSeasonalPrices = buildFullApartmentSeasonalPrices({
+    formData,
+    fallbackPrice: price_egp ?? 0,
+  })
   const floor_number = toNumberOrDefault(formData.get('floor_number'), 0)
   const latitude = toNullableNumber(formData.get('latitude'))
   const longitude = toNullableNumber(formData.get('longitude'))
@@ -825,6 +1091,12 @@ export async function createPropertyAction(formData: FormData) {
   const roomSinglePrices = formData
     .getAll('room_single_room_price_egp')
     .map((v) => String(v).trim())
+  const roomSingleSummerCoursePrices = formData
+    .getAll('room_single_room_price_egp_summer_course')
+    .map((v) => String(v).trim())
+  const roomSingleAcademicYearPrices = formData
+    .getAll('room_single_room_price_egp_academic_year')
+    .map((v) => String(v).trim())
 
   const roomDoubleEnabled = formData
     .getAll('room_double_room_enabled')
@@ -832,12 +1104,24 @@ export async function createPropertyAction(formData: FormData) {
   const roomDoublePrices = formData
     .getAll('room_double_room_price_egp')
     .map((v) => String(v).trim())
+  const roomDoubleSummerCoursePrices = formData
+    .getAll('room_double_room_price_egp_summer_course')
+    .map((v) => String(v).trim())
+  const roomDoubleAcademicYearPrices = formData
+    .getAll('room_double_room_price_egp_academic_year')
+    .map((v) => String(v).trim())
 
   const roomTripleEnabled = formData
     .getAll('room_triple_room_enabled')
     .map((v) => String(v).trim())
   const roomTriplePrices = formData
     .getAll('room_triple_room_price_egp')
+    .map((v) => String(v).trim())
+  const roomTripleSummerCoursePrices = formData
+    .getAll('room_triple_room_price_egp_summer_course')
+    .map((v) => String(v).trim())
+  const roomTripleAcademicYearPrices = formData
+    .getAll('room_triple_room_price_egp_academic_year')
     .map((v) => String(v).trim())
 
   const roomRows = roomNames
@@ -850,10 +1134,54 @@ export async function createPropertyAction(formData: FormData) {
       const doubleEnabled = toBoolean(roomDoubleEnabled[index] || 'false')
       const tripleEnabled = toBoolean(roomTripleEnabled[index] || 'false')
 
-      const parsedSinglePrice = Number(roomSinglePrices[index] || 0)
-      const parsedDoublePrice = Number(roomDoublePrices[index] || 0)
-      const parsedTriplePrice = Number(roomTriplePrices[index] || 0)
+      const parsedSinglePrice = Number(
+        roomSinglePrices[index] ||
+          roomSingleSummerCoursePrices[index] ||
+          roomSingleAcademicYearPrices[index] ||
+          0
+      )
+      const parsedDoublePrice = Number(
+        roomDoublePrices[index] ||
+          roomDoubleSummerCoursePrices[index] ||
+          roomDoubleAcademicYearPrices[index] ||
+          0
+      )
+      const parsedTriplePrice = Number(
+        roomTriplePrices[index] ||
+          roomTripleSummerCoursePrices[index] ||
+          roomTripleAcademicYearPrices[index] ||
+          0
+      )
       const parsedBedsCount = Number(rawBedsCount || 0)
+
+      const emptySeasonalPrices: SeasonalPriceMap = {
+        summer_course: 0,
+        academic_year: 0,
+      }
+      const singleSeasonalPrices = singleEnabled
+        ? buildRoomOptionSeasonalPrices({
+            formData,
+            optionCode: 'single_room',
+            index,
+            fallbackPrice: parsedSinglePrice,
+          })
+        : emptySeasonalPrices
+      const doubleSeasonalPrices = doubleEnabled
+        ? buildRoomOptionSeasonalPrices({
+            formData,
+            optionCode: 'double_room',
+            index,
+            fallbackPrice: parsedDoublePrice,
+          })
+        : emptySeasonalPrices
+      const tripleSeasonalPrices = tripleEnabled
+        ? buildRoomOptionSeasonalPrices({
+            formData,
+            optionCode: 'triple_room',
+            index,
+            fallbackPrice: parsedTriplePrice,
+          })
+        : emptySeasonalPrices
 
       const hasAnyValue =
         room_name ||
@@ -863,8 +1191,14 @@ export async function createPropertyAction(formData: FormData) {
         doubleEnabled ||
         tripleEnabled ||
         (roomSinglePrices[index] || '').trim() ||
+        (roomSingleSummerCoursePrices[index] || '').trim() ||
+        (roomSingleAcademicYearPrices[index] || '').trim() ||
         (roomDoublePrices[index] || '').trim() ||
-        (roomTriplePrices[index] || '').trim()
+        (roomDoubleSummerCoursePrices[index] || '').trim() ||
+        (roomDoubleAcademicYearPrices[index] || '').trim() ||
+        (roomTriplePrices[index] || '').trim() ||
+        (roomTripleSummerCoursePrices[index] || '').trim() ||
+        (roomTripleAcademicYearPrices[index] || '').trim()
 
       if (!hasAnyValue) {
         return null
@@ -891,6 +1225,7 @@ export async function createPropertyAction(formData: FormData) {
           consumes_beds_count: 1,
           is_exclusive: false,
           price_egp: parsedSinglePrice,
+          seasonal_prices: singleSeasonalPrices,
           sort_order: 0,
         })
       }
@@ -909,6 +1244,7 @@ export async function createPropertyAction(formData: FormData) {
           consumes_beds_count: 1,
           is_exclusive: false,
           price_egp: parsedDoublePrice,
+          seasonal_prices: doubleSeasonalPrices,
           sort_order: 1,
         })
       }
@@ -927,6 +1263,7 @@ export async function createPropertyAction(formData: FormData) {
           consumes_beds_count: 1,
           is_exclusive: false,
           price_egp: parsedTriplePrice,
+          seasonal_prices: tripleSeasonalPrices,
           sort_order: 2,
         })
       }
@@ -1007,6 +1344,16 @@ export async function createPropertyAction(formData: FormData) {
       throw new Error('Valid full apartment price is required')
     }
 
+    for (const seasonCode of PRICING_SEASON_CODES) {
+      assertValidSeasonalPrice({
+        price: fullApartmentSeasonalPrices[seasonCode],
+        label:
+          seasonCode === 'summer_course'
+            ? 'Summer course full apartment price'
+            : 'Academic year full apartment price',
+      })
+    }
+
     if (uploadedImages.length === 0) {
       throw new Error('At least one image is required')
     }
@@ -1034,6 +1381,8 @@ export async function createPropertyAction(formData: FormData) {
     roomRows.length > 0
       ? roomRows.reduce((sum, room) => sum + room.beds_count, 0)
       : toNumberOrDefault(formData.get('beds_count'), 0)
+
+  const pricingSeasonsByCode = await getPricingSeasonsByCode({ supabase })
 
   const propertyPayload = {
     property_id,
@@ -1312,14 +1661,32 @@ export async function createPropertyAction(formData: FormData) {
           sort_order: option.sort_order,
         }))
 
-        const { error: roomSellableError } = await supabase
-          .from('property_room_sellable_options')
-          .insert(roomSellableRows)
+        const { data: insertedRoomSellableOptions, error: roomSellableError } =
+          await supabase
+            .from('property_room_sellable_options')
+            .insert(roomSellableRows)
+            .select('id, code')
 
         if (roomSellableError) {
           throw new Error(
             `Failed to insert room sellable options: ${roomSellableError.message}`
           )
+        }
+
+        for (const insertedOption of insertedRoomSellableOptions || []) {
+          const sourceOption = room.enabled_options.find(
+            (option) => option.code === insertedOption.code
+          )
+
+          if (!sourceOption) continue
+
+          await syncSeasonalPricesForRoomSellableOption({
+            supabase,
+            propertyDbId: propertyIdRef,
+            roomSellableOptionId: insertedOption.id,
+            seasonalPrices: sourceOption.seasonal_prices,
+            pricingSeasonsByCode,
+          })
         }
       }
 
@@ -1336,18 +1703,38 @@ export async function createPropertyAction(formData: FormData) {
       propertyIdRef,
       rentalDuration: rental_duration,
       fullApartmentPrice: price_egp,
+      fullApartmentSeasonalPrices,
       insertedRooms,
     })
 
     if (sellableOptionsRows.length > 0) {
-      const { error: sellableOptionsError } = await supabase
-        .from('property_sellable_options')
-        .insert(sellableOptionsRows)
+      const databaseRows = sellableOptionsRows.map(({ seasonal_prices, ...row }) => row)
+      const { data: insertedSellableOptions, error: sellableOptionsError } =
+        await supabase
+          .from('property_sellable_options')
+          .insert(databaseRows)
+          .select('id, code')
 
       if (sellableOptionsError) {
         throw new Error(
           `Failed to insert property sellable options: ${sellableOptionsError.message}`
         )
+      }
+
+      for (const insertedOption of insertedSellableOptions || []) {
+        const sourceOption = sellableOptionsRows.find(
+          (option) => option.code === insertedOption.code
+        )
+
+        if (!sourceOption) continue
+
+        await syncSeasonalPricesForSellableOption({
+          supabase,
+          propertyDbId: propertyIdRef,
+          sellableOptionId: insertedOption.id,
+          seasonalPrices: sourceOption.seasonal_prices,
+          pricingSeasonsByCode,
+        })
       }
     }
   }
@@ -1389,6 +1776,7 @@ export async function createPropertyAction(formData: FormData) {
       latitude,
       longitude,
       floor_number,
+      seasonal_prices: fullApartmentSeasonalPrices,
       admin_status,
       rental_duration,
       has_video: hasUploadedVideo,
@@ -1402,4 +1790,5 @@ export async function createPropertyAction(formData: FormData) {
   revalidatePath('/properties')
   revalidatePath('/properties/search')
   revalidatePath(`/properties/${property_id}`)
+
 }
