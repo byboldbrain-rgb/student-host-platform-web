@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Script from 'next/script'
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { createClient } from '../../src/lib/supabase/server'
 import {
   getCachedPropertiesPageData,
@@ -543,11 +544,239 @@ function formatPrice(
   }).format(converted)
 }
 
-export default async function PropertiesPage({
-  searchParams,
-}: {
+type PropertiesPageProps = {
   searchParams: Promise<SearchParams>
-}) {
+}
+
+const SKELETON_SECTION_COUNT = 3
+const SKELETON_MOBILE_CARD_COUNT = 4
+const SKELETON_DESKTOP_CARD_COUNT = 6
+
+function SkeletonBlock({ className = '' }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`navienty-skeleton-shimmer ${className}`}
+    />
+  )
+}
+
+function PropertyCardSkeleton() {
+  return (
+    <div aria-hidden="true" className="min-w-0">
+      <SkeletonBlock className="aspect-[4/3] w-full rounded-[18px] md:rounded-[28px]" />
+
+      <div className="mt-2.5 space-y-2 md:mt-3">
+        <SkeletonBlock className="h-4 w-[82%] rounded-full" />
+        <SkeletonBlock className="h-3 w-[48%] rounded-full" />
+        <SkeletonBlock className="h-4 w-[62%] rounded-full" />
+      </div>
+    </div>
+  )
+}
+
+function PropertiesPageSkeleton() {
+  return (
+    <main
+      aria-busy="true"
+      aria-label="Loading properties"
+      className="relative min-h-screen overflow-hidden bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+    >
+      <style>{`
+        @keyframes navienty-skeleton-loading {
+          0% {
+            transform: translateX(-115%);
+          }
+
+          100% {
+            transform: translateX(115%);
+          }
+        }
+
+        .navienty-skeleton-shimmer {
+          position: relative;
+          overflow: hidden;
+          background: #e8edf3;
+        }
+
+        .navienty-skeleton-shimmer::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          transform: translateX(-115%);
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.28) 24%,
+            rgba(255, 255, 255, 0.78) 50%,
+            rgba(255, 255, 255, 0.28) 76%,
+            transparent 100%
+          );
+          animation: navienty-skeleton-loading 1.35s ease-in-out infinite;
+          will-change: transform;
+        }
+
+        .navienty-skeleton-mobile-nav {
+          position: fixed;
+          left: max(14px, env(safe-area-inset-left, 0px));
+          right: max(14px, env(safe-area-inset-right, 0px));
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+          z-index: 120;
+          display: none;
+          height: 70px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.72);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.76);
+          box-shadow:
+            0 18px 45px rgba(15, 23, 42, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.85);
+          backdrop-filter: blur(22px) saturate(1.35);
+          -webkit-backdrop-filter: blur(22px) saturate(1.35);
+        }
+
+        @media (max-width: 768px) {
+          .navienty-skeleton-mobile-nav {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            place-items: center;
+          }
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .navienty-skeleton-shimmer {
+            background: #172033;
+          }
+
+          .navienty-skeleton-shimmer::after {
+            background: linear-gradient(
+              90deg,
+              transparent 0%,
+              rgba(255, 255, 255, 0.03) 24%,
+              rgba(255, 255, 255, 0.10) 50%,
+              rgba(255, 255, 255, 0.03) 76%,
+              transparent 100%
+            );
+          }
+
+          .navienty-skeleton-mobile-nav {
+            border-color: rgba(255, 255, 255, 0.14);
+            background: rgba(15, 23, 42, 0.72);
+            box-shadow:
+              0 18px 45px rgba(0, 0, 0, 0.34),
+              inset 0 1px 0 rgba(255, 255, 255, 0.10);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .navienty-skeleton-shimmer::after {
+            animation: none;
+            display: none;
+          }
+        }
+      `}</style>
+
+      <span className="sr-only">Loading properties</span>
+
+      <header className="border-b border-slate-100 bg-white/95 dark:border-slate-800 dark:bg-[#050816]/95">
+        <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5 lg:px-8">
+          <div className="flex items-center justify-between gap-4">
+            <SkeletonBlock className="h-11 w-11 shrink-0 rounded-2xl md:h-14 md:w-14" />
+
+            <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
+              <SkeletonBlock className="h-14 w-full max-w-3xl rounded-full" />
+            </div>
+
+            <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" />
+          </div>
+
+          <div className="mt-4 md:hidden">
+            <SkeletonBlock className="h-14 w-full rounded-full" />
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
+        <section className="mb-10 space-y-10 md:mb-14 md:space-y-12">
+          {Array.from({ length: SKELETON_SECTION_COUNT }).map((_, sectionIndex) => (
+            <div key={`skeleton-section-${sectionIndex}`}>
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <SkeletonBlock className="h-6 w-44 rounded-full md:h-7 md:w-64" />
+                <SkeletonBlock className="h-7 w-7 rounded-full md:hidden" />
+              </div>
+
+              <div className="flex gap-3.5 overflow-hidden pb-4 md:gap-4 lg:hidden">
+                {Array.from({ length: SKELETON_MOBILE_CARD_COUNT }).map(
+                  (_, cardIndex) => (
+                    <div
+                      key={`skeleton-mobile-${sectionIndex}-${cardIndex}`}
+                      className="min-w-[220px] max-w-[220px] shrink-0 md:min-w-[200px] md:max-w-[200px]"
+                    >
+                      <PropertyCardSkeleton />
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="hidden gap-4 pb-4 lg:grid lg:grid-cols-6">
+                {Array.from({ length: SKELETON_DESKTOP_CARD_COUNT }).map(
+                  (_, cardIndex) => (
+                    <PropertyCardSkeleton
+                      key={`skeleton-desktop-${sectionIndex}-${cardIndex}`}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </section>
+      </div>
+
+      <div
+        aria-hidden="true"
+        className="hidden min-h-[320px] bg-[#054aff] px-8 py-16 md:block"
+      >
+        <div className="mx-auto grid max-w-7xl grid-cols-[1.5fr_0.7fr_0.8fr] gap-12">
+          <SkeletonBlock className="h-20 w-[78%] rounded-3xl opacity-30" />
+
+          <div className="space-y-4">
+            <SkeletonBlock className="h-5 w-28 rounded-full opacity-30" />
+            <SkeletonBlock className="h-4 w-24 rounded-full opacity-30" />
+            <SkeletonBlock className="h-4 w-20 rounded-full opacity-30" />
+            <SkeletonBlock className="h-4 w-24 rounded-full opacity-30" />
+          </div>
+
+          <div className="space-y-4">
+            <SkeletonBlock className="h-5 w-28 rounded-full opacity-30" />
+            <SkeletonBlock className="h-4 w-48 rounded-full opacity-30" />
+          </div>
+        </div>
+      </div>
+
+      <div className="navienty-skeleton-mobile-nav" aria-hidden="true">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div
+            key={`skeleton-mobile-nav-${index}`}
+            className="flex flex-col items-center gap-2"
+          >
+            <SkeletonBlock className="h-5 w-5 rounded-full" />
+            <SkeletonBlock className="h-2.5 w-10 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </main>
+  )
+}
+
+export default function PropertiesPage({ searchParams }: PropertiesPageProps) {
+  return (
+    <Suspense fallback={<PropertiesPageSkeleton />}>
+      <PropertiesPageContent searchParams={searchParams} />
+    </Suspense>
+  )
+}
+
+async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
   const {
     rental_duration,
     city_id,
