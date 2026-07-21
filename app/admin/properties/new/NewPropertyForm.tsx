@@ -94,6 +94,18 @@ type MapboxAddressSuggestion = {
   center: [number, number]
 }
 
+type ExistingPropertyMapItem = {
+  id: string
+  property_id: string
+  title_en: string
+  title_ar?: string | null
+  address_en?: string | null
+  latitude: number
+  longitude: number
+  admin_status?: string | null
+  is_active?: boolean | null
+}
+
 type RoomForm = {
   room_name: string
   room_name_ar: string
@@ -136,6 +148,7 @@ type Props = {
   brokerUniversities: BrokerUniversity[]
   amenities: Amenity[]
   billTypes: BillType[]
+  existingProperties: ExistingPropertyMapItem[]
 }
 
 type DisplayStep = {
@@ -166,6 +179,96 @@ type OwnerMode = 'existing' | 'new'
 const PROPERTY_VIDEOS_BUCKET = 'property-videos'
 const MAX_PROPERTY_VIDEO_BYTES = 200 * 1024 * 1024
 const ALLOWED_PROPERTY_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov']
+
+function getDistanceInMeters(
+  latitudeA: number,
+  longitudeA: number,
+  latitudeB: number,
+  longitudeB: number,
+) {
+  const earthRadiusMeters = 6_371_000
+  const toRadians = (value: number) => (value * Math.PI) / 180
+  const latitudeDelta = toRadians(latitudeB - latitudeA)
+  const longitudeDelta = toRadians(longitudeB - longitudeA)
+  const startLatitude = toRadians(latitudeA)
+  const endLatitude = toRadians(latitudeB)
+
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2
+
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine))
+}
+
+function createExistingPropertiesPopup(
+  properties: ExistingPropertyMapItem[],
+) {
+  const container = document.createElement('div')
+  container.style.minWidth = '220px'
+  container.style.maxWidth = '300px'
+
+  const heading = document.createElement('p')
+  heading.textContent =
+    properties.length === 1
+      ? 'Existing property'
+      : `${properties.length} existing properties at this location`
+  heading.style.margin = '0 0 8px'
+  heading.style.fontSize = '13px'
+  heading.style.fontWeight = '700'
+  heading.style.color = '#162033'
+  container.appendChild(heading)
+
+  properties.slice(0, 8).forEach((property, index) => {
+    const item = document.createElement('div')
+    item.style.padding = index === 0 ? '0 0 7px' : '7px 0'
+    item.style.borderTop = index === 0 ? '0' : '1px solid #e5e7eb'
+
+    const title = document.createElement('p')
+    title.textContent =
+      property.title_en || property.title_ar || property.property_id
+    title.style.margin = '0'
+    title.style.fontSize = '12px'
+    title.style.fontWeight = '700'
+    title.style.color = '#1f2937'
+    item.appendChild(title)
+
+    const details = document.createElement('p')
+    const statusText = property.admin_status
+      ? ` · ${property.admin_status.replaceAll('_', ' ')}`
+      : ''
+    details.textContent = `${property.property_id}${statusText}`
+    details.style.margin = '3px 0 0'
+    details.style.fontSize = '11px'
+    details.style.color = '#6b7280'
+    item.appendChild(details)
+
+    if (property.address_en) {
+      const address = document.createElement('p')
+      address.textContent = property.address_en
+      address.style.margin = '3px 0 0'
+      address.style.fontSize = '11px'
+      address.style.lineHeight = '1.4'
+      address.style.color = '#6b7280'
+      item.appendChild(address)
+    }
+
+    container.appendChild(item)
+  })
+
+  if (properties.length > 8) {
+    const more = document.createElement('p')
+    more.textContent = `+${properties.length - 8} more properties`
+    more.style.margin = '8px 0 0'
+    more.style.fontSize = '11px'
+    more.style.fontWeight = '700'
+    more.style.color = '#b45309'
+    container.appendChild(more)
+  }
+
+  return container
+}
 
 function getBrowserSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -705,6 +808,7 @@ export default function NewPropertyForm({
   brokerUniversities,
   amenities,
   billTypes,
+  existingProperties,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -780,6 +884,8 @@ export default function NewPropertyForm({
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const markerRef = useRef<mapboxgl.Marker | null>(null)
+  const existingPropertyMarkersRef = useRef<mapboxgl.Marker[]>([])
+  const hasFittedExistingPropertiesRef = useRef(false)
 
   const inputClass =
     'w-full rounded-md border border-[#cfcfcf] px-3 py-2.5 text-sm outline-none transition focus:border-[#0071c2]'
@@ -958,6 +1064,33 @@ export default function NewPropertyForm({
     if (!brokerStillValid) setBrokerId('')
   }, [brokerId, filteredBrokers])
 
+  const nearbyExistingProperties = useMemo(() => {
+    const latitude = Number(selectedLatitude)
+    const longitude = Number(selectedLongitude)
+
+    if (
+      selectedLatitude.trim() === '' ||
+      selectedLongitude.trim() === '' ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
+      return []
+    }
+
+    return existingProperties
+      .map((property) => ({
+        ...property,
+        distanceMeters: getDistanceInMeters(
+          latitude,
+          longitude,
+          Number(property.latitude),
+          Number(property.longitude),
+        ),
+      }))
+      .filter((property) => property.distanceMeters <= 15)
+      .sort((a, b) => a.distanceMeters - b.distanceMeters)
+  }, [existingProperties, selectedLatitude, selectedLongitude])
+
   const setSelectedMapLocation = useCallback(
     (longitudeValue: number, latitudeValue: number, label: string) => {
       if (!Number.isFinite(longitudeValue) || !Number.isFinite(latitudeValue)) return
@@ -1061,7 +1194,10 @@ export default function NewPropertyForm({
     const initialLongitude = Number(selectedLongitude)
     const initialLatitude = Number(selectedLatitude)
     const hasInitialLocation =
-      Number.isFinite(initialLongitude) && Number.isFinite(initialLatitude)
+      selectedLongitude.trim() !== '' &&
+      selectedLatitude.trim() !== '' &&
+      Number.isFinite(initialLongitude) &&
+      Number.isFinite(initialLatitude)
 
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
@@ -1097,6 +1233,8 @@ export default function NewPropertyForm({
     return () => {
       markerRef.current?.remove()
       markerRef.current = null
+      existingPropertyMarkersRef.current.forEach((marker) => marker.remove())
+      existingPropertyMarkersRef.current = []
       map.remove()
       mapRef.current = null
     }
@@ -1106,10 +1244,178 @@ export default function NewPropertyForm({
     const map = mapRef.current
     if (!map) return
 
+    existingPropertyMarkersRef.current.forEach((marker) => marker.remove())
+    existingPropertyMarkersRef.current = []
+
+    const groupedProperties = new Map<
+      string,
+      {
+        longitude: number
+        latitude: number
+        properties: ExistingPropertyMapItem[]
+      }
+    >()
+
+    existingProperties.forEach((property) => {
+      const latitude = Number(property.latitude)
+      const longitude = Number(property.longitude)
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return
+      }
+
+      const coordinateKey = `${latitude.toFixed(6)},${longitude.toFixed(6)}`
+      const existingGroup = groupedProperties.get(coordinateKey)
+
+      if (existingGroup) {
+        existingGroup.properties.push(property)
+        return
+      }
+
+      groupedProperties.set(coordinateKey, {
+        longitude,
+        latitude,
+        properties: [property],
+      })
+    })
+
+    const bounds = new mapboxgl.LngLatBounds()
+    const markers: mapboxgl.Marker[] = []
+
+    groupedProperties.forEach((group) => {
+      const popup = new mapboxgl.Popup({
+        offset: 24,
+        closeButton: true,
+        closeOnClick: true,
+      }).setDOMContent(createExistingPropertiesPopup(group.properties))
+
+      let marker: mapboxgl.Marker
+
+      if (group.properties.length > 1) {
+        const markerElement = document.createElement('button')
+        markerElement.type = 'button'
+        markerElement.textContent = String(group.properties.length)
+        markerElement.title = `${group.properties.length} existing properties at this location`
+        markerElement.setAttribute(
+          'aria-label',
+          `${group.properties.length} existing properties at this location`,
+        )
+        markerElement.style.width = '30px'
+        markerElement.style.height = '30px'
+        markerElement.style.borderRadius = '9999px'
+        markerElement.style.border = '3px solid white'
+        markerElement.style.background = '#f59e0b'
+        markerElement.style.color = 'white'
+        markerElement.style.fontSize = '12px'
+        markerElement.style.fontWeight = '800'
+        markerElement.style.boxShadow = '0 3px 10px rgba(15, 23, 42, 0.28)'
+        markerElement.style.cursor = 'pointer'
+        markerElement.addEventListener('click', (event) => {
+          event.stopPropagation()
+        })
+
+        marker = new mapboxgl.Marker({ element: markerElement })
+      } else {
+        marker = new mapboxgl.Marker({
+          color: '#f59e0b',
+          scale: 0.82,
+        })
+
+        marker.getElement().title = `Existing property: ${
+          group.properties[0].title_en || group.properties[0].property_id
+        }`
+        marker.getElement().setAttribute(
+          'aria-label',
+          `Existing property: ${
+            group.properties[0].title_en || group.properties[0].property_id
+          }`,
+        )
+        marker.getElement().addEventListener('click', (event) => {
+          event.stopPropagation()
+        })
+      }
+
+      marker
+        .setLngLat([group.longitude, group.latitude])
+        .setPopup(popup)
+        .addTo(map)
+
+      markers.push(marker)
+      bounds.extend([group.longitude, group.latitude])
+    })
+
+    existingPropertyMarkersRef.current = markers
+
+    const hasSelectedLocation =
+      selectedLatitude.trim() !== '' &&
+      selectedLongitude.trim() !== '' &&
+      Number.isFinite(Number(selectedLatitude)) &&
+      Number.isFinite(Number(selectedLongitude))
+
+    const fitExistingProperties = () => {
+      if (
+        hasSelectedLocation ||
+        hasFittedExistingPropertiesRef.current ||
+        groupedProperties.size === 0
+      ) {
+        return
+      }
+
+      hasFittedExistingPropertiesRef.current = true
+
+      if (groupedProperties.size === 1) {
+        const onlyGroup = Array.from(groupedProperties.values())[0]
+        map.easeTo({
+          center: [onlyGroup.longitude, onlyGroup.latitude],
+          zoom: 15,
+          duration: 0,
+        })
+        return
+      }
+
+      map.fitBounds(bounds, {
+        padding: 60,
+        maxZoom: 14,
+        duration: 0,
+      })
+    }
+
+    if (map.loaded()) {
+      fitExistingProperties()
+    } else {
+      map.once('load', fitExistingProperties)
+    }
+
+    return () => {
+      map.off('load', fitExistingProperties)
+      markers.forEach((marker) => marker.remove())
+
+      if (existingPropertyMarkersRef.current === markers) {
+        existingPropertyMarkersRef.current = []
+      }
+    }
+  }, [existingProperties])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
     const latitude = Number(selectedLatitude)
     const longitude = Number(selectedLongitude)
 
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    if (
+      selectedLatitude.trim() === '' ||
+      selectedLongitude.trim() === '' ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
       markerRef.current?.remove()
       markerRef.current = null
       return
@@ -2223,6 +2529,47 @@ export default function NewPropertyForm({
                       </div>
                     )}
                   </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-xs font-semibold text-[#475467]">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-[#054aff] ring-2 ring-[#dbeafe]" />
+                      New property location
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-[#f59e0b] ring-2 ring-[#fef3c7]" />
+                      Existing properties ({existingProperties.length})
+                    </span>
+                    <span className="font-normal text-[#667085]">
+                      A numbered orange marker means multiple properties use the same coordinates.
+                    </span>
+                  </div>
+
+                  {nearbyExistingProperties.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-[#fdb022] bg-[#fffaeb] px-4 py-3 text-sm text-[#7a2e0e]">
+                      <p className="font-bold">
+                        Warning: {nearbyExistingProperties.length}{' '}
+                        {nearbyExistingProperties.length === 1
+                          ? 'existing property is'
+                          : 'existing properties are'}{' '}
+                        within 15 metres of this pin.
+                      </p>
+                      <p className="mt-1 leading-6">
+                        {nearbyExistingProperties
+                          .slice(0, 4)
+                          .map(
+                            (item) =>
+                              `${item.property_id} (${Math.max(
+                                0,
+                                Math.round(item.distanceMeters),
+                              )} m)`,
+                          )
+                          .join(' · ')}
+                        {nearbyExistingProperties.length > 4
+                          ? ` · +${nearbyExistingProperties.length - 4} more`
+                          : ''}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="mt-3 rounded-2xl border border-dashed border-[#bdd7f4] bg-[#f5f9ff] px-4 py-3 text-sm text-[#35506b]">
                     <p className="font-semibold text-[#162033]">Map location only</p>

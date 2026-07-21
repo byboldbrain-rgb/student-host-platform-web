@@ -1,4 +1,5 @@
 import { createClient } from '@/src/lib/supabase/server'
+import { createAdminClient } from '@/src/lib/supabase/admin'
 import {
   requirePropertyCreatorAccess,
   isSuperAdmin,
@@ -8,6 +9,7 @@ import NewPropertyForm from './NewPropertyForm'
 export default async function NewPropertyPage() {
   const adminContext = await requirePropertyCreatorAccess()
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
   const admin = adminContext.admin
 
   const [
@@ -20,6 +22,7 @@ export default async function NewPropertyPage() {
     brokerUniversitiesRes,
     amenitiesRes,
     billTypesRes,
+    existingPropertiesRes,
   ] = await Promise.all([
     supabase.from('cities').select('id, name_en, name_ar').order('name_en'),
 
@@ -70,6 +73,14 @@ export default async function NewPropertyPage() {
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .order('name_en', { ascending: true }),
+
+    adminSupabase
+      .from('properties')
+      .select(
+        'id, property_id, title_en, title_ar, address_en, latitude, longitude, admin_status, is_active'
+      )
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null),
   ])
 
   if (citiesRes.error) throw new Error(citiesRes.error.message)
@@ -85,6 +96,35 @@ export default async function NewPropertyPage() {
   }
   if (amenitiesRes.error) throw new Error(amenitiesRes.error.message)
   if (billTypesRes.error) throw new Error(billTypesRes.error.message)
+  if (existingPropertiesRes.error) {
+    throw new Error(existingPropertiesRes.error.message)
+  }
+
+  const existingProperties = (existingPropertiesRes.data ?? []).flatMap(
+    (property) => {
+      const latitude = Number(property.latitude)
+      const longitude = Number(property.longitude)
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return []
+      }
+
+      return [
+        {
+          ...property,
+          latitude,
+          longitude,
+        },
+      ]
+    }
+  )
 
   let brokers = brokersRes.data ?? []
   let brokerUniversities = brokerUniversitiesRes.data ?? []
@@ -110,6 +150,7 @@ export default async function NewPropertyPage() {
           brokerUniversities={brokerUniversities}
           amenities={amenitiesRes.data ?? []}
           billTypes={billTypesRes.data ?? []}
+          existingProperties={existingProperties}
         />
       </div>
     </div>

@@ -132,6 +132,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
     propertyFacilitiesRes,
     propertyBillsRes,
     roomsRes,
+    existingPropertiesRes,
   ] = await Promise.all([
     supabase.from('cities').select('id, name_en, name_ar').order('name_en'),
 
@@ -293,6 +294,15 @@ export default async function EditPropertyPage({ params }: PageProps) {
       .eq('property_id_ref', id)
       .eq('is_active', true)
       .order('sort_order'),
+
+    adminSupabase
+      .from('properties')
+      .select(
+        'id, property_id, title_en, title_ar, address_en, latitude, longitude, admin_status, is_active',
+      )
+      .neq('id', id)
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null),
   ])
 
   if (citiesRes.error) throw new Error(citiesRes.error.message)
@@ -313,6 +323,35 @@ export default async function EditPropertyPage({ params }: PageProps) {
     throw new Error(propertyFacilitiesRes.error.message)
   if (propertyBillsRes.error) throw new Error(propertyBillsRes.error.message)
   if (roomsRes.error) throw new Error(roomsRes.error.message)
+  if (existingPropertiesRes.error) {
+    throw new Error(existingPropertiesRes.error.message)
+  }
+
+  const existingProperties = (existingPropertiesRes.data ?? []).flatMap(
+    (existingProperty) => {
+      const latitude = Number(existingProperty.latitude)
+      const longitude = Number(existingProperty.longitude)
+
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return []
+      }
+
+      return [
+        {
+          ...existingProperty,
+          latitude,
+          longitude,
+        },
+      ]
+    },
+  )
 
   const brokers = isSuperAdmin(admin)
     ? (brokersRes.data ?? [])
@@ -410,6 +449,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
         bookingRequests={[]}
         canChangeBroker={isSuperAdmin(admin)}
         canChangeAdminStatus={isSuperAdmin(admin)}
+        existingProperties={existingProperties}
       />
     </div>
   )
