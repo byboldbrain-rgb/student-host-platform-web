@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "../../../src/lib/supabase/server";
 import PropertiesHeader from "../../properties/PropertiesHeader";
+import PropertiesSearchBar from "../../properties/PropertiesSearchBar";
 import SortDropdown from "../../properties/search/SortDropdown";
 import PropertyImageSlider from "./PropertyImageSlider";
 import PropertyAlertRequestCard from "./PropertyAlertRequestCard";
@@ -2773,7 +2774,7 @@ export default async function SakanSeoPage({
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="sakan-results-page relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <Script
         id="sakan-collection-jsonld"
@@ -2818,6 +2819,43 @@ export default async function SakanSeoPage({
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
+        }
+
+        .sakan-results-mobile-search {
+          display: none;
+        }
+
+        @media (max-width: 767px) {
+          .sakan-results-page .properties-header > div:first-child > div:nth-child(2) {
+            display: none !important;
+          }
+
+          .sakan-results-mobile-search {
+            position: sticky;
+            top: 72px;
+            z-index: 135;
+            display: block;
+            padding:
+              max(8px, env(safe-area-inset-top, 0px))
+              max(8px, env(safe-area-inset-right, 0px))
+              8px
+              max(8px, env(safe-area-inset-left, 0px));
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(18px) saturate(1.25);
+            -webkit-backdrop-filter: blur(18px) saturate(1.25);
+          }
+
+          .sakan-results-mobile-search > div {
+            max-width: none;
+          }
+        }
+
+        @media (max-width: 767px) and (prefers-color-scheme: dark) {
+          .sakan-results-mobile-search {
+            background: rgba(5, 8, 22, 0.94);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+          }
         }
 
         .mobile-inline-map {
@@ -4076,6 +4114,10 @@ export default async function SakanSeoPage({
           amenities: (amenities as Amenity[]) ?? [],
         }}
       />
+
+      <div className="sakan-results-mobile-search md:hidden">
+        <PropertiesSearchBar {...searchBarProps} />
+      </div>
 
       <div className="mega-menu-overlay">
         <div className="mega-menu-wrap">

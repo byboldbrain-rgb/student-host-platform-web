@@ -1,204 +1,281 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import PropertiesSearchBar from './PropertiesSearchBar'
-import SortDropdown from './search/SortDropdown'
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import PropertiesSearchBar from "./PropertiesSearchBar";
+import SortDropdown from "./search/SortDropdown";
 
 type City = {
-  id: string | number
-  name_en: string
-  name_ar?: string
-}
+  id: string | number;
+  name_en: string;
+  name_ar?: string;
+};
 
 type University = {
-  id: string | number
-  name_en: string
-  name_ar?: string
-  city_id: string | number
-}
+  id: string | number;
+  name_en: string;
+  name_ar?: string;
+  city_id: string | number;
+};
 
-type SupportedLanguage = 'en' | 'ar'
+type PropertyArea = {
+  id: string | number;
+  city_id: string | number;
+  name_en: string;
+  name_ar?: string;
+  is_active?: boolean | null;
+};
+
+type UniversityArea = {
+  id?: string | number;
+  university_id: string | number;
+  area_id: string | number;
+};
+
+type SupportedLanguage = "en" | "ar";
+type LocationMode = "city-university-area" | "city-area";
 
 type Labels = {
-  city: string
-  university: string
-  duration: string
+  city: string;
+  university: string;
+  area: string;
+  duration: string;
 
-  area: string
+  searchCities: string;
+  searchAreas: string;
 
-  searchCities: string
-  searchAreas: string
+  chooseUniversity: string;
+  chooseArea: string;
+  chooseDuration: string;
 
-  chooseUniversity: string
-  chooseDuration: string
-  chooseArea: string
+  selectCity: string;
+  selectUniversity: string;
+  selectArea: string;
+  selectDuration: string;
 
-  selectCity: string
-  selectUniversity: string
-  selectDuration: string
-  selectArea: string
+  anyCity: string;
+  anyUniversity: string;
+  anyArea: string;
+  anyDuration: string;
 
-  anyCity: string
-  anyUniversity: string
-  anyDuration: string
-  anyArea: string
+  daily: string;
+  monthly: string;
 
-  daily: string
-  monthly: string
-}
+  search?: string;
+  clearAll?: string;
+};
 
 type SupportedSort =
-  | 'newly_listed'
-  | 'lowest_price'
-  | 'highest_price'
-  | 'boys'
-  | 'girls'
+  | "newly_listed"
+  | "lowest_price"
+  | "highest_price"
+  | "boys"
+  | "girls";
 
 type SortOption = {
-  value: SupportedSort
-  label: string
-  href: string
-}
+  value: SupportedSort;
+  label: string;
+  href: string;
+};
 
 type AmenityOption = {
-  id: string
-  name_en: string
-  name_ar: string
-  icon_url?: string | null
-  sort_order?: number | null
-  is_active?: boolean | null
-}
+  id: string;
+  name_en: string;
+  name_ar: string;
+  icon_url?: string | null;
+  sort_order?: number | null;
+  is_active?: boolean | null;
+};
 
 type SearchBarProps = {
-  cities: City[]
-  universities: University[]
-  initialCityId?: string
-  initialUniversityId?: string
-  initialRentalDuration?: string
-  initialPriceRange?: string
-  language?: SupportedLanguage
-  currency?: string
-  labels: Labels
-}
+  cities?: City[];
+  universities?: University[];
+  areas?: PropertyArea[];
+  universityAreas?: UniversityArea[];
+
+  initialCityId?: string;
+  initialUniversityId?: string;
+  initialAreaId?: string;
+  initialRentalDuration?: string;
+  initialPriceRange?: string;
+
+  language?: SupportedLanguage;
+  currency?: string;
+  labels?: Partial<Labels>;
+  locationMode?: LocationMode;
+};
 
 type HeaderTexts = {
-  startSearch: string
-  sortBy?: string
-  backToProperties?: string
-}
+  startSearch: string;
+  sortBy?: string;
+  backToProperties?: string;
+};
 
 type MobileSortProps = {
-  isArabic: boolean
-  selectedSort: SupportedSort
-  sortByLabel: string
-  amenitiesLabel?: string
-  options: SortOption[]
-  amenities?: AmenityOption[]
-}
+  isArabic: boolean;
+  selectedSort: SupportedSort;
+  sortByLabel: string;
+  amenitiesLabel?: string;
+  options: SortOption[];
+  amenities?: AmenityOption[];
+};
 
 type Props = {
-  homeHref: string
-  searchBarProps?: SearchBarProps
-  t: HeaderTexts
-  showMobileSearchHeaderExtras?: boolean
-  mobileBackHref?: string
-  mobileSortProps?: MobileSortProps
-  hideDesktopHeader?: boolean
-}
+  homeHref: string;
+  searchBarProps?: SearchBarProps;
+  t: HeaderTexts;
+  showMobileSearchHeaderExtras?: boolean;
+  mobileBackHref?: string;
+  mobileSortProps?: MobileSortProps;
+  hideDesktopHeader?: boolean;
+
+  /**
+   * Set this to true when the large desktop search bar is rendered inside
+   * the page hero. In that mode, the header only shows the compact search
+   * bar after the user scrolls.
+   */
+  desktopSearchInHero?: boolean;
+};
 
 export default function PropertiesHeader({
   homeHref,
   searchBarProps,
   t,
   showMobileSearchHeaderExtras = false,
-  mobileBackHref = '',
+  mobileBackHref = "",
   mobileSortProps,
   hideDesktopHeader = false,
+  desktopSearchInHero = false,
 }: Props) {
-  const [isScrolled, setIsScrolled] = useState(false)
-  const [forceExpanded, setForceExpanded] = useState(false)
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [forceExpanded, setForceExpanded] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-  const hasSearchBar = Boolean(searchBarProps)
+  const hasSearchBar = Boolean(searchBarProps);
 
   const normalizedSearchBarProps = useMemo(() => {
-    if (!searchBarProps) return null
+    if (!searchBarProps) return null;
 
-    const isArabic = searchBarProps.language === 'ar'
+    const isArabic = searchBarProps.language === "ar";
+    const incomingLabels = searchBarProps.labels ?? {};
 
     return {
       ...searchBarProps,
+      cities: searchBarProps.cities ?? [],
+      universities: searchBarProps.universities ?? [],
+      areas: searchBarProps.areas ?? [],
+      universityAreas: searchBarProps.universityAreas ?? [],
       labels: {
-        ...searchBarProps.labels,
-
-        area: searchBarProps.labels.area || (isArabic ? 'المنطقة' : 'Area'),
+        city: incomingLabels.city ?? (isArabic ? "المدينة" : "City"),
+        university:
+          incomingLabels.university ?? (isArabic ? "الجامعة" : "University"),
+        area: incomingLabels.area ?? (isArabic ? "المنطقة" : "Area"),
+        duration: incomingLabels.duration ?? (isArabic ? "المدة" : "Duration"),
+        searchCities:
+          incomingLabels.searchCities ??
+          (isArabic ? "ابحث عن مدينة" : "Search cities"),
         searchAreas:
-          searchBarProps.labels.searchAreas ||
-          (isArabic ? 'ابحث عن منطقة' : 'Search areas'),
+          incomingLabels.searchAreas ??
+          (isArabic ? "ابحث عن منطقة" : "Search areas"),
+        chooseUniversity:
+          incomingLabels.chooseUniversity ??
+          (isArabic ? "اختر الجامعة" : "Choose university"),
         chooseArea:
-          searchBarProps.labels.chooseArea ||
-          (isArabic ? 'اختر المنطقة' : 'Choose area'),
+          incomingLabels.chooseArea ??
+          (isArabic ? "اختر المنطقة" : "Choose area"),
+        chooseDuration:
+          incomingLabels.chooseDuration ??
+          (isArabic ? "اختر المدة" : "Choose duration"),
+        selectCity:
+          incomingLabels.selectCity ??
+          (isArabic ? "اختر المدينة" : "Select city"),
+        selectUniversity:
+          incomingLabels.selectUniversity ??
+          (isArabic ? "اختر الجامعة" : "Select university"),
         selectArea:
-          searchBarProps.labels.selectArea ||
-          (isArabic ? 'اختر منطقة' : 'Select area'),
-        anyArea:
-          searchBarProps.labels.anyArea ||
-          (isArabic ? 'أي منطقة' : 'Any area'),
+          incomingLabels.selectArea ??
+          (isArabic ? "اختر المنطقة" : "Select area"),
+        selectDuration:
+          incomingLabels.selectDuration ??
+          (isArabic ? "اختر المدة" : "Select duration"),
+        anyCity: incomingLabels.anyCity ?? (isArabic ? "أي مدينة" : "Any city"),
+        anyUniversity:
+          incomingLabels.anyUniversity ??
+          (isArabic ? "أي جامعة" : "Any university"),
+        anyArea: incomingLabels.anyArea ?? (isArabic ? "أي منطقة" : "Any area"),
+        anyDuration:
+          incomingLabels.anyDuration ?? (isArabic ? "أي مدة" : "Any duration"),
+        daily: incomingLabels.daily ?? (isArabic ? "يومي" : "Daily"),
+        monthly: incomingLabels.monthly ?? (isArabic ? "شهري" : "Monthly"),
+        search: incomingLabels.search ?? (isArabic ? "بحث" : "Search"),
+        clearAll:
+          incomingLabels.clearAll ?? (isArabic ? "مسح الكل" : "Clear all"),
       },
-    }
-  }, [searchBarProps])
+    };
+  }, [searchBarProps]);
 
   useEffect(() => {
-    let ticking = false
+    let ticking = false;
 
     const updateScrollState = () => {
-      const y = window.scrollY
+      const y = window.scrollY;
 
       if (!forceExpanded) {
-        setIsScrolled((prev) => {
-          if (!prev && y > 140) return true
-          if (prev && y < 90) return false
-          return prev
-        })
+        setIsScrolled((previousValue) => {
+          if (!previousValue && y > 140) return true;
+          if (previousValue && y < 90) return false;
+          return previousValue;
+        });
       }
 
-      ticking = false
-    }
+      ticking = false;
+    };
 
     const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(updateScrollState)
-        ticking = true
-      }
-    }
+      if (ticking) return;
 
-    updateScrollState()
-    window.addEventListener('scroll', handleScroll, { passive: true })
+      window.requestAnimationFrame(updateScrollState);
+      ticking = true;
+    };
+
+    updateScrollState();
+    window.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', handleScroll)
-    }
-  }, [forceExpanded])
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, [forceExpanded]);
 
   useEffect(() => {
-    if (!isMobileSearchOpen) return
+    if (!isMobileSearchOpen) return;
 
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = prevOverflow
-    }
-  }, [isMobileSearchOpen])
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileSearchOpen]);
 
   useEffect(() => {
     if (!hasSearchBar && isMobileSearchOpen) {
-      setIsMobileSearchOpen(false)
+      setIsMobileSearchOpen(false);
     }
-  }, [hasSearchBar, isMobileSearchOpen])
+  }, [hasSearchBar, isMobileSearchOpen]);
 
-  const showCompact = isScrolled && !forceExpanded
+  const showCompact = isScrolled && !forceExpanded;
+  const showDesktopSearch =
+    hasSearchBar &&
+    Boolean(normalizedSearchBarProps) &&
+    (!desktopSearchInHero || isScrolled || forceExpanded);
+
+  const desktopHeaderHeight = !hasSearchBar
+    ? "h-[82px]"
+    : desktopSearchInHero && !isScrolled && !forceExpanded
+      ? "h-[82px]"
+      : showCompact
+        ? "h-[94px]"
+        : "h-[168px]";
 
   return (
     <>
@@ -213,10 +290,6 @@ export default function PropertiesHeader({
           .properties-header {
             background: #0b1220 !important;
             border-bottom-color: rgba(255, 255, 255, 0.1) !important;
-          }
-
-          .properties-header .menu-trigger-lines span {
-            background: #f8fafc;
           }
 
           .properties-header .navienty-logo,
@@ -239,58 +312,52 @@ export default function PropertiesHeader({
 
       <header
         className={`properties-header sticky top-0 z-[130] border-b border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1220] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)] md:bg-[#f7f7f7] md:shadow-none md:dark:bg-[#0b1220] ${
-          hideDesktopHeader ? 'md:hidden' : ''
+          hideDesktopHeader ? "md:hidden" : ""
         }`}
       >
         <div className="w-full bg-white pb-2 pt-1 dark:bg-[#0b1220] md:hidden">
-          <div className="flex items-center justify-between px-3 pt-2">
+          <div className="flex items-center justify-center px-3 pb-1 pt-3">
             <Link
               href={homeHref}
-              className="navienty-logo-mobile"
+              className="inline-flex items-center justify-center"
               aria-label="Navienty home"
             >
               <img
                 src="https://i.ibb.co/FLsWDBr6/Untitled.png"
-                alt="Navienty icon"
+                alt="Navienty"
+                className="h-[52px] w-[52px] object-contain"
               />
             </Link>
-
-            <label
-              htmlFor="nav-menu-toggle"
-              className="menu-trigger"
-              aria-label="Open menu"
-            >
-              <span className="menu-trigger-lines" aria-hidden="true">
-                <span />
-                <span />
-              </span>
-            </label>
           </div>
 
           {hasSearchBar && normalizedSearchBarProps && (
             <div className="px-3 pb-4 pt-2">
-              {showMobileSearchHeaderExtras && mobileSortProps && mobileBackHref ? (
+              {showMobileSearchHeaderExtras &&
+              mobileSortProps &&
+              mobileBackHref ? (
                 <div className="flex items-center gap-2">
                   <Link
                     href={mobileBackHref}
-                    aria-label={t.backToProperties || 'Back'}
+                    aria-label={t.backToProperties || "Back"}
                     className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full border border-[#dedede] bg-white text-[#222] shadow-[0_1px_5px_rgba(0,0,0,0.08)] transition dark:border-white/10 dark:bg-[#0b1220] dark:text-slate-100 dark:shadow-[0_8px_22px_rgba(0,0,0,0.28)] dark:hover:bg-[#111827]"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
-                      strokeWidth={1.5}
+                      strokeWidth={1.9}
                       stroke="currentColor"
-                      className={`h-6 w-6 ${
-                        mobileSortProps.isArabic ? 'rotate-180' : ''
-                      }`}
+                      className="h-[15px] w-[15px]"
                       aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
+                        d={
+                          mobileSortProps.isArabic
+                            ? "m10 6 6 6-6 6"
+                            : "m14 6-6 6 6 6"
+                        }
                       />
                     </svg>
                   </Link>
@@ -307,6 +374,7 @@ export default function PropertiesHeader({
                       strokeWidth={2.2}
                       stroke="currentColor"
                       className="h-[16px] w-[16px] shrink-0 text-[#222] dark:text-slate-100"
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -344,6 +412,7 @@ export default function PropertiesHeader({
                     strokeWidth={2.2}
                     stroke="currentColor"
                     className="h-[16px] w-[16px] text-[#222] dark:text-slate-100"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -361,7 +430,7 @@ export default function PropertiesHeader({
           )}
 
           {isMobileSearchOpen && normalizedSearchBarProps && (
-            <div className="properties-mobile-search-overlay fixed inset-0 z-[220] bg-[#f2f2f2] dark:bg-[#050816]">
+            <div className="properties-mobile-search-overlay fixed inset-0 z-[220] overflow-y-auto bg-[#f2f2f2] dark:bg-[#050816]">
               <div className="flex items-center justify-end px-4 pb-2 pt-4">
                 <button
                   type="button"
@@ -376,6 +445,7 @@ export default function PropertiesHeader({
                     stroke="currentColor"
                     strokeWidth="2"
                     className="h-5 w-5"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -390,7 +460,7 @@ export default function PropertiesHeader({
                 <PropertiesSearchBar
                   {...normalizedSearchBarProps}
                   mobileSearchBarClassName={
-                    showMobileSearchHeaderExtras ? 'mt-0' : ''
+                    showMobileSearchHeaderExtras ? "mt-0" : ""
                   }
                   mobileMode
                   mobileOpen
@@ -405,63 +475,35 @@ export default function PropertiesHeader({
           <div className="hidden md:block">
             <div className="mx-auto max-w-[1920px] px-6">
               <div
-                className={`relative transition-all duration-300 ${
-                  hasSearchBar
-                    ? showCompact
-                      ? 'h-[94px]'
-                      : 'h-[168px]'
-                    : 'h-[82px]'
-                }`}
+                className={`relative transition-[height] duration-300 ${desktopHeaderHeight}`}
               >
-                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-between">
-                  <div className="pointer-events-auto flex items-center">
-                    <Link
-                      href={homeHref}
-                      className="navienty-logo"
-                      aria-label="Navienty home"
-                    >
-                      <img
-                        src="https://i.ibb.co/FLsWDBr6/Untitled.png"
-                        alt="Navienty icon"
-                        className="navienty-logo-icon"
-                      />
-                      <span className="navienty-logo-text-wrap">
-                        <img
-                          src="https://i.ibb.co/kVC7z9x7/Navienty-15.png"
-                          alt="Navienty"
-                          className="navienty-logo-text"
-                        />
-                      </span>
-                    </Link>
-                  </div>
-
-                  <div className="pointer-events-auto flex items-center">
-                    <label
-                      htmlFor="nav-menu-toggle"
-                      className="menu-trigger"
-                      aria-label="Open menu"
-                    >
-                      <span className="menu-trigger-lines" aria-hidden="true">
-                        <span />
-                        <span />
-                      </span>
-                    </label>
-                  </div>
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                  <Link
+                    href={homeHref}
+                    className="pointer-events-auto inline-flex items-center justify-center"
+                    aria-label="Navienty home"
+                  >
+                    <img
+                      src="https://i.ibb.co/FLsWDBr6/Untitled.png"
+                      alt="Navienty"
+                      className="h-[58px] w-[58px] object-contain"
+                    />
+                  </Link>
                 </div>
 
-                {hasSearchBar && normalizedSearchBarProps && (
+                {showDesktopSearch && normalizedSearchBarProps && (
                   <div
-                    className={`absolute left-1/2 z-30 flex -translate-x-1/2 justify-center origin-center transition-all duration-300 ${
+                    className={`absolute left-1/2 z-30 flex -translate-x-1/2 origin-center justify-center transition-[top,transform,width,max-width] duration-300 ${
                       showCompact
-                        ? 'top-1/2 -translate-y-1/2 scale-[0.85] w-max'
-                        : 'top-[72px] scale-[0.92] w-full max-w-[1000px]'
+                        ? "top-1/2 w-max max-w-[calc(100vw-190px)] -translate-y-1/2 scale-[0.92]"
+                        : "top-[72px] w-full max-w-[1000px] scale-[0.92]"
                     }`}
                   >
                     <PropertiesSearchBar
                       {...normalizedSearchBarProps}
                       compact={showCompact}
                       onOpenMenuChange={(isOpen) => {
-                        setForceExpanded(isOpen)
+                        setForceExpanded(isOpen);
                       }}
                     />
                   </div>
@@ -472,5 +514,5 @@ export default function PropertiesHeader({
         )}
       </header>
     </>
-  )
+  );
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "../../../src/lib/supabase/server";
 import PropertiesHeader from "../PropertiesHeader";
+import PropertiesSearchBar from "../PropertiesSearchBar";
 import SortDropdown from "./SortDropdown";
 import PropertyImageSlider from "./PropertyImageSlider";
 import PropertyAlertRequestCard from "../../sakan/[...slug]/PropertyAlertRequestCard";
@@ -1927,7 +1928,7 @@ export default async function SearchResultsPage({
   return (
     <main
       dir={isArabic ? "rtl" : "ltr"}
-      className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
+      className="search-results-page relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <input
         id="nav-menu-toggle"
@@ -1943,6 +1944,43 @@ export default async function SearchResultsPage({
           --menu-blue: #054aff;
           --menu-cream: #f2ead8;
           --menu-cream-soft: rgba(242, 234, 216, 0.92);
+        }
+
+        .search-results-mobile-search {
+          display: none;
+        }
+
+        @media (max-width: 767px) {
+          .search-results-page .properties-header > div:first-child > div:nth-child(2) {
+            display: none !important;
+          }
+
+          .search-results-mobile-search {
+            position: sticky;
+            top: 72px;
+            z-index: 135;
+            display: block;
+            padding:
+              max(8px, env(safe-area-inset-top, 0px))
+              max(8px, env(safe-area-inset-right, 0px))
+              8px
+              max(8px, env(safe-area-inset-left, 0px));
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(18px) saturate(1.25);
+            -webkit-backdrop-filter: blur(18px) saturate(1.25);
+          }
+
+          .search-results-mobile-search > div {
+            max-width: none;
+          }
+        }
+
+        @media (max-width: 767px) and (prefers-color-scheme: dark) {
+          .search-results-mobile-search {
+            background: rgba(5, 8, 22, 0.94);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+          }
         }
 
         .mobile-inline-map {
@@ -3201,6 +3239,10 @@ export default async function SearchResultsPage({
           amenities: (amenities as Amenity[]) ?? [],
         }}
       />
+
+      <div className="search-results-mobile-search md:hidden">
+        <PropertiesSearchBar {...searchBarProps} />
+      </div>
 
       <div className="mega-menu-overlay">
         <div className="mega-menu-wrap">

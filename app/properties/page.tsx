@@ -1,30 +1,31 @@
-import Link from 'next/link'
-import Script from 'next/script'
-import type { Metadata } from 'next'
-import { Suspense } from 'react'
-import { createClient } from '../../src/lib/supabase/server'
+import Link from "next/link";
+import Script from "next/script";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import PropertiesLoading from "./loading";
 import {
   getCachedPropertiesPageData,
   getCachedSakanSeoPages,
   type SakanSeoPage,
-} from './data'
-import PropertiesSearchBar from './PropertiesSearchBar'
-import PropertiesHeader from './PropertiesHeader'
-import { Squada_One } from 'next/font/google'
+} from "./data";
+import PropertiesSearchBar from "./PropertiesSearchBar";
+import { Squada_One } from "next/font/google";
 
 const squadaOne = Squada_One({
-  subsets: ['latin'],
-  weight: '400',
-})
+  subsets: ["latin"],
+  weight: "400",
+});
 
-const APP_LOGO_URL = '/og-image.jpg'
+const APP_LOGO_URL = "/og-image.jpg";
+const HOME_HERO_DESKTOP_IMAGE = "/images/home/home-hero-v3.webp";
+const HOME_HERO_MOBILE_IMAGE = "/images/home/home-hero-v5.webp";
 
-const SITE_URL = 'https://navienty.com'
+const SITE_URL = "https://navienty.com";
 
 export const metadata: Metadata = {
-  title: 'سكن طلاب قريب من الجامعة بدون عمولة',
+  title: "سكن طلاب قريب من الجامعة بدون عمولة",
   description:
-    'اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع حسب المدينة أو المنطقة، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.',
+    "اكتشف سكن طلاب وسكن طالبات قريب من الجامعة، قارن الأسعار والصور والموقع حسب المدينة أو المنطقة، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.",
   alternates: {
     canonical: `${SITE_URL}/properties`,
   },
@@ -34,406 +35,397 @@ export const metadata: Metadata = {
     googleBot: {
       index: true,
       follow: true,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-      'max-video-preview': -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
     },
   },
   openGraph: {
-    title: 'Navienty - سكن طلاب قريب من الجامعة بدون عمولة',
+    title: "Navienty - سكن طلاب قريب من الجامعة بدون عمولة",
     description:
-      'قارن أماكن السكن الطلابي حسب المدينة والمنطقة، شاهد الصور والأسعار، وتواصل مباشرة مع المضيف بدون عمولة.',
+      "قارن أماكن السكن الطلابي حسب المدينة والمنطقة، شاهد الصور والأسعار، وتواصل مباشرة مع المضيف بدون عمولة.",
     url: `${SITE_URL}/properties`,
-    siteName: 'Navienty',
-    locale: 'ar_EG',
-    type: 'website',
+    siteName: "Navienty",
+    locale: "ar_EG",
+    type: "website",
     images: [
       {
         url: APP_LOGO_URL,
         width: 1200,
         height: 630,
-        alt: 'Navienty student housing search',
+        alt: "Navienty student housing search",
       },
     ],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Navienty - سكن طلاب قريب من الجامعة بدون عمولة',
+    card: "summary_large_image",
+    title: "Navienty - سكن طلاب قريب من الجامعة بدون عمولة",
     description:
-      'اكتشف وقارن أماكن سكن الطلاب وتواصل مع المضيف مباشرة بدون عمولة.',
+      "اكتشف وقارن أماكن سكن الطلاب وتواصل مع المضيف مباشرة بدون عمولة.",
     images: [APP_LOGO_URL],
   },
-}
+};
 
 type SearchParams = {
-  rental_duration?: string
-  city_id?: string
-  university_id?: string
-  area_id?: string
-  price_range?: string
-  lang?: string
-  currency?: string
-}
+  rental_duration?: string;
+  city_id?: string;
+  university_id?: string;
+  area_id?: string;
+  price_range?: string;
+  lang?: string;
+  currency?: string;
+};
 
 type City = {
-  id: string | number
-  name_en: string
-  name_ar: string
-}
+  id: string | number;
+  name_en: string;
+  name_ar: string;
+};
 
 type University = {
-  id: string | number
-  name_en: string
-  name_ar: string
-  city_id: string | number
-}
+  id: string | number;
+  name_en: string;
+  name_ar: string;
+  city_id: string | number;
+};
 
 type PropertyArea = {
-  id: string | number
-  city_id: string | number
-  name_en: string
-  name_ar: string
-  is_active?: boolean | null
-}
+  id: string | number;
+  city_id: string | number;
+  name_en: string;
+  name_ar: string;
+  is_active?: boolean | null;
+};
 
 type UniversityArea = {
-  id?: string | number
-  university_id: string | number
-  area_id: string | number
-}
+  id?: string | number;
+  university_id: string | number;
+  area_id: string | number;
+};
 
 type PropertyImage = {
-  image_url?: string | null
-  is_cover?: boolean | null
-  sort_order?: number | null
-}
+  image_url?: string | null;
+  is_cover?: boolean | null;
+  sort_order?: number | null;
+};
 
 type PropertySellableOption = {
-  code?: string | null
-  option_code?: string | null
-  price_egp?: number | null
-  is_active?: boolean | null
-  deleted_at?: string | null
-}
+  code?: string | null;
+  option_code?: string | null;
+  price_egp?: number | null;
+  is_active?: boolean | null;
+  deleted_at?: string | null;
+};
 
 type PropertyRoomSellableOption = {
-  code?: string | null
-  price_egp?: number | null
-  is_active?: boolean | null
-  deleted_at?: string | null
-}
+  code?: string | null;
+  price_egp?: number | null;
+  is_active?: boolean | null;
+  deleted_at?: string | null;
+};
 
 type PropertyRoom = {
-  property_room_sellable_options?: PropertyRoomSellableOption[] | null
-}
+  property_room_sellable_options?: PropertyRoomSellableOption[] | null;
+};
 
 type PropertyUniversityLink = {
-  university_id?: string | number | null
-}
+  university_id?: string | number | null;
+};
 
 type Property = {
-  id: string | number
-  property_id: string
-  title_en: string
-  title_ar: string
-  price_egp: number
-  rental_duration: string
-  availability_status: string
-  gender?: 'boys' | 'girls' | string | null
-  city_id?: string | number | null
-  university_id?: string | number | null
-  area_id?: string | number | null
-  property_universities?: PropertyUniversityLink[] | null
-  property_images?: PropertyImage[] | null
-  property_sellable_options?: PropertySellableOption[] | null
-  property_rooms?: PropertyRoom[] | null
-}
+  id: string | number;
+  property_id: string;
+  title_en: string;
+  title_ar: string;
+  price_egp: number;
+  rental_duration: string;
+  availability_status: string;
+  gender?: "boys" | "girls" | string | null;
+  city_id?: string | number | null;
+  university_id?: string | number | null;
+  area_id?: string | number | null;
+  property_universities?: PropertyUniversityLink[] | null;
+  property_images?: PropertyImage[] | null;
+  property_sellable_options?: PropertySellableOption[] | null;
+  property_rooms?: PropertyRoom[] | null;
+};
 
 const SUPPORTED_CURRENCIES = [
-  'EGP',
-  'USD',
-  'EUR',
-  'BHD',
-  'DZD',
-  'IQD',
-  'JOD',
-  'KWD',
-  'LBP',
-  'LYD',
-  'MAD',
-  'OMR',
-  'QAR',
-  'SAR',
-  'TND',
-] as const
+  "EGP",
+  "USD",
+  "EUR",
+  "BHD",
+  "DZD",
+  "IQD",
+  "JOD",
+  "KWD",
+  "LBP",
+  "LYD",
+  "MAD",
+  "OMR",
+  "QAR",
+  "SAR",
+  "TND",
+] as const;
 
-type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]
-type SupportedLanguage = 'en' | 'ar'
+type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+type SupportedLanguage = "en" | "ar";
 type NormalizedAvailabilityStatus =
-  | 'available'
-  | 'reserved'
-  | 'unavailable'
-  | 'unknown'
+  "available" | "reserved" | "unavailable" | "unknown";
 
-type NormalizedGender = 'boys' | 'girls' | null
-
-type MenuFooterLink = {
-  label: string
-  href: string
-  isEmail?: boolean
-}
+type NormalizedGender = "boys" | "girls" | null;
 
 const PRICE_PRIORITY = [
-  'triple_room',
-  'double_room',
-  'single_room',
-  'full_apartment',
-] as const
+  "triple_room",
+  "double_room",
+  "single_room",
+  "full_apartment",
+] as const;
 
-type PricePriorityCode = (typeof PRICE_PRIORITY)[number]
+type PricePriorityCode = (typeof PRICE_PRIORITY)[number];
 
 const TRANSLATIONS = {
   en: {
-    seeAll: 'See All',
-    popularHomesIn: 'Popular Stays in',
-    popularHomesNear: 'Popular stays near',
-    stay: 'stay',
-    night: 'night',
-    month: 'month',
-    city: 'City',
-    university: 'University',
-    area: 'Area',
-    duration: 'Duration',
-    searchCities: 'Search cities',
-    searchAreas: 'Search areas',
-    chooseUniversity: 'Choose university',
-    chooseArea: 'Choose area',
-    chooseDuration: 'Choose duration',
-    selectCity: 'Select city',
-    selectUniversity: 'Select university',
-    selectArea: 'Select area',
-    selectDuration: 'Select duration',
-    anyCity: 'Any city',
-    anyUniversity: 'Any university',
-    anyArea: 'Any area',
-    anyDuration: 'Any duration',
-    daily: 'Daily',
-    monthly: 'Monthly',
-    available: 'Available',
-    unavailable: 'Unavailable',
-    reserved: 'Reserved',
-    boys: 'Boys',
-    girls: 'Girls',
-    startSearch: 'Start your search',
-    pricesIncludeFees: 'Prices include all fees',
-    help: 'Contact Us',
-    signUp: 'Sign up',
-    logIn: 'Log in',
-    language: 'Language',
-    english: 'English',
-    arabic: 'العربية',
-    close: 'Close',
-    login: 'Log in or sign up',
-    join: 'Guide',
-    facebook: 'Facebook',
-    instagram: 'Instagram',
-    linkedIn: 'LinkedIn',
-    footerTitle: 'Find your way to better student living',
-    quickLinks: 'Quick Links',
-    aboutUs: 'About us',
-    board: 'Board',
-    contact: 'Contact',
-    contactUs: 'Contact Us',
-    footerEmail: 'info@navienty.com',
-    explore: 'Search',
-    community: 'Guide',
-    account: 'Account',
-    mobileLogin: 'Log in',
+    seeAll: "See All",
+    popularHomesIn: "Popular Stays in",
+    popularHomesNear: "Popular stays near",
+    stay: "stay",
+    night: "night",
+    month: "month",
+    city: "City",
+    university: "University",
+    area: "Area",
+    duration: "Duration",
+    searchCities: "Search cities",
+    searchAreas: "Search areas",
+    chooseUniversity: "Choose university",
+    chooseArea: "Choose area",
+    chooseDuration: "Choose duration",
+    selectCity: "Select city",
+    selectUniversity: "Select university",
+    selectArea: "Select area",
+    selectDuration: "Select duration",
+    anyCity: "Any city",
+    anyUniversity: "Any university",
+    anyArea: "Any area",
+    anyDuration: "Any duration",
+    daily: "Daily",
+    monthly: "Monthly",
+    available: "Available",
+    unavailable: "Unavailable",
+    reserved: "Reserved",
+    boys: "Boys",
+    girls: "Girls",
+    startSearch: "Start your search",
+    pricesIncludeFees: "Prices include all fees",
+    help: "Contact Us",
+    signUp: "Sign up",
+    logIn: "Log in",
+    language: "Language",
+    english: "English",
+    arabic: "العربية",
+    close: "Close",
+    login: "Log in or sign up",
+    join: "Guide",
+    facebook: "Facebook",
+    instagram: "Instagram",
+    linkedIn: "LinkedIn",
+    footerTitle: "Find your way to better student living",
+    quickLinks: "Quick Links",
+    aboutUs: "About us",
+    board: "Board",
+    contact: "Contact",
+    contactUs: "Contact Us",
+    footerEmail: "info@navienty.com",
+    explore: "Search",
+    community: "Guide",
+    account: "Account",
+    mobileLogin: "Log in",
     copyright: `© ${new Date().getFullYear()} Navienty | All rights reserved.`,
   },
   ar: {
-    seeAll: 'عرض الكل',
-    popularHomesIn: 'إقامات شائعة في',
-    popularHomesNear: 'إقامات شائعة بالقرب من',
-    stay: 'إقامة',
-    night: 'ليلة',
-    month: 'شهر',
-    city: 'المدينة',
-    university: 'الجامعة',
-    area: 'المنطقة',
-    duration: 'المدة',
-    searchCities: 'ابحث عن مدينة',
-    searchAreas: 'ابحث عن منطقة',
-    chooseUniversity: 'اختر الجامعة',
-    chooseArea: 'اختر المنطقة',
-    chooseDuration: 'اختر المدة',
-    selectCity: 'اختر المدينة',
-    selectUniversity: 'اختر الجامعة',
-    selectArea: 'اختر المنطقة',
-    selectDuration: 'اختر المدة',
-    anyCity: 'أي مدينة',
-    anyUniversity: 'أي جامعة',
-    anyArea: 'أي منطقة',
-    anyDuration: 'أي مدة',
-    daily: 'يومي',
-    monthly: 'شهري',
-    available: 'متاح',
-    unavailable: 'غير متاح',
-    reserved: 'محجوز',
-    boys: 'ولاد',
-    girls: 'بنات',
-    startSearch: 'ابدأ بحثك',
-    pricesIncludeFees: 'الأسعار تشمل جميع الرسوم',
-    help: 'مساعدة',
-    signUp: 'إنشاء حساب',
-    community: 'الدليل',
-    logIn: 'تسجيل الدخول',
-    language: 'اللغة',
-    english: 'English',
-    arabic: 'العربية',
-    close: 'إغلاق',
-    investors: 'المستثمرون',
-    login: 'سجّل الدخول أو أنشئ حسابًا',
-    join: 'الدليل',
-    facebook: 'فيسبوك',
-    instagram: 'إنستجرام',
-    linkedIn: 'لينكدإن',
-    footerTitle: 'نظرة إلى المستقبل.',
+    seeAll: "عرض الكل",
+    popularHomesIn: "إقامات شائعة في",
+    popularHomesNear: "إقامات شائعة بالقرب من",
+    stay: "إقامة",
+    night: "ليلة",
+    month: "شهر",
+    city: "المدينة",
+    university: "الجامعة",
+    area: "المنطقة",
+    duration: "المدة",
+    searchCities: "ابحث عن مدينة",
+    searchAreas: "ابحث عن منطقة",
+    chooseUniversity: "اختر الجامعة",
+    chooseArea: "اختر المنطقة",
+    chooseDuration: "اختر المدة",
+    selectCity: "اختر المدينة",
+    selectUniversity: "اختر الجامعة",
+    selectArea: "اختر المنطقة",
+    selectDuration: "اختر المدة",
+    anyCity: "أي مدينة",
+    anyUniversity: "أي جامعة",
+    anyArea: "أي منطقة",
+    anyDuration: "أي مدة",
+    daily: "يومي",
+    monthly: "شهري",
+    available: "متاح",
+    unavailable: "غير متاح",
+    reserved: "محجوز",
+    boys: "ولاد",
+    girls: "بنات",
+    startSearch: "ابدأ بحثك",
+    pricesIncludeFees: "الأسعار تشمل جميع الرسوم",
+    help: "مساعدة",
+    signUp: "إنشاء حساب",
+    community: "الدليل",
+    logIn: "تسجيل الدخول",
+    language: "اللغة",
+    english: "English",
+    arabic: "العربية",
+    close: "إغلاق",
+    investors: "المستثمرون",
+    login: "سجّل الدخول أو أنشئ حسابًا",
+    join: "الدليل",
+    facebook: "فيسبوك",
+    instagram: "إنستجرام",
+    linkedIn: "لينكدإن",
+    footerTitle: "نظرة إلى المستقبل.",
     footerDescription:
-      'بفضل تنوع مواقعنا الاستراتيجي، تمنح رؤية Navienty المتكاملة والشاملة تجربة سكن طلابي مبتكرة تخدم مختلف الاحتياجات بكفاءة عالية.',
-    quickLinks: 'روابط سريعة',
-    aboutUs: 'من نحن',
-    board: 'الإدارة',
-    news: 'الأخبار',
-    contact: 'تواصل معنا',
-    contactUs: 'تواصل معنا',
-    footerEmail: 'info@navienty.com',
-    explore: 'استكشاف',
-    account: 'الحساب',
-    mobileLogin: 'تسجيل الدخول',
+      "بفضل تنوع مواقعنا الاستراتيجي، تمنح رؤية Navienty المتكاملة والشاملة تجربة سكن طلابي مبتكرة تخدم مختلف الاحتياجات بكفاءة عالية.",
+    quickLinks: "روابط سريعة",
+    aboutUs: "من نحن",
+    board: "الإدارة",
+    news: "الأخبار",
+    contact: "تواصل معنا",
+    contactUs: "تواصل معنا",
+    footerEmail: "info@navienty.com",
+    explore: "استكشاف",
+    account: "الحساب",
+    mobileLogin: "تسجيل الدخول",
     copyright: `© ${new Date().getFullYear()} نافينتي | جميع الحقوق محفوظة.`,
   },
-} as const
+} as const;
 
 function normalizeLanguage(value?: string): SupportedLanguage {
-  return value === 'ar' ? 'ar' : 'en'
+  return value === "ar" ? "ar" : "en";
 }
 
 function normalizeCurrency(value?: string): SupportedCurrency {
-  const upper = value?.toUpperCase()
+  const upper = value?.toUpperCase();
   return SUPPORTED_CURRENCIES.includes(upper as SupportedCurrency)
     ? (upper as SupportedCurrency)
-    : 'EGP'
+    : "EGP";
 }
 
 function normalizeGender(value?: string | null): NormalizedGender {
-  const normalized = value?.toLowerCase().trim()
+  const normalized = value?.toLowerCase().trim();
 
-  if (normalized === 'boys') return 'boys'
-  if (normalized === 'girls') return 'girls'
+  if (normalized === "boys") return "boys";
+  if (normalized === "girls") return "girls";
 
-  return null
+  return null;
 }
 
 function normalizeAvailabilityStatusForUi(
-  status?: string
+  status?: string,
 ): NormalizedAvailabilityStatus {
   const normalized = status
     ?.toLowerCase()
     .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 
-  if (!normalized) return 'unknown'
-
-  if (
-    normalized === 'available' ||
-    normalized === 'partial reserved' ||
-    normalized === 'partially reserved'
-  ) {
-    return 'available'
-  }
+  if (!normalized) return "unknown";
 
   if (
-    normalized === 'reserved' ||
-    normalized === 'full reserved' ||
-    normalized === 'fully reserved'
+    normalized === "available" ||
+    normalized === "partial reserved" ||
+    normalized === "partially reserved"
   ) {
-    return 'reserved'
+    return "available";
   }
 
-  if (normalized === 'unavailable') {
-    return 'unavailable'
+  if (
+    normalized === "reserved" ||
+    normalized === "full reserved" ||
+    normalized === "fully reserved"
+  ) {
+    return "reserved";
   }
 
-  return 'unknown'
+  if (normalized === "unavailable") {
+    return "unavailable";
+  }
+
+  return "unknown";
 }
 
 function translateAvailabilityStatus(
   value: string,
-  language: SupportedLanguage
+  language: SupportedLanguage,
 ) {
-  const normalized = normalizeAvailabilityStatusForUi(value)
+  const normalized = normalizeAvailabilityStatusForUi(value);
 
-  if (normalized === 'available') return TRANSLATIONS[language].available
-  if (normalized === 'reserved') return TRANSLATIONS[language].reserved
-  if (normalized === 'unavailable') return TRANSLATIONS[language].unavailable
+  if (normalized === "available") return TRANSLATIONS[language].available;
+  if (normalized === "reserved") return TRANSLATIONS[language].reserved;
+  if (normalized === "unavailable") return TRANSLATIONS[language].unavailable;
 
-  return value
+  return value;
 }
 
 function translateRentalDuration(value: string, language: SupportedLanguage) {
-  const normalized = value?.toLowerCase?.() || ''
+  const normalized = value?.toLowerCase?.() || "";
 
-  if (normalized === 'daily') return TRANSLATIONS[language].daily
-  if (normalized === 'monthly') return TRANSLATIONS[language].monthly
+  if (normalized === "daily") return TRANSLATIONS[language].daily;
+  if (normalized === "monthly") return TRANSLATIONS[language].monthly;
 
-  return value
+  return value;
 }
 
 function getAvailabilityRank(status?: string) {
-  const normalized = normalizeAvailabilityStatusForUi(status)
+  const normalized = normalizeAvailabilityStatusForUi(status);
 
-  if (normalized === 'available') return 0
-  if (normalized === 'reserved') return 1
-  if (normalized === 'unavailable') return 2
-  return 3
+  if (normalized === "available") return 0;
+  if (normalized === "reserved") return 1;
+  if (normalized === "unavailable") return 2;
+  return 3;
 }
 
 function getStablePropertyRank(property: Property) {
-  const value = String(property.property_id || property.id || '')
-  let hash = 0
+  const value = String(property.property_id || property.id || "");
+  let hash = 0;
 
   for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) % 1000000007
+    hash = (hash * 31 + value.charCodeAt(index)) % 1000000007;
   }
 
-  return hash
+  return hash;
 }
 
 function normalizeOptionCode(value?: string | null) {
   return value
     ?.toLowerCase()
     .trim()
-    .replace(/[-\s]+/g, '_')
+    .replace(/[-\s]+/g, "_");
 }
 
 function getOptionPriority(code?: string | null) {
-  const normalizedCode = normalizeOptionCode(code)
-  const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode)
+  const normalizedCode = normalizeOptionCode(code);
+  const index = PRICE_PRIORITY.indexOf(normalizedCode as PricePriorityCode);
 
-  return index === -1 ? Number.POSITIVE_INFINITY : index
+  return index === -1 ? Number.POSITIVE_INFINITY : index;
 }
 
 function isUsablePriceOption(option: {
-  code?: string | null
-  option_code?: string | null
-  price_egp?: number | null
-  is_active?: boolean | null
-  deleted_at?: string | null
+  code?: string | null;
+  option_code?: string | null;
+  price_egp?: number | null;
+  is_active?: boolean | null;
+  deleted_at?: string | null;
 }) {
-  const code = normalizeOptionCode(option.option_code || option.code)
-  const price = Number(option.price_egp)
+  const code = normalizeOptionCode(option.option_code || option.code);
+  const price = Number(option.price_egp);
 
   return (
     !!code &&
@@ -442,7 +434,7 @@ function isUsablePriceOption(option: {
     !option.deleted_at &&
     Number.isFinite(price) &&
     price >= 0
-  )
+  );
 }
 
 function getDisplayPriceEgp(property: Property) {
@@ -452,7 +444,7 @@ function getDisplayPriceEgp(property: Property) {
       price_egp: option.price_egp,
       is_active: option.is_active,
       deleted_at: option.deleted_at,
-    })) ?? []
+    })) ?? [];
 
   const roomOptions =
     property.property_rooms?.flatMap((room) =>
@@ -461,27 +453,28 @@ function getDisplayPriceEgp(property: Property) {
         price_egp: option.price_egp,
         is_active: option.is_active,
         deleted_at: option.deleted_at,
-      }))
-    ) ?? []
+      })),
+    ) ?? [];
 
   const matchedOption = [...propertyOptions, ...roomOptions]
     .filter(isUsablePriceOption)
     .sort((a, b) => {
-      const priorityDiff = getOptionPriority(a.code) - getOptionPriority(b.code)
+      const priorityDiff =
+        getOptionPriority(a.code) - getOptionPriority(b.code);
 
-      if (priorityDiff !== 0) return priorityDiff
+      if (priorityDiff !== 0) return priorityDiff;
 
-      return Number(a.price_egp) - Number(b.price_egp)
-    })[0]
+      return Number(a.price_egp) - Number(b.price_egp);
+    })[0];
 
-  return matchedOption?.price_egp ?? property.price_egp
+  return matchedOption?.price_egp ?? property.price_egp;
 }
 
 async function getCurrencyRate(currency: SupportedCurrency) {
-  if (currency === 'EGP') return 1
+  if (currency === "EGP") return 1;
 
-  const accessKey = process.env.EXCHANGERATE_API_KEY
-  if (!accessKey) return 1
+  const accessKey = process.env.EXCHANGERATE_API_KEY;
+  if (!accessKey) return 1;
 
   try {
     const response = await fetch(
@@ -491,40 +484,40 @@ async function getCurrencyRate(currency: SupportedCurrency) {
           revalidate: 60 * 60 * 6,
           tags: [`navienty:currency-rate:${currency}`],
         },
-      }
-    )
+      },
+    );
 
-    const data = await response.json()
+    const data = await response.json();
 
     if (data?.success && data?.quotes) {
-      const egpFromUsd = data.quotes.USDEGP
-      const targetFromUsd = data.quotes[`USD${currency}`]
+      const egpFromUsd = data.quotes.USDEGP;
+      const targetFromUsd = data.quotes[`USD${currency}`];
 
       if (
-        typeof egpFromUsd === 'number' &&
-        typeof targetFromUsd === 'number' &&
+        typeof egpFromUsd === "number" &&
+        typeof targetFromUsd === "number" &&
         egpFromUsd > 0
       ) {
-        return targetFromUsd / egpFromUsd
+        return targetFromUsd / egpFromUsd;
       }
     }
 
     if (data?.rates?.EGP && data?.rates?.[currency]) {
-      const egpRate = data.rates.EGP
-      const targetRate = data.rates[currency]
+      const egpRate = data.rates.EGP;
+      const targetRate = data.rates[currency];
 
       if (
-        typeof egpRate === 'number' &&
-        typeof targetRate === 'number' &&
+        typeof egpRate === "number" &&
+        typeof targetRate === "number" &&
         egpRate > 0
       ) {
-        return targetRate / egpRate
+        return targetRate / egpRate;
       }
     }
 
-    return 1
+    return 1;
   } catch {
-    return 1
+    return 1;
   }
 }
 
@@ -532,248 +525,28 @@ function formatPrice(
   amountEgp: number,
   currency: SupportedCurrency,
   language: SupportedLanguage,
-  rate: number
+  rate: number,
 ) {
-  const converted = currency === 'EGP' ? amountEgp : amountEgp * rate
-  const locale = language === 'ar' ? 'ar-EG' : 'en-US'
+  const converted = currency === "EGP" ? amountEgp : amountEgp * rate;
+  const locale = language === "ar" ? "ar-EG" : "en-US";
 
   return new Intl.NumberFormat(locale, {
-    style: 'currency',
+    style: "currency",
     currency,
-    maximumFractionDigits: currency === 'IQD' || currency === 'LBP' ? 0 : 2,
-  }).format(converted)
+    maximumFractionDigits: currency === "IQD" || currency === "LBP" ? 0 : 2,
+  }).format(converted);
 }
 
 type PropertiesPageProps = {
-  searchParams: Promise<SearchParams>
-}
-
-const SKELETON_SECTION_COUNT = 3
-const SKELETON_MOBILE_CARD_COUNT = 4
-const SKELETON_DESKTOP_CARD_COUNT = 6
-
-function SkeletonBlock({ className = '' }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={`navienty-skeleton-shimmer ${className}`}
-    />
-  )
-}
-
-function PropertyCardSkeleton() {
-  return (
-    <div aria-hidden="true" className="min-w-0">
-      <SkeletonBlock className="aspect-[4/3] w-full rounded-[18px] md:rounded-[28px]" />
-
-      <div className="mt-2.5 space-y-2 md:mt-3">
-        <SkeletonBlock className="h-4 w-[82%] rounded-full" />
-        <SkeletonBlock className="h-3 w-[48%] rounded-full" />
-        <SkeletonBlock className="h-4 w-[62%] rounded-full" />
-      </div>
-    </div>
-  )
-}
-
-function PropertiesPageSkeleton() {
-  return (
-    <main
-      aria-busy="true"
-      aria-label="Loading properties"
-      className="relative min-h-screen overflow-hidden bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
-    >
-      <style>{`
-        @keyframes navienty-skeleton-loading {
-          0% {
-            transform: translateX(-115%);
-          }
-
-          100% {
-            transform: translateX(115%);
-          }
-        }
-
-        .navienty-skeleton-shimmer {
-          position: relative;
-          overflow: hidden;
-          background: #e8edf3;
-        }
-
-        .navienty-skeleton-shimmer::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          transform: translateX(-115%);
-          background: linear-gradient(
-            90deg,
-            transparent 0%,
-            rgba(255, 255, 255, 0.28) 24%,
-            rgba(255, 255, 255, 0.78) 50%,
-            rgba(255, 255, 255, 0.28) 76%,
-            transparent 100%
-          );
-          animation: navienty-skeleton-loading 1.35s ease-in-out infinite;
-          will-change: transform;
-        }
-
-        .navienty-skeleton-mobile-nav {
-          position: fixed;
-          left: max(14px, env(safe-area-inset-left, 0px));
-          right: max(14px, env(safe-area-inset-right, 0px));
-          bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
-          z-index: 120;
-          display: none;
-          height: 70px;
-          overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.72);
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.76);
-          box-shadow:
-            0 18px 45px rgba(15, 23, 42, 0.14),
-            inset 0 1px 0 rgba(255, 255, 255, 0.85);
-          backdrop-filter: blur(22px) saturate(1.35);
-          -webkit-backdrop-filter: blur(22px) saturate(1.35);
-        }
-
-        @media (max-width: 768px) {
-          .navienty-skeleton-mobile-nav {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            place-items: center;
-          }
-        }
-
-        @media (prefers-color-scheme: dark) {
-          .navienty-skeleton-shimmer {
-            background: #172033;
-          }
-
-          .navienty-skeleton-shimmer::after {
-            background: linear-gradient(
-              90deg,
-              transparent 0%,
-              rgba(255, 255, 255, 0.03) 24%,
-              rgba(255, 255, 255, 0.10) 50%,
-              rgba(255, 255, 255, 0.03) 76%,
-              transparent 100%
-            );
-          }
-
-          .navienty-skeleton-mobile-nav {
-            border-color: rgba(255, 255, 255, 0.14);
-            background: rgba(15, 23, 42, 0.72);
-            box-shadow:
-              0 18px 45px rgba(0, 0, 0, 0.34),
-              inset 0 1px 0 rgba(255, 255, 255, 0.10);
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .navienty-skeleton-shimmer::after {
-            animation: none;
-            display: none;
-          }
-        }
-      `}</style>
-
-      <span className="sr-only">Loading properties</span>
-
-      <header className="border-b border-slate-100 bg-white/95 dark:border-slate-800 dark:bg-[#050816]/95">
-        <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5 lg:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <SkeletonBlock className="h-11 w-11 shrink-0 rounded-2xl md:h-14 md:w-14" />
-
-            <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-              <SkeletonBlock className="h-14 w-full max-w-3xl rounded-full" />
-            </div>
-
-            <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" />
-          </div>
-
-          <div className="mt-4 md:hidden">
-            <SkeletonBlock className="h-14 w-full rounded-full" />
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        <section className="mb-10 space-y-10 md:mb-14 md:space-y-12">
-          {Array.from({ length: SKELETON_SECTION_COUNT }).map((_, sectionIndex) => (
-            <div key={`skeleton-section-${sectionIndex}`}>
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <SkeletonBlock className="h-6 w-44 rounded-full md:h-7 md:w-64" />
-                <SkeletonBlock className="h-7 w-7 rounded-full md:hidden" />
-              </div>
-
-              <div className="flex gap-3.5 overflow-hidden pb-4 md:gap-4 lg:hidden">
-                {Array.from({ length: SKELETON_MOBILE_CARD_COUNT }).map(
-                  (_, cardIndex) => (
-                    <div
-                      key={`skeleton-mobile-${sectionIndex}-${cardIndex}`}
-                      className="min-w-[220px] max-w-[220px] shrink-0 md:min-w-[200px] md:max-w-[200px]"
-                    >
-                      <PropertyCardSkeleton />
-                    </div>
-                  )
-                )}
-              </div>
-
-              <div className="hidden gap-4 pb-4 lg:grid lg:grid-cols-6">
-                {Array.from({ length: SKELETON_DESKTOP_CARD_COUNT }).map(
-                  (_, cardIndex) => (
-                    <PropertyCardSkeleton
-                      key={`skeleton-desktop-${sectionIndex}-${cardIndex}`}
-                    />
-                  )
-                )}
-              </div>
-            </div>
-          ))}
-        </section>
-      </div>
-
-      <div
-        aria-hidden="true"
-        className="hidden min-h-[320px] bg-[#054aff] px-8 py-16 md:block"
-      >
-        <div className="mx-auto grid max-w-7xl grid-cols-[1.5fr_0.7fr_0.8fr] gap-12">
-          <SkeletonBlock className="h-20 w-[78%] rounded-3xl opacity-30" />
-
-          <div className="space-y-4">
-            <SkeletonBlock className="h-5 w-28 rounded-full opacity-30" />
-            <SkeletonBlock className="h-4 w-24 rounded-full opacity-30" />
-            <SkeletonBlock className="h-4 w-20 rounded-full opacity-30" />
-            <SkeletonBlock className="h-4 w-24 rounded-full opacity-30" />
-          </div>
-
-          <div className="space-y-4">
-            <SkeletonBlock className="h-5 w-28 rounded-full opacity-30" />
-            <SkeletonBlock className="h-4 w-48 rounded-full opacity-30" />
-          </div>
-        </div>
-      </div>
-
-      <div className="navienty-skeleton-mobile-nav" aria-hidden="true">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div
-            key={`skeleton-mobile-nav-${index}`}
-            className="flex flex-col items-center gap-2"
-          >
-            <SkeletonBlock className="h-5 w-5 rounded-full" />
-            <SkeletonBlock className="h-2.5 w-10 rounded-full" />
-          </div>
-        ))}
-      </div>
-    </main>
-  )
-}
+  searchParams: Promise<SearchParams>;
+};
 
 export default function PropertiesPage({ searchParams }: PropertiesPageProps) {
   return (
-    <Suspense fallback={<PropertiesPageSkeleton />}>
+    <Suspense fallback={<PropertiesLoading />}>
       <PropertiesPageContent searchParams={searchParams} />
     </Suspense>
-  )
+  );
 }
 
 async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
@@ -785,37 +558,24 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
     price_range,
     lang,
     currency,
-  } = await searchParams
+  } = await searchParams;
 
-  const selectedLanguage = normalizeLanguage(lang)
-  const selectedCurrency = normalizeCurrency(currency)
-  const t = TRANSLATIONS[selectedLanguage]
-  const isArabic = selectedLanguage === 'ar'
-  const currencyRate = await getCurrencyRate(selectedCurrency)
+  const selectedLanguage = normalizeLanguage(lang);
+  const selectedCurrency = normalizeCurrency(currency);
+  const t = TRANSLATIONS[selectedLanguage];
+  const isArabic = selectedLanguage === "ar";
+  const currencyRate = await getCurrencyRate(selectedCurrency);
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { cities, universities, areas, universityAreas, allPopularSource } =
+    await getCachedPropertiesPageData();
 
-  const isLoggedIn = !!user
-
-  const {
-    cities,
-    universities,
-    areas,
-    universityAreas,
-    allPopularSource,
-  } = await getCachedPropertiesPageData()
-
-  const sakanSeoPages = await getCachedSakanSeoPages()
+  const sakanSeoPages = await getCachedSakanSeoPages();
 
   const sakanPathByAreaId = new Map(
     (sakanSeoPages as SakanSeoPage[])
-      .filter((page) => page.page_type === 'area' && page.area_id && page.path)
-      .map((page) => [String(page.area_id), page.path])
-  )
-
+      .filter((page) => page.page_type === "area" && page.area_id && page.path)
+      .map((page) => [String(page.area_id), page.path]),
+  );
 
   const seoNavigationLinks = (sakanSeoPages as SakanSeoPage[])
     .filter(
@@ -823,151 +583,157 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         page.is_indexable &&
         page.published_properties_count >= 3 &&
         Boolean(page.path) &&
-        Boolean(page.seo_h1_ar || page.entity_name_ar)
+        Boolean(page.seo_h1_ar || page.entity_name_ar),
     )
     .slice(0, 12)
     .map((page) => ({
       href: page.path,
       label: page.seo_h1_ar || page.entity_name_ar,
       count: page.published_properties_count,
-    }))
+    }));
 
   const seoItemListJsonLd =
     seoNavigationLinks.length > 0
       ? {
-          '@context': 'https://schema.org',
-          '@type': 'ItemList',
-          name: 'Navienty student housing pages',
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          name: "Navienty student housing pages",
           itemListElement: seoNavigationLinks.map((item, index) => ({
-            '@type': 'ListItem',
+            "@type": "ListItem",
             position: index + 1,
             name: item.label,
             url: `${SITE_URL}${item.href}`,
           })),
         }
-      : null
+      : null;
 
   const propertiesCollectionJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: 'سكن طلاب قريب من الجامعة بدون عمولة',
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "سكن طلاب قريب من الجامعة بدون عمولة",
     description:
-      'صفحة بحث ومقارنة أماكن السكن الطلابي على Navienty حسب المدينة والمنطقة والأسعار.',
+      "صفحة بحث ومقارنة أماكن السكن الطلابي على Navienty حسب المدينة والمنطقة والأسعار.",
     url: `${SITE_URL}/properties`,
-    inLanguage: 'ar-EG',
+    inLanguage: "ar-EG",
     isPartOf: {
-      '@type': 'WebSite',
-      name: 'Navienty',
+      "@type": "WebSite",
+      name: "Navienty",
       url: SITE_URL,
     },
     about: [
-      { '@type': 'Thing', name: 'سكن طلاب' },
-      { '@type': 'Thing', name: 'سكن طالبات' },
-      { '@type': 'Thing', name: 'Student accommodation' },
+      { "@type": "Thing", name: "سكن طلاب" },
+      { "@type": "Thing", name: "سكن طالبات" },
+      { "@type": "Thing", name: "Student accommodation" },
     ],
-  }
+  };
 
   const buildPageLink = (updates: Partial<SearchParams> = {}) => {
-    const params = new URLSearchParams()
+    const params = new URLSearchParams();
 
     const nextRentalDuration =
       updates.rental_duration !== undefined
         ? updates.rental_duration
-        : rental_duration
+        : rental_duration;
 
-    const nextCityId = updates.city_id !== undefined ? updates.city_id : city_id
+    const nextCityId =
+      updates.city_id !== undefined ? updates.city_id : city_id;
 
     const nextUniversityId =
       updates.university_id !== undefined
         ? updates.university_id
-        : university_id
+        : university_id;
 
     const nextAreaId =
-      updates.area_id !== undefined ? updates.area_id : area_id
+      updates.area_id !== undefined ? updates.area_id : area_id;
 
     const nextPriceRange =
-      updates.price_range !== undefined ? updates.price_range : price_range
+      updates.price_range !== undefined ? updates.price_range : price_range;
 
     const nextLang =
-      updates.lang !== undefined ? updates.lang : selectedLanguage
+      updates.lang !== undefined ? updates.lang : selectedLanguage;
 
     const nextCurrency =
-      updates.currency !== undefined ? updates.currency : selectedCurrency
+      updates.currency !== undefined ? updates.currency : selectedCurrency;
 
-    if (nextRentalDuration) params.set('rental_duration', nextRentalDuration)
-    if (nextCityId) params.set('city_id', nextCityId)
-    if (nextUniversityId) params.set('university_id', nextUniversityId)
-    if (nextAreaId) params.set('area_id', nextAreaId)
-    if (nextPriceRange) params.set('price_range', nextPriceRange)
-    if (nextLang) params.set('lang', nextLang)
-    if (nextCurrency) params.set('currency', nextCurrency)
+    if (nextRentalDuration) params.set("rental_duration", nextRentalDuration);
+    if (nextCityId) params.set("city_id", nextCityId);
+    if (nextUniversityId) params.set("university_id", nextUniversityId);
+    if (nextAreaId) params.set("area_id", nextAreaId);
+    if (nextPriceRange) params.set("price_range", nextPriceRange);
+    if (nextLang) params.set("lang", nextLang);
+    if (nextCurrency) params.set("currency", nextCurrency);
 
-    const queryString = params.toString()
-    return queryString ? `/properties?${queryString}` : '/properties'
-  }
+    const queryString = params.toString();
+    return queryString ? `/properties?${queryString}` : "/properties";
+  };
 
   const buildPropertyHref = (propertyId: string) => {
-    const params = new URLSearchParams()
-    params.set('lang', selectedLanguage)
-    params.set('currency', selectedCurrency)
-    return `/properties/${propertyId}?${params.toString()}`
-  }
+    const params = new URLSearchParams();
+    params.set("lang", selectedLanguage);
+    params.set("currency", selectedCurrency);
+    return `/properties/${propertyId}?${params.toString()}`;
+  };
 
   const buildSimpleNavLink = (
     path: string,
-    updates: Partial<SearchParams> = {}
+    updates: Partial<SearchParams> = {},
   ) => {
-    const params = new URLSearchParams()
-    params.set('lang', updates.lang ?? selectedLanguage)
-    params.set('currency', updates.currency ?? selectedCurrency)
-    const queryString = params.toString()
-    return queryString ? `${path}?${queryString}` : path
-  }
+    const params = new URLSearchParams();
+    params.set("lang", updates.lang ?? selectedLanguage);
+    params.set("currency", updates.currency ?? selectedCurrency);
+    const queryString = params.toString();
+    return queryString ? `${path}?${queryString}` : path;
+  };
 
-  const cityMap = new Map<string, string>()
+  const footerQuickLinks = [
+    { label: t.aboutUs, href: buildSimpleNavLink("/about") },
+    { label: t.board, href: buildSimpleNavLink("/board") },
+    { label: t.contact, href: buildSimpleNavLink("/contact") },
+  ];
+
+  const cityMap = new Map<string, string>();
   for (const city of (cities as City[]) ?? []) {
-    cityMap.set(String(city.id), isArabic ? city.name_ar : city.name_en)
+    cityMap.set(String(city.id), isArabic ? city.name_ar : city.name_en);
   }
 
-
-  const areaMap = new Map<string, string>()
+  const areaMap = new Map<string, string>();
   for (const area of (areas as PropertyArea[]) ?? []) {
     areaMap.set(
       String(area.id),
-      isArabic ? area.name_ar || area.name_en : area.name_en
-    )
+      isArabic ? area.name_ar || area.name_en : area.name_en,
+    );
   }
 
   const sourceProperties = ((allPopularSource as Property[]) ?? [])
     .filter(
       (property) =>
         normalizeAvailabilityStatusForUi(property.availability_status) !==
-        'unavailable'
+        "unavailable",
     )
     .sort((a, b) => {
       const availabilityDiff =
         getAvailabilityRank(a.availability_status) -
-        getAvailabilityRank(b.availability_status)
+        getAvailabilityRank(b.availability_status);
 
-      if (availabilityDiff !== 0) return availabilityDiff
+      if (availabilityDiff !== 0) return availabilityDiff;
 
-      return getStablePropertyRank(a) - getStablePropertyRank(b)
-    })
+      return getStablePropertyRank(a) - getStablePropertyRank(b);
+    });
 
-  const POPULAR_SECTION_ITEM_LIMIT = 10
-  const POPULAR_SECTIONS_LIMIT = 10
+  const POPULAR_SECTION_ITEM_LIMIT = 10;
+  const POPULAR_SECTIONS_LIMIT = 10;
 
-  const areaSectionsMap = new Map<string, Property[]>()
+  const areaSectionsMap = new Map<string, Property[]>();
 
   for (const property of sourceProperties) {
-    if (!property.area_id) continue
+    if (!property.area_id) continue;
 
-    const areaKey = String(property.area_id)
-    const existing = areaSectionsMap.get(areaKey) ?? []
+    const areaKey = String(property.area_id);
+    const existing = areaSectionsMap.get(areaKey) ?? [];
 
     if (existing.length < POPULAR_SECTION_ITEM_LIMIT) {
-      existing.push(property)
-      areaSectionsMap.set(areaKey, existing)
+      existing.push(property);
+      areaSectionsMap.set(areaKey, existing);
     }
   }
 
@@ -976,79 +742,81 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
     .slice(0, POPULAR_SECTIONS_LIMIT)
     .map(([key, items]) => ({
       id: key,
-      type: 'area' as const,
+      type: "area" as const,
       title: `${t.popularHomesIn} ${areaMap.get(key)}`,
       items,
-    }))
+    }));
 
   const buildSearchLink = ({ areaId }: { areaId?: string }) => {
     if (areaId) {
-      const seoPath = sakanPathByAreaId.get(String(areaId))
+      const seoPath = sakanPathByAreaId.get(String(areaId));
 
-      if (seoPath) return seoPath
+      if (seoPath) return seoPath;
     }
 
-    const params = new URLSearchParams()
+    const params = new URLSearchParams();
 
-    if (areaId) params.set('area_id', areaId)
+    if (areaId) params.set("area_id", areaId);
 
-    params.set('lang', selectedLanguage)
-    params.set('currency', selectedCurrency)
+    params.set("lang", selectedLanguage);
+    params.set("currency", selectedCurrency);
 
-    return `/properties/search?${params.toString()}`
-  }
+    return `/properties/search?${params.toString()}`;
+  };
 
   const getCoverImage = (property: Property) => {
     const images = (property.property_images ?? []).filter(
-      (image) => !!image.image_url
-    )
+      (image) => !!image.image_url,
+    );
 
     if (images.length === 0) {
-      return null
+      return null;
     }
 
-    const coverImage = images.find((image) => image.is_cover === true)
+    const coverImage = images.find((image) => image.is_cover === true);
 
     if (coverImage?.image_url) {
-      return coverImage.image_url
+      return coverImage.image_url;
     }
 
-    return [...images].sort((a, b) => {
-      const sortOrderA = a.sort_order ?? Number.POSITIVE_INFINITY
-      const sortOrderB = b.sort_order ?? Number.POSITIVE_INFINITY
+    return (
+      [...images].sort((a, b) => {
+        const sortOrderA = a.sort_order ?? Number.POSITIVE_INFINITY;
+        const sortOrderB = b.sort_order ?? Number.POSITIVE_INFINITY;
 
-      return sortOrderA - sortOrderB
-    })[0]?.image_url ?? null
-  }
+        return sortOrderA - sortOrderB;
+      })[0]?.image_url ?? null
+    );
+  };
 
   const renderGenderMeta = (property: Property) => {
-    const gender = normalizeGender(property.gender)
+    const gender = normalizeGender(property.gender);
 
-    if (!gender) return null
+    if (!gender) return null;
 
     const label =
-      selectedLanguage === 'ar'
-        ? gender === 'boys'
-          ? 'ولاد فقط'
-          : 'بنات فقط'
-        : gender === 'boys'
-          ? 'Boys only'
-          : 'Girls only'
+      selectedLanguage === "ar"
+        ? gender === "boys"
+          ? "ولاد فقط"
+          : "بنات فقط"
+        : gender === "boys"
+          ? "Boys only"
+          : "Girls only";
 
-    return <span className="property-meta-gender">{label}</span>
-  }
+    return <span className="property-meta-gender">{label}</span>;
+  };
 
   const renderSeeAllCard = (sectionId: string, items: Property[]) => {
     const images = items
       .map(getCoverImage)
       .filter(Boolean)
-      .slice(0, 3) as string[]
+      .slice(0, 3) as string[];
 
     return (
       <Link
         key={`see-all-area-${sectionId}`}
         href={buildSearchLink({ areaId: sectionId })}
-        className="group block min-w-[150px] max-w-[150px] shrink-0 snap-start md:min-w-[160px] md:max-w-[160px]"
+        className="group block min-w-[240px] max-w-[240px] shrink-0 snap-start md:min-w-[260px] md:max-w-[260px]"
       >
         <div className="relative flex aspect-[4/3] w-full items-center justify-center rounded-xl transition duration-300 md:rounded-3xl">
           <div className="relative flex h-full w-full items-center justify-center">
@@ -1074,7 +842,9 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
               />
             ) : (
               <div className="absolute z-10 flex h-[70%] w-[70%] items-center justify-center rounded-lg border-[2px] border-white bg-gray-100 shadow-md transition-transform duration-300 group-hover:scale-105 dark:border-slate-700 dark:bg-slate-800 md:rounded-xl md:border-[3px]">
-                <span className="text-xl text-gray-400 dark:text-slate-500 md:text-2xl">→</span>
+                <span className="text-xl text-gray-400 dark:text-slate-500 md:text-2xl">
+                  →
+                </span>
               </div>
             )}
           </div>
@@ -1086,17 +856,17 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
           </span>
         </div>
       </Link>
-    )
-  }
+    );
+  };
 
   const renderPropertyImage = (property: Property, badgeText: string) => {
-    const coverImage = getCoverImage(property)
+    const coverImage = getCoverImage(property);
     const normalizedStatus = normalizeAvailabilityStatusForUi(
-      property.availability_status
-    )
+      property.availability_status,
+    );
 
-    const isReserved = normalizedStatus === 'reserved'
-    const isAvailable = normalizedStatus === 'available'
+    const isReserved = normalizedStatus === "reserved";
+    const isAvailable = normalizedStatus === "available";
 
     return (
       <div className="property-media-card group/image relative aspect-[4/3] overflow-hidden rounded-[18px] bg-gray-100 shadow-[0_10px_30px_rgba(15,23,42,0.10)] dark:bg-slate-800 dark:shadow-[0_10px_30px_rgba(0,0,0,0.35)] md:rounded-[28px]">
@@ -1115,104 +885,79 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         {(isAvailable || isReserved) && (
           <div
             className={`status-ribbon ${
-              isReserved ? 'status-ribbon--reserved' : 'status-ribbon--available'
+              isReserved
+                ? "status-ribbon--reserved"
+                : "status-ribbon--available"
             }`}
           >
             <span className="status-ribbon__inner">{badgeText}</span>
           </div>
         )}
       </div>
-    )
-  }
+    );
+  };
 
-  const renderPropertyCard = (property: Property) => {
-  const displayPriceEgp = getDisplayPriceEgp(property)
+  const renderPropertyCard = (property: Property, responsiveClassName = "") => {
+    const displayPriceEgp = getDisplayPriceEgp(property);
 
-  return (
-    <Link
-      key={property.id}
-      href={buildPropertyHref(property.property_id)}
-      className="group block min-w-[220px] max-w-[220px] shrink-0 snap-start md:min-w-[200px] md:max-w-[200px]"
-    >
-      {renderPropertyImage(
-        property,
-        translateAvailabilityStatus(
-          property.availability_status,
-          selectedLanguage
-        )
-      )}
-
-      <div className="mt-2.5 space-y-1.5 md:mt-3">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 dark:text-slate-100 md:text-[17px]">
-            {isArabic ? property.title_ar : property.title_en}
-          </h3>
-        </div>
-
-        {renderGenderMeta(property) && (
-          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-400 md:text-[13px]">
-            {renderGenderMeta(property)}
-          </div>
+    return (
+      <Link
+        key={property.id}
+        href={buildPropertyHref(property.property_id)}
+        className={`group block min-w-[240px] max-w-[240px] shrink-0 snap-start md:min-w-[260px] md:max-w-[260px] ${responsiveClassName}`}
+      >
+        {renderPropertyImage(
+          property,
+          translateAvailabilityStatus(
+            property.availability_status,
+            selectedLanguage,
+          ),
         )}
 
-        <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
-          <span className="font-semibold text-slate-950 dark:text-white">
-            {formatPrice(
-              displayPriceEgp,
-              selectedCurrency,
-              selectedLanguage,
-              currencyRate
-            )}
-          </span>{' '}
-          <span className="text-[12px] text-slate-500 dark:text-slate-400 md:text-[12px]">
-            / {property.rental_duration === 'daily' ? t.night : t.month}
-          </span>
-        </p>
-      </div>
-    </Link>
-  )
-}
+        <div className="mt-2.5 space-y-1.5 md:mt-3.5">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 dark:text-slate-100 md:text-[18px]">
+              {isArabic ? property.title_ar : property.title_en}
+            </h3>
+          </div>
 
-  const primaryMenuLinks = [
-    {
-      label: isLoggedIn ? t.account : t.login,
-      href: isLoggedIn
-        ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/account-login'),
-    },
-    { label: t.join, href: buildSimpleNavLink('/community') },
-  ]
+          {renderGenderMeta(property) && (
+            <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-400 md:text-[14px]">
+              {renderGenderMeta(property)}
+            </div>
+          )}
 
-  const socialMenuLinks = [
-    { label: t.facebook, href: 'https://www.facebook.com/' },
-    { label: t.instagram, href: 'https://www.instagram.com/' },
-    { label: t.linkedIn, href: 'https://www.linkedin.com/' },
-  ]
-
-  const footerQuickLinks = [
-    { label: t.aboutUs, href: buildSimpleNavLink('/about') },
-    { label: t.board, href: buildSimpleNavLink('/board') },
-    { label: t.contact, href: buildSimpleNavLink('/contact') },
-  ]
-
-  const menuFooterLinks: MenuFooterLink[] = [
-    ...footerQuickLinks,
-    { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
-  ]
+          <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[16px]">
+            <span className="font-semibold text-slate-950 dark:text-white">
+              {formatPrice(
+                displayPriceEgp,
+                selectedCurrency,
+                selectedLanguage,
+                currencyRate,
+              )}
+            </span>{" "}
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 md:text-[13px]">
+              / {property.rental_duration === "daily" ? t.night : t.month}
+            </span>
+          </p>
+        </div>
+      </Link>
+    );
+  };
 
   const searchBarProps = {
     cities: (cities as City[]) ?? [],
     universities: (universities as University[]) ?? [],
     areas: (areas as PropertyArea[]) ?? [],
     universityAreas: (universityAreas as UniversityArea[]) ?? [],
-    initialCityId: city_id ?? '',
-    initialUniversityId: university_id ?? '',
-    initialAreaId: area_id ?? '',
-    initialRentalDuration: rental_duration ?? '',
-    initialPriceRange: price_range ?? '',
+    initialCityId: city_id ?? "",
+    initialUniversityId: university_id ?? "",
+    initialAreaId: area_id ?? "",
+    initialRentalDuration: rental_duration ?? "",
+    initialPriceRange: price_range ?? "",
     language: selectedLanguage,
     currency: selectedCurrency,
-    locationMode: 'city-area' as const,
+    locationMode: "city-area" as const,
     labels: {
       city: t.city,
       university: t.university,
@@ -1234,22 +979,25 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
       daily: t.daily,
       monthly: t.monthly,
     },
-  }
+  };
 
-  const nextMobileLanguage: SupportedLanguage = selectedLanguage === 'ar' ? 'en' : 'ar'
-  const mobileLanguageHref = buildPageLink({ lang: nextMobileLanguage })
-  const mobileLanguageLabel = selectedLanguage === 'ar' ? t.english : t.arabic
+  const nextMobileLanguage: SupportedLanguage =
+    selectedLanguage === "ar" ? "en" : "ar";
+  const mobileLanguageHref = buildPageLink({ lang: nextMobileLanguage });
+  const mobileLanguageLabel = selectedLanguage === "ar" ? t.english : t.arabic;
   const mobileLanguageAriaLabel =
-    selectedLanguage === 'ar' ? 'Switch language to English' : 'تغيير اللغة إلى العربية'
+    selectedLanguage === "ar"
+      ? "Switch language to English"
+      : "تغيير اللغة إلى العربية";
 
   return (
     <main
-      dir={isArabic ? 'rtl' : 'ltr'}
+      dir={isArabic ? "rtl" : "ltr"}
       className="relative min-h-screen bg-white pb-32 text-gray-700 dark:bg-[#050816] dark:text-slate-100 md:pb-0"
     >
       <Script
         id="navienty-default-language-script"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function () {
@@ -1301,39 +1049,28 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         }}
       />
 
-      <Script
+      <script
         id="properties-collection-jsonld"
         type="application/ld+json"
-        strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(propertiesCollectionJsonLd).replace(/</g, '\\u003c'),
+          __html: JSON.stringify(propertiesCollectionJsonLd).replace(
+            /</g,
+            "\\u003c",
+          ),
         }}
       />
 
       {seoItemListJsonLd && (
-        <Script
+        <script
           id="properties-sakan-seo-item-list"
           type="application/ld+json"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(seoItemListJsonLd).replace(/</g, '\\u003c'),
+            __html: JSON.stringify(seoItemListJsonLd).replace(/</g, "\\u003c"),
           }}
         />
       )}
 
-      <input
-        id="nav-menu-toggle"
-        type="checkbox"
-        className="peer sr-only"
-        aria-hidden="true"
-      />
-
       <style>{`
-        :root {
-          --menu-blue: #054aff;
-          --menu-cream: #f2ead8;
-          --menu-cream-soft: rgba(242, 234, 216, 0.92);
-        }
 
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
@@ -1350,320 +1087,6 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
           max-width: none !important;
         }
 
-        .navienty-logo {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          overflow: hidden;
-          text-decoration: none;
-          transform: translateY(-7px);
-        }
-
-        .navienty-logo-icon {
-          width: 56px;
-          height: 56px;
-          object-fit: contain;
-          flex-shrink: 0;
-          display: block;
-        }
-
-        .navienty-logo-text-wrap {
-          max-width: 0;
-          opacity: 0;
-          overflow: hidden;
-          transform: translateX(-6px);
-          transition:
-            max-width 0.35s ease,
-            opacity 0.25s ease,
-            transform 0.35s ease;
-          display: flex;
-          align-items: center;
-        }
-
-        .navienty-logo:hover .navienty-logo-text-wrap,
-        .navienty-logo:focus-visible .navienty-logo-text-wrap {
-          max-width: 120px;
-          opacity: 1;
-          transform: translateX(0);
-        }
-
-        .navienty-logo-text {
-          width: 112px;
-          min-width: 112px;
-          height: auto;
-          object-fit: contain;
-          display: block;
-          transform: translateY(-2px);
-        }
-
-        .navienty-logo-mobile {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          text-decoration: none;
-        }
-
-        .navienty-logo-mobile img {
-          width: 42px;
-          height: 42px;
-          object-fit: contain;
-          display: block;
-        }
-
-        .menu-trigger {
-          width: 40px;
-          height: 40px;
-          background: transparent;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-
-        .menu-trigger:hover {
-          background: rgba(255, 255, 255, 0.08);
-        }
-
-        .menu-trigger-lines {
-          position: relative;
-          width: 26px;
-          height: 10px;
-          display: block;
-        }
-
-        .menu-trigger-lines span {
-          position: absolute;
-          left: 0;
-          width: 100%;
-          height: 2px;
-          background: #000000;
-          border-radius: 2px;
-        }
-
-        .menu-trigger-lines span:nth-child(1) {
-          top: 0;
-        }
-
-        .menu-trigger-lines span:nth-child(2) {
-          bottom: 0;
-        }
-
-        .mega-menu-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 140;
-          background: var(--menu-blue);
-          color: var(--menu-cream);
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transform: translateY(-8px);
-          transition:
-            opacity 0.26s ease,
-            visibility 0.26s ease,
-            transform 0.26s ease;
-        }
-
-        .peer:checked ~ .mega-menu-overlay {
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
-          transform: translateY(0);
-        }
-
-        .mega-menu-wrap {
-          position: relative;
-          min-height: 100dvh;
-          padding: 38px 56px 38px;
-        }
-
-        .mega-menu-top {
-          position: absolute;
-          left: 56px;
-          right: 56px;
-          top: 36px;
-          height: 56px;
-          z-index: 3;
-        }
-
-        .mega-menu-close {
-          position: absolute;
-          right: 0;
-          top: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 16px;
-          cursor: pointer;
-          color: var(--menu-cream);
-          font-size: 18px;
-          font-weight: 600;
-          text-decoration: none;
-          letter-spacing: -0.02em;
-        }
-
-        .mega-menu-close-line {
-          width: 46px;
-          height: 2px;
-          border-radius: 999px;
-          background: currentColor;
-          display: inline-block;
-          transform: translateY(-1px);
-        }
-
-        .mega-menu-logo {
-          position: absolute;
-          left: 50%;
-          top: -60px;
-          transform: translateX(-50%);
-          z-index: 2;
-        }
-
-        .mega-menu-logo img {
-          width: 160px;
-          height: auto;
-          object-fit: contain;
-          display: block;
-        }
-
-        .mega-menu-investors {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-size: 18px;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .mega-menu-investors:hover {
-          opacity: 0.88;
-        }
-
-        .mega-menu-body {
-          position: relative;
-          min-height: calc(100dvh - 76px);
-          padding-top: 100px;
-          width: 100%;
-          padding-left: 56px;
-          padding-right: 56px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .mega-menu-left {
-          position: absolute;
-          left: 56px;
-          bottom: 36px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          width: 220px;
-          min-width: 220px;
-          min-height: auto;
-        }
-
-        .mega-menu-left-spacer {
-          display: none;
-        }
-
-        .mega-menu-left-bottom {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 10px;
-          width: 100%;
-          padding-bottom: 0;
-        }
-
-        .mega-menu-small-link {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-size: 22px;
-          line-height: 1.28;
-          font-weight: 600;
-          letter-spacing: -0.03em;
-          display: block;
-          width: fit-content;
-        }
-
-        .mega-menu-small-link:hover {
-          opacity: 0.88;
-        }
-
-        .mega-menu-right {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          min-width: 0;
-          padding-top: 0;
-          transform: translateY(-100px);
-        }
-
-        .mega-menu-main-links {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 0;
-          width: 100%;
-          max-width: 900px;
-          text-align: center;
-        }
-
-        .mega-menu-main-link {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 64px;
-          line-height: 1.15;
-          letter-spacing: -0.075em;
-          display: block;
-          width: fit-content;
-        }
-
-        .mega-menu-main-link:hover {
-          opacity: 0.9;
-        }
-
-        .mega-menu-footer-links {
-          position: absolute;
-          right: 56px;
-          bottom: 12px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 10px;
-          max-width: 240px;
-          text-align: right;
-        }
-
-        .mega-menu-footer-link {
-          color: rgba(242, 234, 216, 0.88);
-          text-decoration: none;
-          font-size: 18px;
-          line-height: 1.35;
-          font-weight: 500;
-          letter-spacing: -0.02em;
-          transition:
-            opacity 0.2s ease,
-            transform 0.2s ease,
-            color 0.2s ease;
-        }
-
-        .mega-menu-footer-link:hover {
-          opacity: 1;
-          color: var(--menu-cream);
-          transform: translateX(-2px);
-        }
-
-        .mega-menu-footer-link--email {
-          margin-top: 8px;
-          opacity: 0.76;
-          font-size: 16px;
-        }
 
         .property-media-card {
           isolation: isolate;
@@ -1835,9 +1258,7 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .mobile-bottom-nav {
-            transition: none;
-          }
+          .mobile-bottom-nav,
         }
 
         .mobile-bottom-nav::before {
@@ -2057,101 +1478,7 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         }
 
         @media (max-width: 1024px) {
-          .mega-menu-wrap {
-            padding: 26px 24px 28px;
-            overflow-y: auto;
-          }
 
-          .mega-menu-top {
-            left: 24px;
-            right: 24px;
-            top: 24px;
-            height: 40px;
-          }
-
-          .mega-menu-close {
-            right: 0;
-            top: 0;
-            font-size: 16px;
-            gap: 12px;
-          }
-
-          .mega-menu-close-line {
-            width: 34px;
-          }
-
-          .mega-menu-logo {
-            top: 68px;
-          }
-
-          .mega-menu-logo img {
-            width: 74px;
-            height: 74px;
-          }
-
-          .mega-menu-investors {
-            font-size: 16px;
-          }
-
-          .mega-menu-body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: auto;
-            padding-top: 160px;
-            padding-left: 0;
-            padding-right: 0;
-            padding-bottom: 180px;
-          }
-
-          .mega-menu-left {
-            position: absolute;
-            left: 24px;
-            bottom: 28px;
-            width: auto;
-            min-width: 0;
-          }
-
-          .mega-menu-left-bottom {
-            width: 100%;
-            padding-bottom: 0;
-            gap: 12px;
-          }
-
-          .mega-menu-right {
-            width: 100%;
-            min-width: 0;
-            padding-top: 0;
-          }
-
-          .mega-menu-main-links {
-            gap: 6px;
-            max-width: 100%;
-          }
-
-          .mega-menu-main-link {
-            font-size: clamp(54px, 14.4vw, 86px);
-            line-height: 1.05;
-            white-space: normal;
-          }
-
-          .mega-menu-small-link {
-            font-size: 24px;
-          }
-
-          .mega-menu-footer-links {
-            right: 24px;
-            bottom: 28px;
-            max-width: 220px;
-          }
-
-          .mega-menu-footer-link {
-            font-size: 16px;
-          }
-
-          .mega-menu-footer-link--email {
-            font-size: 15px;
-          }
 
           .status-ribbon {
             width: 88px;
@@ -2174,48 +1501,17 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
           }
         }
 
+        @media (max-width: 860px) {
+
+
+        }
+
         @media (max-width: 768px) {
-          .navienty-logo-mobile,
-          .menu-trigger {
-            display: none !important;
-          }
 
           .mobile-bottom-nav {
             display: block;
           }
 
-          .mega-menu-body {
-            padding-bottom: 220px;
-          }
-
-          .mega-menu-left {
-            left: 24px;
-            bottom: 24px;
-          }
-
-          .mega-menu-footer-links {
-            left: 24px;
-            right: 24px;
-            bottom: 96px;
-            align-items: flex-start;
-            text-align: left;
-            max-width: none;
-            gap: 8px;
-          }
-
-          [dir='rtl'] .mega-menu-footer-links {
-            align-items: flex-end;
-            text-align: right;
-          }
-
-          .mega-menu-footer-link {
-            font-size: 16px;
-          }
-
-          .mega-menu-footer-link--email {
-            margin-top: 6px;
-            font-size: 14px;
-          }
 
           .footer-esaf-container {
             padding: 48px 22px 28px;
@@ -2268,9 +1564,7 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
 
 
         @media (prefers-color-scheme: dark) {
-          .menu-trigger-lines span {
-            background: #f8fafc;
-          }
+
 
           .property-meta-gender {
             color: #94a3b8;
@@ -2325,102 +1619,114 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         }
       `}</style>
 
-      <PropertiesHeader
-        homeHref={buildPageLink()}
-        searchBarProps={searchBarProps}
-        t={{ startSearch: t.startSearch }}
-      />
+      <section
+        aria-labelledby="navienty-properties-hero-heading"
+        className="relative isolate z-[100] mb-10 min-h-[460px] overflow-visible md:mb-14 md:min-h-[540px]"
+      >
+        <div className="absolute inset-0 overflow-hidden rounded-b-[42px] bg-[#182235] md:rounded-b-[78px]">
+          <picture className="absolute inset-0 block h-full w-full">
+            <source
+              media="(max-width: 767px)"
+              srcSet={HOME_HERO_MOBILE_IMAGE}
+            />
+            <img
+              src={HOME_HERO_DESKTOP_IMAGE}
+              alt={
+                isArabic
+                  ? "طلاب يستمتعون بتجربة السكن الطلابي مع نافينتي"
+                  : "Students enjoying the Navienty student living experience"
+              }
+              loading="eager"
+              decoding="async"
+              className="h-full w-full object-cover object-center brightness-[1.06] contrast-[1.04] saturate-[1.04] md:object-[center_42%]"
+            />
+          </picture>
 
-      <div className="mega-menu-overlay">
-        <div className="mega-menu-wrap">
-          <div className="mega-menu-top">
-            <label
-              htmlFor="nav-menu-toggle"
-              className="mega-menu-close"
-              aria-label="Close menu"
+          <div className="pointer-events-none absolute inset-0 bg-black/20 md:hidden" />
+
+          <div
+            className={`pointer-events-none absolute inset-y-0 hidden w-[72%] md:block ${
+              isArabic
+                ? "right-0 bg-gradient-to-l from-[#07111f]/80 via-[#07111f]/48 to-transparent"
+                : "left-0 bg-gradient-to-r from-[#07111f]/80 via-[#07111f]/48 to-transparent"
+            }`}
+          />
+        </div>
+
+        <div className="relative z-10 mx-auto flex min-h-[460px] max-w-[1600px] flex-col justify-center px-5 pb-14 pt-16 sm:px-8 md:min-h-[540px] md:px-14 md:pb-20 md:pt-16 lg:px-20 xl:px-28">
+          <div className="max-w-[820px]">
+            <h1
+              id="navienty-properties-hero-heading"
+              className="relative z-20 max-w-[800px] text-[42px] font-black leading-[0.98] tracking-[-0.055em] text-white sm:text-[52px] md:text-[66px] lg:text-[76px]"
+              style={{
+                textShadow:
+                  "0 3px 4px rgba(0,0,0,0.95), 0 10px 30px rgba(0,0,0,0.72)",
+              }}
             >
-              <span className="mega-menu-close-line" />
-              <span>{t.close}</span>
-            </label>
-
-            <div className="mega-menu-logo">
-              <Link href={buildPageLink()} aria-label="Navienty home">
-                <img
-                  src="https://i.ibb.co/5gYVYQSR/Navienty-1.jpg"
-                  alt="Navienty"
-                />
-              </Link>
-            </div>
-          </div>
-
-          <div className="mega-menu-body">
-            <div className="mega-menu-left">
-              <div className="mega-menu-left-spacer" />
-
-              <div className="mega-menu-left-bottom">
-                {socialMenuLinks.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mega-menu-small-link"
-                  >
-                    {item.label}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div className="mega-menu-right">
-              <div className="mega-menu-main-links">
-                {primaryMenuLinks.map((item) => (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="mega-menu-main-link"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="mega-menu-footer-links">
-              {menuFooterLinks.map((item) =>
-                item.isEmail ? (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    className="mega-menu-footer-link mega-menu-footer-link--email"
-                  >
-                    {item.label}
-                  </a>
-                ) : (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="mega-menu-footer-link"
-                  >
-                    {item.label}
-                  </Link>
-                )
+              {isArabic ? (
+                <>
+                  هتلاقي سكنك علي
+                  <br />
+                  <span className="relative inline-block text-[#1765ff] drop-shadow-[0_3px_5px_rgba(0,0,0,0.9)]">
+                    ناڤينتي!
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 270 28"
+                      className="absolute -bottom-8 start-0 h-7 w-full overflow-visible text-white"
+                      fill="none"
+                    >
+                      <path
+                        d="M7 20C67 4 169 5 263 13"
+                        stroke="currentColor"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </>
+              ) : (
+                <>
+                  Search, explore and
+                  <br />
+                  book your{" "}
+                  <span className="relative inline-block text-[#fff59d]">
+                    room!
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 270 28"
+                      className="absolute -bottom-8 left-0 h-7 w-full overflow-visible text-white"
+                      fill="none"
+                    >
+                      <path
+                        d="M7 20C67 4 169 5 263 13"
+                        stroke="currentColor"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </>
               )}
+            </h1>
+
+            <div
+              id="navienty-home-search"
+              className="relative z-30 mt-8 w-full scroll-mt-28 lg:mt-10"
+            >
+              <PropertiesSearchBar {...searchBarProps} />
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
+      <div className="relative z-0 mx-auto max-w-[1600px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
         {showcaseSections.length > 0 && (
           <section className="mb-10 space-y-10 md:mb-14 md:space-y-12">
             {showcaseSections.map((section) => (
               <div key={`${section.type}-${section.id}`}>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-[19px] font-semibold tracking-tight text-gray-900 dark:text-slate-100 md:text-2xl">
-                    <Link
-                      href={buildSearchLink({ areaId: section.id })}
-                    >
+                    <Link href={buildSearchLink({ areaId: section.id })}>
                       {section.title}
                     </Link>
                   </h2>
@@ -2446,22 +1752,28 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
                   </Link>
                 </div>
 
-                <div className="hide-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:gap-4 lg:hidden">
-                  {section.items.map((property) => renderPropertyCard(property))}
+                <div className="hide-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 md:gap-5 lg:hidden">
+                  {section.items.map((property) =>
+                    renderPropertyCard(property),
+                  )}
                   {renderSeeAllCard(section.id, section.items)}
                 </div>
 
-                <div className="popular-desktop-grid hidden gap-4 pb-4 lg:grid lg:grid-cols-6">
-                  {section.items.slice(0, 5).map((property) =>
-                    renderPropertyCard(property)
-                  )}
+                <div className="popular-desktop-grid hidden gap-5 pb-4 lg:grid lg:grid-cols-5 2xl:grid-cols-6 2xl:gap-6">
+                  {section.items
+                    .slice(0, 5)
+                    .map((property, index) =>
+                      renderPropertyCard(
+                        property,
+                        index === 4 ? "lg:hidden 2xl:block" : "",
+                      ),
+                    )}
                   {renderSeeAllCard(section.id, section.items)}
                 </div>
               </div>
             ))}
           </section>
         )}
-
       </div>
 
       <footer className="footer-esaf hidden md:block">
@@ -2821,7 +2133,7 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
           </Link>
 
           <Link
-            href={buildSimpleNavLink('/community')}
+            href={buildSimpleNavLink("/community")}
             className="mobile-bottom-nav__item"
           >
             <img
@@ -2865,5 +2177,5 @@ async function PropertiesPageContent({ searchParams }: PropertiesPageProps) {
         </div>
       </nav>
     </main>
-  )
+  );
 }

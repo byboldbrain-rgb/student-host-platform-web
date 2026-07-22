@@ -1,14 +1,12 @@
 import Link from 'next/link'
 import Script from 'next/script'
 import type { Metadata } from 'next'
-import { createClient } from '../src/lib/supabase/server'
 import {
   getCachedPropertiesPageData,
   getCachedSakanSeoPages,
   type SakanSeoPage,
 } from './properties/data'
 import PropertiesSearchBar from './properties/PropertiesSearchBar'
-import PropertiesHeader from './properties/PropertiesHeader'
 import { Squada_One } from 'next/font/google'
 import {
   DEFAULT_OG_IMAGE,
@@ -22,6 +20,8 @@ const squadaOne = Squada_One({
 })
 
 const APP_LOGO_URL = DEFAULT_OG_IMAGE
+const HOME_HERO_DESKTOP_IMAGE = '/images/home/home-hero-v3.webp'
+const HOME_HERO_MOBILE_IMAGE = '/images/home/home-hero-v5.webp'
 
 export const metadata: Metadata = {
   title: {
@@ -181,10 +181,16 @@ type NormalizedAvailabilityStatus =
 
 type NormalizedGender = 'boys' | 'girls' | null
 
-type MenuFooterLink = {
-  label: string
+
+type SeoNavigationPage = SakanSeoPage & {
+  entity_name_en?: string | null
+  seo_h1_en?: string | null
+}
+
+type SeoNavigationItem = {
   href: string
-  isEmail?: boolean
+  label: string
+  count: number
 }
 
 const PRICE_PRIORITY = [
@@ -569,12 +575,6 @@ export default async function HomePage({
   const isArabic = selectedLanguage === 'ar'
   const currencyRate = await getCurrencyRate(selectedCurrency)
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const isLoggedIn = !!user
 
   const {
     cities,
@@ -593,20 +593,65 @@ export default async function HomePage({
   )
 
 
-  const seoNavigationLinks = (sakanSeoPages as SakanSeoPage[])
+  const indexableSeoPages = (sakanSeoPages as SeoNavigationPage[])
     .filter(
       (page) =>
         page.is_indexable &&
         page.published_properties_count >= 3 &&
         Boolean(page.path) &&
-        Boolean(page.seo_h1_ar || page.entity_name_ar)
+        Boolean(
+          page.entity_name_ar ||
+            page.seo_h1_ar ||
+            page.entity_name_en ||
+            page.seo_h1_en
+        )
     )
-    .slice(0, 12)
-    .map((page) => ({
-      href: page.path,
-      label: page.seo_h1_ar || page.entity_name_ar,
-      count: page.published_properties_count,
-    }))
+    .sort(
+      (a, b) =>
+        b.published_properties_count - a.published_properties_count
+    )
+
+  const getSeoPageLabel = (page: SeoNavigationPage) => {
+    const localizedLabel = isArabic
+      ? page.entity_name_ar || page.seo_h1_ar
+      : page.entity_name_en ||
+        page.seo_h1_en ||
+        page.entity_name_ar ||
+        page.seo_h1_ar
+
+    return localizedLabel?.trim() || ''
+  }
+
+  const createSeoNavigationItems = (
+    pageType: 'city' | 'university' | 'area',
+    limit: number
+  ): SeoNavigationItem[] =>
+    indexableSeoPages
+      .filter((page) => page.page_type === pageType)
+      .slice(0, limit)
+      .map((page) => ({
+        href: page.path as string,
+        label: getSeoPageLabel(page),
+        count: page.published_properties_count,
+      }))
+      .filter((item) => Boolean(item.label))
+
+  const seoLocationGroups = [
+    {
+      id: 'city',
+      title: isArabic ? 'مدن شائعة' : 'Popular cities',
+      items: createSeoNavigationItems('city', 18),
+    },
+    {
+      id: 'area',
+      title: isArabic ? 'مناطق شائعة' : 'Popular areas',
+      items: createSeoNavigationItems('area', 24),
+    },
+  ].filter((group) => group.items.length > 0)
+
+  const seoNavigationLinks = seoLocationGroups.flatMap(
+    (group) => group.items
+  )
 
   const seoItemListJsonLd =
     seoNavigationLinks.length > 0
@@ -830,7 +875,7 @@ export default async function HomePage({
       <Link
         key={`see-all-area-${sectionId}`}
         href={buildSearchLink({ areaId: sectionId })}
-        className="group block min-w-[150px] max-w-[150px] shrink-0 snap-start md:min-w-[160px] md:max-w-[160px]"
+        className="group block min-w-[240px] max-w-[240px] shrink-0 snap-start md:min-w-[260px] md:max-w-[260px]"
       >
         <div className="relative flex aspect-[4/3] w-full items-center justify-center rounded-xl transition duration-300 md:rounded-3xl">
           <div className="relative flex h-full w-full items-center justify-center">
@@ -907,79 +952,61 @@ export default async function HomePage({
     )
   }
 
-  const renderPropertyCard = (property: Property) => {
-  const displayPriceEgp = getDisplayPriceEgp(property)
+  const renderPropertyCard = (
+    property: Property,
+    responsiveClassName = ''
+  ) => {
+    const displayPriceEgp = getDisplayPriceEgp(property)
 
-  return (
-    <Link
-      key={property.id}
-      href={buildPropertyHref(property.property_id)}
-      className="group block min-w-[220px] max-w-[220px] shrink-0 snap-start md:min-w-[200px] md:max-w-[200px]"
-    >
-      {renderPropertyImage(
-        property,
-        translateAvailabilityStatus(
-          property.availability_status,
-          selectedLanguage
-        )
-      )}
-
-      <div className="mt-2.5 space-y-1.5 md:mt-3">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-[16px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 dark:text-slate-100 md:text-[17px]">
-            {isArabic ? property.title_ar : property.title_en}
-          </h3>
-        </div>
-
-        {renderGenderMeta(property) && (
-          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-400 md:text-[13px]">
-            {renderGenderMeta(property)}
-          </div>
+    return (
+      <Link
+        key={property.id}
+        href={buildPropertyHref(property.property_id)}
+        className={`group block min-w-[240px] max-w-[240px] shrink-0 snap-start md:min-w-[260px] md:max-w-[260px] ${responsiveClassName}`}
+      >
+        {renderPropertyImage(
+          property,
+          translateAvailabilityStatus(
+            property.availability_status,
+            selectedLanguage
+          )
         )}
 
-        <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[14px]">
-          <span className="font-semibold text-slate-950 dark:text-white">
-            {formatPrice(
-              displayPriceEgp,
-              selectedCurrency,
-              selectedLanguage,
-              currencyRate
-            )}
-          </span>{' '}
-          <span className="text-[12px] text-slate-500 dark:text-slate-400 md:text-[12px]">
-            / {property.rental_duration === 'daily' ? t.night : t.month}
-          </span>
-        </p>
-      </div>
-    </Link>
-  )
-}
+        <div className="mt-2.5 space-y-1.5 md:mt-3.5">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 dark:text-slate-100 md:text-[18px]">
+              {isArabic ? property.title_ar : property.title_en}
+            </h3>
+          </div>
 
-  const primaryMenuLinks = [
-    {
-      label: isLoggedIn ? t.account : t.login,
-      href: isLoggedIn
-        ? buildSimpleNavLink('/account')
-        : buildSimpleNavLink('/account-login'),
-    },
-    { label: t.join, href: buildSimpleNavLink('/community') },
-  ]
+          {renderGenderMeta(property) && (
+            <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-400 md:text-[14px]">
+              {renderGenderMeta(property)}
+            </div>
+          )}
 
-  const socialMenuLinks = [
-    { label: t.facebook, href: 'https://www.facebook.com/' },
-    { label: t.instagram, href: 'https://www.instagram.com/' },
-    { label: t.linkedIn, href: 'https://www.linkedin.com/' },
-  ]
+          <p className="truncate pt-0.5 text-[15px] md:pt-1 md:text-[16px]">
+            <span className="font-semibold text-slate-950 dark:text-white">
+              {formatPrice(
+                displayPriceEgp,
+                selectedCurrency,
+                selectedLanguage,
+                currencyRate
+              )}
+            </span>{' '}
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 md:text-[13px]">
+              / {property.rental_duration === 'daily' ? t.night : t.month}
+            </span>
+          </p>
+        </div>
+      </Link>
+    )
+  }
 
   const footerQuickLinks = [
     { label: t.aboutUs, href: buildSimpleNavLink('/about') },
     { label: t.board, href: buildSimpleNavLink('/board') },
     { label: t.contact, href: buildSimpleNavLink('/contact') },
-  ]
-
-  const menuFooterLinks: MenuFooterLink[] = [
-    ...footerQuickLinks,
-    { label: t.footerEmail, href: `mailto:${t.footerEmail}`, isEmail: true },
   ]
 
   const searchBarProps = {
@@ -1031,7 +1058,7 @@ export default async function HomePage({
     >
       <Script
         id="navienty-default-language-script"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function () {
@@ -1083,40 +1110,25 @@ export default async function HomePage({
         }}
       />
 
-      <Script
+      <script
         id="navienty-homepage-jsonld"
         type="application/ld+json"
-        strategy="beforeInteractive"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(homePageJsonLd).replace(/</g, '\\u003c'),
         }}
       />
 
       {seoItemListJsonLd && (
-        <Script
+        <script
           id="properties-sakan-seo-item-list"
           type="application/ld+json"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(seoItemListJsonLd).replace(/</g, '\\u003c'),
           }}
         />
       )}
 
-      <input
-        id="nav-menu-toggle"
-        type="checkbox"
-        className="peer sr-only"
-        aria-hidden="true"
-      />
-
       <style>{`
-        :root {
-          --menu-blue: #054aff;
-          --menu-cream: #f2ead8;
-          --menu-cream-soft: rgba(242, 234, 216, 0.92);
-        }
-
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }
@@ -1130,321 +1142,6 @@ export default async function HomePage({
           width: 100%;
           min-width: 0 !important;
           max-width: none !important;
-        }
-
-        .navienty-logo {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          overflow: hidden;
-          text-decoration: none;
-          transform: translateY(-7px);
-        }
-
-        .navienty-logo-icon {
-          width: 56px;
-          height: 56px;
-          object-fit: contain;
-          flex-shrink: 0;
-          display: block;
-        }
-
-        .navienty-logo-text-wrap {
-          max-width: 0;
-          opacity: 0;
-          overflow: hidden;
-          transform: translateX(-6px);
-          transition:
-            max-width 0.35s ease,
-            opacity 0.25s ease,
-            transform 0.35s ease;
-          display: flex;
-          align-items: center;
-        }
-
-        .navienty-logo:hover .navienty-logo-text-wrap,
-        .navienty-logo:focus-visible .navienty-logo-text-wrap {
-          max-width: 120px;
-          opacity: 1;
-          transform: translateX(0);
-        }
-
-        .navienty-logo-text {
-          width: 112px;
-          min-width: 112px;
-          height: auto;
-          object-fit: contain;
-          display: block;
-          transform: translateY(-2px);
-        }
-
-        .navienty-logo-mobile {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          text-decoration: none;
-        }
-
-        .navienty-logo-mobile img {
-          width: 42px;
-          height: 42px;
-          object-fit: contain;
-          display: block;
-        }
-
-        .menu-trigger {
-          width: 40px;
-          height: 40px;
-          background: transparent;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-
-        .menu-trigger:hover {
-          background: rgba(255, 255, 255, 0.08);
-        }
-
-        .menu-trigger-lines {
-          position: relative;
-          width: 26px;
-          height: 10px;
-          display: block;
-        }
-
-        .menu-trigger-lines span {
-          position: absolute;
-          left: 0;
-          width: 100%;
-          height: 2px;
-          background: #000000;
-          border-radius: 2px;
-        }
-
-        .menu-trigger-lines span:nth-child(1) {
-          top: 0;
-        }
-
-        .menu-trigger-lines span:nth-child(2) {
-          bottom: 0;
-        }
-
-        .mega-menu-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 140;
-          background: var(--menu-blue);
-          color: var(--menu-cream);
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transform: translateY(-8px);
-          transition:
-            opacity 0.26s ease,
-            visibility 0.26s ease,
-            transform 0.26s ease;
-        }
-
-        .peer:checked ~ .mega-menu-overlay {
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
-          transform: translateY(0);
-        }
-
-        .mega-menu-wrap {
-          position: relative;
-          min-height: 100dvh;
-          padding: 38px 56px 38px;
-        }
-
-        .mega-menu-top {
-          position: absolute;
-          left: 56px;
-          right: 56px;
-          top: 36px;
-          height: 56px;
-          z-index: 3;
-        }
-
-        .mega-menu-close {
-          position: absolute;
-          right: 0;
-          top: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 16px;
-          cursor: pointer;
-          color: var(--menu-cream);
-          font-size: 18px;
-          font-weight: 600;
-          text-decoration: none;
-          letter-spacing: -0.02em;
-        }
-
-        .mega-menu-close-line {
-          width: 46px;
-          height: 2px;
-          border-radius: 999px;
-          background: currentColor;
-          display: inline-block;
-          transform: translateY(-1px);
-        }
-
-        .mega-menu-logo {
-          position: absolute;
-          left: 50%;
-          top: -60px;
-          transform: translateX(-50%);
-          z-index: 2;
-        }
-
-        .mega-menu-logo img {
-          width: 160px;
-          height: auto;
-          object-fit: contain;
-          display: block;
-        }
-
-        .mega-menu-investors {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-size: 18px;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .mega-menu-investors:hover {
-          opacity: 0.88;
-        }
-
-        .mega-menu-body {
-          position: relative;
-          min-height: calc(100dvh - 76px);
-          padding-top: 100px;
-          width: 100%;
-          padding-left: 56px;
-          padding-right: 56px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .mega-menu-left {
-          position: absolute;
-          left: 56px;
-          bottom: 36px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          width: 220px;
-          min-width: 220px;
-          min-height: auto;
-        }
-
-        .mega-menu-left-spacer {
-          display: none;
-        }
-
-        .mega-menu-left-bottom {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 10px;
-          width: 100%;
-          padding-bottom: 0;
-        }
-
-        .mega-menu-small-link {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-size: 22px;
-          line-height: 1.28;
-          font-weight: 600;
-          letter-spacing: -0.03em;
-          display: block;
-          width: fit-content;
-        }
-
-        .mega-menu-small-link:hover {
-          opacity: 0.88;
-        }
-
-        .mega-menu-right {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 100%;
-          min-width: 0;
-          padding-top: 0;
-          transform: translateY(-100px);
-        }
-
-        .mega-menu-main-links {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 0;
-          width: 100%;
-          max-width: 900px;
-          text-align: center;
-        }
-
-        .mega-menu-main-link {
-          color: var(--menu-cream);
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 64px;
-          line-height: 1.15;
-          letter-spacing: -0.075em;
-          display: block;
-          width: fit-content;
-        }
-
-        .mega-menu-main-link:hover {
-          opacity: 0.9;
-        }
-
-        .mega-menu-footer-links {
-          position: absolute;
-          right: 56px;
-          bottom: 12px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 10px;
-          max-width: 240px;
-          text-align: right;
-        }
-
-        .mega-menu-footer-link {
-          color: rgba(242, 234, 216, 0.88);
-          text-decoration: none;
-          font-size: 18px;
-          line-height: 1.35;
-          font-weight: 500;
-          letter-spacing: -0.02em;
-          transition:
-            opacity 0.2s ease,
-            transform 0.2s ease,
-            color 0.2s ease;
-        }
-
-        .mega-menu-footer-link:hover {
-          opacity: 1;
-          color: var(--menu-cream);
-          transform: translateX(-2px);
-        }
-
-        .mega-menu-footer-link--email {
-          margin-top: 8px;
-          opacity: 0.76;
-          font-size: 16px;
         }
 
         .property-media-card {
@@ -1696,6 +1393,149 @@ export default async function HomePage({
           letter-spacing: 0.01em;
         }
 
+        .seo-link-cloud-section {
+          position: relative;
+        }
+
+        .seo-link-cloud-panel {
+          position: relative;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          border-radius: 42px;
+          background:
+            radial-gradient(
+              circle at 88% 4%,
+              rgba(255, 255, 255, 0.18),
+              transparent 32%
+            ),
+            radial-gradient(
+              circle at 7% 100%,
+              rgba(52, 211, 255, 0.16),
+              transparent 34%
+            ),
+            linear-gradient(
+              135deg,
+              #0437c9 0%,
+              #054aff 48%,
+              #0a66ff 100%
+            );
+          box-shadow:
+            0 30px 80px rgba(5, 74, 255, 0.24),
+            inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        }
+
+        .seo-link-cloud-panel::before,
+        .seo-link-cloud-panel::after {
+          content: '';
+          position: absolute;
+          pointer-events: none;
+          border-radius: 999px;
+          filter: blur(4px);
+        }
+
+        .seo-link-cloud-panel::before {
+          top: -160px;
+          right: -110px;
+          width: 360px;
+          height: 360px;
+          background: rgba(255, 255, 255, 0.10);
+        }
+
+        .seo-link-cloud-panel::after {
+          bottom: -190px;
+          left: -120px;
+          width: 420px;
+          height: 420px;
+          background: rgba(242, 234, 216, 0.10);
+        }
+
+        .seo-link-cloud-content {
+          position: relative;
+          z-index: 1;
+          padding: 70px 64px 74px;
+        }
+
+        .seo-link-cloud-groups {
+          display: flex;
+          flex-direction: column;
+          gap: 42px;
+        }
+
+        .seo-link-cloud-group {
+          min-width: 0;
+        }
+
+        .seo-link-cloud-heading {
+          margin: 0 0 14px;
+          color: #f2ead8;
+          font-size: clamp(21px, 1.6vw, 27px);
+          line-height: 1.25;
+          font-weight: 800;
+          letter-spacing: -0.035em;
+        }
+
+        .seo-link-cloud-links {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 3px 14px;
+        }
+
+        .seo-link-cloud-link {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          color: rgba(255, 255, 255, 0.94);
+          text-decoration: none;
+          font-size: 17px;
+          line-height: 1.9;
+          font-weight: 500;
+          letter-spacing: -0.018em;
+          transition:
+            color 0.2s ease,
+            transform 0.2s ease;
+        }
+
+        .seo-link-cloud-link::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 3px;
+          height: 1px;
+          background: currentColor;
+          opacity: 0;
+          transform: scaleX(0.35);
+          transform-origin: center;
+          transition:
+            opacity 0.2s ease,
+            transform 0.2s ease;
+        }
+
+        .seo-link-cloud-link:hover,
+        .seo-link-cloud-link:focus-visible {
+          color: #fff59d;
+          transform: translateY(-1px);
+          outline: none;
+        }
+
+        .seo-link-cloud-link:hover::after,
+        .seo-link-cloud-link:focus-visible::after {
+          opacity: 0.4;
+          transform: scaleX(1);
+        }
+
+        [dir='rtl'] .seo-link-cloud-heading,
+        [dir='rtl'] .seo-link-cloud-links {
+          text-align: right;
+        }
+
+        @media (max-width: 1100px) {
+          .seo-link-cloud-content {
+            padding: 56px 44px 60px;
+          }
+        }
+
         .footer-esaf {
           background: #054aff;
           color: #ffffff;
@@ -1839,101 +1679,6 @@ export default async function HomePage({
         }
 
         @media (max-width: 1024px) {
-          .mega-menu-wrap {
-            padding: 26px 24px 28px;
-            overflow-y: auto;
-          }
-
-          .mega-menu-top {
-            left: 24px;
-            right: 24px;
-            top: 24px;
-            height: 40px;
-          }
-
-          .mega-menu-close {
-            right: 0;
-            top: 0;
-            font-size: 16px;
-            gap: 12px;
-          }
-
-          .mega-menu-close-line {
-            width: 34px;
-          }
-
-          .mega-menu-logo {
-            top: 68px;
-          }
-
-          .mega-menu-logo img {
-            width: 74px;
-            height: 74px;
-          }
-
-          .mega-menu-investors {
-            font-size: 16px;
-          }
-
-          .mega-menu-body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: auto;
-            padding-top: 160px;
-            padding-left: 0;
-            padding-right: 0;
-            padding-bottom: 180px;
-          }
-
-          .mega-menu-left {
-            position: absolute;
-            left: 24px;
-            bottom: 28px;
-            width: auto;
-            min-width: 0;
-          }
-
-          .mega-menu-left-bottom {
-            width: 100%;
-            padding-bottom: 0;
-            gap: 12px;
-          }
-
-          .mega-menu-right {
-            width: 100%;
-            min-width: 0;
-            padding-top: 0;
-          }
-
-          .mega-menu-main-links {
-            gap: 6px;
-            max-width: 100%;
-          }
-
-          .mega-menu-main-link {
-            font-size: clamp(54px, 14.4vw, 86px);
-            line-height: 1.05;
-            white-space: normal;
-          }
-
-          .mega-menu-small-link {
-            font-size: 24px;
-          }
-
-          .mega-menu-footer-links {
-            right: 24px;
-            bottom: 28px;
-            max-width: 220px;
-          }
-
-          .mega-menu-footer-link {
-            font-size: 16px;
-          }
-
-          .mega-menu-footer-link--email {
-            font-size: 15px;
-          }
 
           .status-ribbon {
             width: 88px;
@@ -1957,46 +1702,36 @@ export default async function HomePage({
         }
 
         @media (max-width: 768px) {
-          .navienty-logo-mobile,
-          .menu-trigger {
-            display: none !important;
-          }
 
           .mobile-bottom-nav {
             display: block;
           }
 
-          .mega-menu-body {
-            padding-bottom: 220px;
+
+          .seo-link-cloud-panel {
+            border-radius: 28px;
           }
 
-          .mega-menu-left {
-            left: 24px;
-            bottom: 24px;
+          .seo-link-cloud-content {
+            padding: 36px 22px 40px;
           }
 
-          .mega-menu-footer-links {
-            left: 24px;
-            right: 24px;
-            bottom: 96px;
-            align-items: flex-start;
-            text-align: left;
-            max-width: none;
-            gap: 8px;
+          .seo-link-cloud-groups {
+            gap: 30px;
           }
 
-          [dir='rtl'] .mega-menu-footer-links {
-            align-items: flex-end;
-            text-align: right;
+          .seo-link-cloud-heading {
+            margin-bottom: 11px;
+            font-size: 20px;
           }
 
-          .mega-menu-footer-link {
-            font-size: 16px;
+          .seo-link-cloud-links {
+            gap: 1px 11px;
           }
 
-          .mega-menu-footer-link--email {
-            margin-top: 6px;
-            font-size: 14px;
+          .seo-link-cloud-link {
+            font-size: 15px;
+            line-height: 1.85;
           }
 
           .footer-esaf-container {
@@ -2050,12 +1785,41 @@ export default async function HomePage({
 
 
         @media (prefers-color-scheme: dark) {
-          .menu-trigger-lines span {
-            background: #f8fafc;
-          }
 
           .property-meta-gender {
             color: #94a3b8;
+          }
+
+          .seo-link-cloud-panel {
+            border-color: rgba(255, 255, 255, 0.16);
+            background:
+              radial-gradient(
+                circle at 88% 4%,
+                rgba(255, 255, 255, 0.12),
+                transparent 32%
+              ),
+              radial-gradient(
+                circle at 7% 100%,
+                rgba(52, 211, 255, 0.12),
+                transparent 34%
+              ),
+              linear-gradient(135deg, #032b9f 0%, #043fd6 52%, #0755d9 100%);
+            box-shadow:
+              0 30px 80px rgba(0, 0, 0, 0.34),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
+          }
+
+          .seo-link-cloud-heading {
+            color: #f2ead8;
+          }
+
+          .seo-link-cloud-link {
+            color: rgba(255, 255, 255, 0.94);
+          }
+
+          .seo-link-cloud-link:hover,
+          .seo-link-cloud-link:focus-visible {
+            color: #fff59d;
           }
 
           .group:hover .property-meta-gender {
@@ -2107,93 +1871,107 @@ export default async function HomePage({
         }
       `}</style>
 
-      <PropertiesHeader
-        homeHref={buildPageLink()}
-        searchBarProps={searchBarProps}
-        t={{ startSearch: t.startSearch }}
-      />
+      <section
+        aria-labelledby="navienty-home-heading"
+        className="relative isolate z-[100] mb-10 min-h-[460px] overflow-visible md:mb-14 md:min-h-[540px]"
+      >
+        <div className="absolute inset-0 overflow-hidden rounded-b-[42px] bg-[#182235] md:rounded-b-[78px]">
+          <picture className="absolute inset-0 block h-full w-full">
+            <source
+              media="(max-width: 767px)"
+              srcSet={HOME_HERO_MOBILE_IMAGE}
+            />
+            <img
+              src={HOME_HERO_DESKTOP_IMAGE}
+              alt={
+                isArabic
+                  ? 'طلاب وموظفون مغتربون يستمتعون بتجربة السكن مع نافينتي'
+                  : 'Students and expatriate employees enjoying the Navienty living experience'
+              }
+              loading="eager"
+              decoding="async"
+              className="h-full w-full object-cover object-center brightness-[1.06] contrast-[1.04] saturate-[1.04] md:object-[center_42%]"
+            />
+          </picture>
 
-      <div className="mega-menu-overlay">
-        <div className="mega-menu-wrap">
-          <div className="mega-menu-top">
-            <label
-              htmlFor="nav-menu-toggle"
-              className="mega-menu-close"
-              aria-label="Close menu"
-            >
-              <span className="mega-menu-close-line" />
-              <span>{t.close}</span>
-            </label>
+          <div className="pointer-events-none absolute inset-0 bg-black/20 md:hidden" />
 
-            <div className="mega-menu-logo">
-              <Link href={buildPageLink()} aria-label="Navienty home">
-                <img
-                  src="https://i.ibb.co/5gYVYQSR/Navienty-1.jpg"
-                  alt="Navienty"
-                />
-              </Link>
-            </div>
-          </div>
-
-          <div className="mega-menu-body">
-            <div className="mega-menu-left">
-              <div className="mega-menu-left-spacer" />
-
-              <div className="mega-menu-left-bottom">
-                {socialMenuLinks.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mega-menu-small-link"
-                  >
-                    {item.label}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div className="mega-menu-right">
-              <div className="mega-menu-main-links">
-                {primaryMenuLinks.map((item) => (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="mega-menu-main-link"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="mega-menu-footer-links">
-              {menuFooterLinks.map((item) =>
-                item.isEmail ? (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    className="mega-menu-footer-link mega-menu-footer-link--email"
-                  >
-                    {item.label}
-                  </a>
-                ) : (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="mega-menu-footer-link"
-                  >
-                    {item.label}
-                  </Link>
-                )
-              )}
-            </div>
-          </div>
+          <div
+            className={`pointer-events-none absolute inset-y-0 hidden w-[72%] md:block ${
+              isArabic
+                ? 'right-0 bg-gradient-to-l from-[#07111f]/80 via-[#07111f]/48 to-transparent'
+                : 'left-0 bg-gradient-to-r from-[#07111f]/80 via-[#07111f]/48 to-transparent'
+            }`}
+          />
         </div>
-      </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
+        <div className="relative z-10 mx-auto flex min-h-[460px] max-w-[1600px] flex-col justify-center px-5 pb-14 pt-16 sm:px-8 md:min-h-[540px] md:px-14 md:pb-20 md:pt-16 lg:px-20 xl:px-28">
+          <div className="max-w-[820px]">
+            <h1
+              id="navienty-home-heading"
+              className="relative z-20 max-w-[800px] text-[42px] font-black leading-[0.98] tracking-[-0.055em] text-white sm:text-[52px] md:text-[66px] lg:text-[76px]"
+              style={{
+                textShadow:
+                  '0 3px 4px rgba(0,0,0,0.95), 0 10px 30px rgba(0,0,0,0.72)',
+              }}
+            >
+              {isArabic ? (
+                <>
+                  هتلاقي سكنك علي 
+                  <br />
+                  <span className="relative inline-block text-[#1765ff] drop-shadow-[0_3px_5px_rgba(0,0,0,0.9)]">
+                    ناڤينتي!
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 270 28"
+                      className="absolute -bottom-8 start-0 h-7 w-full overflow-visible text-white"
+                      fill="none"
+                    >
+                      <path
+                        d="M7 20C67 4 169 5 263 13"
+                        stroke="currentColor"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </>
+              ) : (
+                <>
+                  Search, explore and
+                  <br />
+                  book your{' '}
+                  <span className="relative inline-block text-[#fff59d]">
+                    room!
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 270 28"
+                      className="absolute -bottom-6 left-0 h-7 w-full overflow-visible text-white"
+                      fill="none"
+                    >
+                      <path
+                        d="M7 20C67 4 169 5 263 13"
+                        stroke="currentColor"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </>
+              )}
+            </h1>
+
+          
+
+            <div className="relative z-30 mt-8 w-full lg:mt-10">
+              <PropertiesSearchBar {...searchBarProps} />
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <div className="relative z-0 mx-auto max-w-[1600px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
         {showcaseSections.length > 0 && (
           <section className="mb-10 space-y-10 md:mb-14 md:space-y-12">
             {showcaseSections.map((section) => (
@@ -2228,14 +2006,17 @@ export default async function HomePage({
                   </Link>
                 </div>
 
-                <div className="hide-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:gap-4 lg:hidden">
+                <div className="hide-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 md:gap-5 lg:hidden">
                   {section.items.map((property) => renderPropertyCard(property))}
                   {renderSeeAllCard(section.id, section.items)}
                 </div>
 
-                <div className="popular-desktop-grid hidden gap-4 pb-4 lg:grid lg:grid-cols-6">
-                  {section.items.slice(0, 5).map((property) =>
-                    renderPropertyCard(property)
+                <div className="popular-desktop-grid hidden gap-5 pb-4 lg:grid lg:grid-cols-5 2xl:grid-cols-6 2xl:gap-6">
+                  {section.items.slice(0, 5).map((property, index) =>
+                    renderPropertyCard(
+                      property,
+                      index === 4 ? 'lg:hidden 2xl:block' : ''
+                    )
                   )}
                   {renderSeeAllCard(section.id, section.items)}
                 </div>
@@ -2247,84 +2028,56 @@ export default async function HomePage({
         {seoNavigationLinks.length > 0 && (
           <section
             aria-labelledby="navienty-location-links-heading"
-            className="mt-12 border-t border-slate-200 pt-10 dark:border-white/10 md:mt-16 md:pt-12"
+            className="seo-link-cloud-section mt-12 md:mt-16"
           >
-            <div className="mb-6 max-w-3xl">
-              <h2
-                id="navienty-location-links-heading"
-                className="text-2xl font-black tracking-[-0.03em] text-slate-950 dark:text-white md:text-3xl"
-              >
-                {isArabic
-                  ? 'استكشف السكن حسب المدينة والمنطقة'
-                  : 'Explore housing by city and area'}
-              </h2>
+            <h2 id="navienty-location-links-heading" className="sr-only">
+              {isArabic
+                ? 'استكشف السكن حسب المدينة والمنطقة'
+                : 'Explore housing by city and area'}
+            </h2>
 
-              <p className="mt-3 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
-                {isArabic
-                  ? 'انتقل مباشرة إلى صفحات المدن والجامعات والمناطق التي تحتوي على أماكن سكن منشورة.'
-                  : 'Open city, university and area pages with published student accommodation.'}
-              </p>
-            </div>
-
-            <nav
-              aria-label={
-                isArabic
-                  ? 'صفحات السكن حسب الموقع'
-                  : 'Housing pages by location'
-              }
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-            >
-              {seoNavigationLinks.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="group flex min-h-[72px] items-center justify-between gap-4 rounded-[18px] border border-slate-200 bg-white px-4 py-3 transition hover:-translate-y-0.5 hover:border-[#054aff]/40 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/[0.04]"
+            <div className="seo-link-cloud-panel">
+              <div className="seo-link-cloud-content">
+                <nav
+                  aria-label={
+                    isArabic
+                      ? 'صفحات السكن حسب الموقع'
+                      : 'Housing pages by location'
+                  }
+                  className="seo-link-cloud-groups"
                 >
-                  <span className="min-w-0">
-                    <span className="block text-[15px] font-bold leading-6 text-slate-900 dark:text-slate-100">
-                      {item.label}
-                    </span>
-                    <span className="mt-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
-                      {isArabic
-                        ? `${new Intl.NumberFormat('ar-EG').format(item.count)} سكن منشور`
-                        : `${new Intl.NumberFormat('en-US').format(item.count)} published stays`}
-                    </span>
-                  </span>
+                  {seoLocationGroups.map((group) => (
+                    <div key={group.id} className="seo-link-cloud-group">
+                      <h3 className="seo-link-cloud-heading">
+                        {group.title}
+                      </h3>
 
-                  <span
-                    aria-hidden="true"
-                    className="text-xl text-[#054aff] transition group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
-                  >
-                    {isArabic ? '‹' : '›'}
-                  </span>
-                </Link>
-              ))}
-            </nav>
+                      <div className="seo-link-cloud-links">
+                        {group.items.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="seo-link-cloud-link"
+                            aria-label={
+                              isArabic
+                                ? `${item.label}، ${new Intl.NumberFormat('ar-EG').format(item.count)} سكن منشور`
+                                : `${item.label}, ${new Intl.NumberFormat('en-US').format(item.count)} published stays`
+                            }
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </nav>
+              </div>
+            </div>
           </section>
         )}
-
-        <section
-          aria-labelledby="navienty-home-heading"
-          className="mt-12 max-w-3xl border-t border-slate-200 pb-2 pt-8 dark:border-white/10 md:mt-16 md:pt-10"
-        >
-          <h1
-            id="navienty-home-heading"
-            className="text-[22px] font-black leading-9 tracking-[-0.03em] text-slate-950 dark:text-white md:text-[28px]"
-          >
-            {isArabic
-              ? 'Navienty | منصة سكن الطلاب في مصر'
-              : 'Navienty | Student housing in Egypt'}
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-[14px] leading-7 text-slate-600 dark:text-slate-300 md:text-[15px]">
-            {isArabic
-              ? 'ابحث عن سكن طلاب أو سكن طالبات حسب المدينة والمنطقة، وقارن الأسعار والصور والموقع، وتواصل مباشرة مع المضيف بدون عمولة على الطالب.'
-              : 'Find student accommodation by city and area, compare prices, photos and location, and contact the host directly without student commission.'}
-          </p>
-        </section>
       </div>
 
-      <footer className="footer-esaf hidden md:block">
+      <footer className="footer-esaf">
         <div className="footer-esaf-container">
           <div className="footer-esaf-top">
             <div className="footer-esaf-top-left">
