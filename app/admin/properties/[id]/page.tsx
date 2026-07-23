@@ -8,6 +8,37 @@ type PageProps = {
   params: Promise<{ id: string }>
 }
 
+type PricingSeasonCode = 'summer_course' | 'academic_year'
+
+type RawSeasonalPriceRow = {
+  id?: string
+  sellable_option_id?: string | null
+  room_sellable_option_id?: string | null
+  season_id?: string | null
+  price_egp?: number | string | null
+  is_active?: boolean | null
+  property_pricing_seasons?:
+    | {
+        code?: PricingSeasonCode | string | null
+      }
+    | Array<{
+        code?: PricingSeasonCode | string | null
+      }>
+    | null
+}
+
+type SeasonalPriceRow = {
+  id?: string
+  sellable_option_id?: string | null
+  room_sellable_option_id?: string | null
+  season_id?: string | null
+  price_egp?: number | string | null
+  is_active?: boolean | null
+  property_pricing_seasons?: {
+    code?: PricingSeasonCode | string | null
+  } | null
+}
+
 function normalizeOwnerRows(rows: any[] | null | undefined) {
   const uniqueOwners = new Map<string, any>()
 
@@ -48,12 +79,58 @@ function normalizeOwnerRows(rows: any[] | null | undefined) {
   )
 }
 
+function normalizeSeasonalPriceRow(
+  row: RawSeasonalPriceRow,
+): SeasonalPriceRow {
+  const seasonRelation = Array.isArray(row.property_pricing_seasons)
+    ? row.property_pricing_seasons[0] ?? null
+    : row.property_pricing_seasons ?? null
+
+  return {
+    id: row.id,
+    sellable_option_id: row.sellable_option_id ?? null,
+    room_sellable_option_id: row.room_sellable_option_id ?? null,
+    season_id: row.season_id ?? null,
+    price_egp: row.price_egp ?? null,
+    is_active: row.is_active ?? null,
+    property_pricing_seasons: seasonRelation
+      ? {
+          code: seasonRelation.code ?? null,
+        }
+      : null,
+  }
+}
+
+function getSeasonCode(row: SeasonalPriceRow) {
+  return row.property_pricing_seasons?.code ?? null
+}
+
+function buildSeasonalPriceMap(rows: SeasonalPriceRow[]) {
+  const result: Partial<Record<PricingSeasonCode, number | string | null>> = {}
+
+  rows.forEach((row) => {
+    if (row.is_active === false || row.price_egp == null) return
+
+    const seasonCode = getSeasonCode(row)
+
+    if (
+      seasonCode === 'summer_course' ||
+      seasonCode === 'academic_year'
+    ) {
+      result[seasonCode] = row.price_egp
+    }
+  })
+
+  return result
+}
+
 export default async function EditPropertyPage({ params }: PageProps) {
   const adminContext = await requirePropertyEditorAccess()
   const { id } = await params
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
   const admin = adminContext.admin
+
   const propertyRes = await supabase
     .from('properties')
     .select(
@@ -132,6 +209,8 @@ export default async function EditPropertyPage({ params }: PageProps) {
     propertyFacilitiesRes,
     propertyBillsRes,
     roomsRes,
+    fullApartmentOptionRes,
+    seasonalPricesRes,
     existingPropertiesRes,
   ] = await Promise.all([
     supabase.from('cities').select('id, name_en, name_ar').order('name_en'),
@@ -253,7 +332,7 @@ export default async function EditPropertyPage({ params }: PageProps) {
       .select('bill_type_id')
       .eq('property_id_ref', id),
 
-    supabase
+    adminSupabase
       .from('property_rooms')
       .select(
         `
@@ -296,6 +375,33 @@ export default async function EditPropertyPage({ params }: PageProps) {
       .order('sort_order'),
 
     adminSupabase
+      .from('property_sellable_options')
+      .select('id, code, price_egp, is_active')
+      .eq('property_id', id)
+      .eq('code', 'full_apartment')
+      .eq('is_active', true)
+      .maybeSingle(),
+
+    adminSupabase
+      .from('property_option_seasonal_prices')
+      .select(
+        `
+        id,
+        property_id,
+        sellable_option_id,
+        room_sellable_option_id,
+        season_id,
+        price_egp,
+        is_active,
+        property_pricing_seasons (
+          code
+        )
+      `,
+      )
+      .eq('property_id', id)
+      .eq('is_active', true),
+
+    adminSupabase
       .from('properties')
       .select(
         'id, property_id, title_en, title_ar, address_en, latitude, longitude, admin_status, is_active',
@@ -308,8 +414,9 @@ export default async function EditPropertyPage({ params }: PageProps) {
   if (citiesRes.error) throw new Error(citiesRes.error.message)
   if (universitiesRes.error) throw new Error(universitiesRes.error.message)
   if (brokersRes.error) throw new Error(brokersRes.error.message)
-  if (ownerServiceAreasRes.error)
+  if (ownerServiceAreasRes.error) {
     throw new Error(ownerServiceAreasRes.error.message)
+  }
   if (allOwnersRes.error) throw new Error(allOwnersRes.error.message)
   if (currentOwnerRes.error) throw new Error(currentOwnerRes.error.message)
   if (amenitiesRes.error) throw new Error(amenitiesRes.error.message)
@@ -317,12 +424,20 @@ export default async function EditPropertyPage({ params }: PageProps) {
   if (billTypesRes.error) throw new Error(billTypesRes.error.message)
   if (imagesRes.error) throw new Error(imagesRes.error.message)
   if (videosRes.error) throw new Error(videosRes.error.message)
-  if (propertyAmenitiesRes.error)
+  if (propertyAmenitiesRes.error) {
     throw new Error(propertyAmenitiesRes.error.message)
-  if (propertyFacilitiesRes.error)
+  }
+  if (propertyFacilitiesRes.error) {
     throw new Error(propertyFacilitiesRes.error.message)
+  }
   if (propertyBillsRes.error) throw new Error(propertyBillsRes.error.message)
   if (roomsRes.error) throw new Error(roomsRes.error.message)
+  if (fullApartmentOptionRes.error) {
+    throw new Error(fullApartmentOptionRes.error.message)
+  }
+  if (seasonalPricesRes.error) {
+    throw new Error(seasonalPricesRes.error.message)
+  }
   if (existingPropertiesRes.error) {
     throw new Error(existingPropertiesRes.error.message)
   }
@@ -395,6 +510,11 @@ export default async function EditPropertyPage({ params }: PageProps) {
     String(a.full_name || '').localeCompare(String(b.full_name || '')),
   )
 
+  const seasonalPriceRows = (
+    (seasonalPricesRes.data ?? []) as RawSeasonalPriceRow[]
+  ).map(normalizeSeasonalPriceRow)
+  const fullApartmentOption = fullApartmentOptionRes.data
+
   const activeRooms = (roomsRes.data ?? []).map((room: any) => ({
     ...room,
     room_beds: Array.isArray(room.room_beds)
@@ -404,14 +524,36 @@ export default async function EditPropertyPage({ params }: PageProps) {
         )
       : [],
     room_sellable_options: Array.isArray(room.room_sellable_options)
-      ? room.room_sellable_options.filter(
-          (option: any) => option && option.is_active !== false,
-        )
+      ? room.room_sellable_options
+          .filter((option: any) => option && option.is_active !== false)
+          .map((option: any) => {
+            const optionSeasonalRows = seasonalPriceRows.filter(
+              (row) => row.room_sellable_option_id === option.id,
+            )
+
+            return {
+              ...option,
+              seasonal_prices: buildSeasonalPriceMap(optionSeasonalRows),
+              property_option_seasonal_prices: optionSeasonalRows,
+            }
+          })
       : [],
   }))
 
+  const fullApartmentSeasonalRows = fullApartmentOption?.id
+    ? seasonalPriceRows.filter(
+        (row) => row.sellable_option_id === fullApartmentOption.id,
+      )
+    : []
+
   const syncedProperty = {
     ...property,
+    price_egp:
+      fullApartmentOption?.price_egp != null
+        ? fullApartmentOption.price_egp
+        : property.price_egp,
+    seasonal_prices: buildSeasonalPriceMap(fullApartmentSeasonalRows),
+    property_option_seasonal_prices: fullApartmentSeasonalRows,
     bedrooms_count: activeRooms.length,
     beds_count: activeRooms.reduce((sum: number, room: any) => {
       const roomBedsCount = Array.isArray(room.room_beds)
