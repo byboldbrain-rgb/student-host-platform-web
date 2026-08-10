@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import {
   useRef,
   useState,
@@ -21,6 +22,9 @@ const HORIZONTAL_LOCK_RATIO = 1.05
 const SWIPE_THRESHOLD_RATIO = 0.2
 const SWIPE_THRESHOLD_MAX_PX = 86
 const CLICK_SUPPRESS_MS = 180
+
+const IMAGE_SIZES =
+  '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
 
 export default function PropertyImageSlider({
   images,
@@ -45,13 +49,49 @@ export default function PropertyImageSlider({
 
   const maxIndex = Math.max(images.length - 1, 0)
 
+  /**
+   * نحتفظ بتحميل:
+   * - الصورة الحالية
+   * - الصورة السابقة
+   * - الصورة التالية
+   *
+   * بدل تحميل كل صور العقار مرة واحدة.
+   */
+  const previousImageIndex =
+    images.length <= 1
+      ? 0
+      : activeIndex === 0
+        ? maxIndex
+        : activeIndex - 1
+
+  const nextImageIndex =
+    images.length <= 1
+      ? 0
+      : activeIndex === maxIndex
+        ? 0
+        : activeIndex + 1
+
+  const shouldLoadImage = (index: number) => {
+    if (images.length <= 3) {
+      return true
+    }
+
+    return (
+      index === activeIndex ||
+      index === previousImageIndex ||
+      index === nextImageIndex
+    )
+  }
+
   const getPreviousIndex = () => {
     if (images.length <= 1) return 0
+
     return activeIndex === 0 ? maxIndex : activeIndex - 1
   }
 
   const getNextIndex = () => {
     if (images.length <= 1) return 0
+
     return activeIndex === maxIndex ? 0 : activeIndex + 1
   }
 
@@ -75,7 +115,10 @@ export default function PropertyImageSlider({
     setDragOffset(0)
   }
 
-  const startGesture = (clientX: number, clientY: number) => {
+  const startGesture = (
+    clientX: number,
+    clientY: number
+  ) => {
     if (images.length <= 1) return
 
     isGestureActiveRef.current = true
@@ -91,13 +134,20 @@ export default function PropertyImageSlider({
     setDragOffset(0)
   }
 
-  const updateGesture = (clientX: number, clientY: number) => {
-    if (!isGestureActiveRef.current || images.length <= 1) {
+  const updateGesture = (
+    clientX: number,
+    clientY: number
+  ) => {
+    if (
+      !isGestureActiveRef.current ||
+      images.length <= 1
+    ) {
       return false
     }
 
     const diffX = clientX - startXRef.current
     const diffY = clientY - startYRef.current
+
     const absX = Math.abs(diffX)
     const absY = Math.abs(diffY)
 
@@ -107,10 +157,13 @@ export default function PropertyImageSlider({
       }
 
       dragAxisRef.current =
-        absX > absY * HORIZONTAL_LOCK_RATIO ? 'horizontal' : 'vertical'
+        absX > absY * HORIZONTAL_LOCK_RATIO
+          ? 'horizontal'
+          : 'vertical'
     }
 
-    // لو المستخدم بيعمل Scroll لفوق/تحت، سيبه يكمل Scroll عادي
+    // لو المستخدم بيعمل Scroll لفوق/تحت،
+    // سيبه يكمل Scroll عادي.
     if (dragAxisRef.current === 'vertical') {
       if (Math.max(absX, absY) > 10) {
         suppressClickRef.current = true
@@ -133,7 +186,8 @@ export default function PropertyImageSlider({
     if (!isGestureActiveRef.current) return
 
     const wasHorizontalDrag =
-      dragAxisRef.current === 'horizontal' && isDraggingRef.current
+      dragAxisRef.current === 'horizontal' &&
+      isDraggingRef.current
 
     const finalDragOffset = dragOffsetRef.current
 
@@ -156,7 +210,9 @@ export default function PropertyImageSlider({
       return
     }
 
-    const sliderWidth = sliderRef.current?.clientWidth || 1
+    const sliderWidth =
+      sliderRef.current?.clientWidth || 1
+
     const threshold = Math.min(
       SWIPE_THRESHOLD_MAX_PX,
       sliderWidth * SWIPE_THRESHOLD_RATIO
@@ -176,43 +232,64 @@ export default function PropertyImageSlider({
   }
 
   const getActiveTouch = (
-  touches:
-    | ReactTouchEvent<HTMLDivElement>['touches']
-    | ReactTouchEvent<HTMLDivElement>['changedTouches']
-) => {
-  const activeTouchId = activeTouchIdRef.current
+    touches:
+      | ReactTouchEvent<HTMLDivElement>['touches']
+      | ReactTouchEvent<HTMLDivElement>['changedTouches']
+  ) => {
+    const activeTouchId =
+      activeTouchIdRef.current
 
-  if (activeTouchId === null) {
-    return touches[0] ?? null
-  }
-
-  for (let index = 0; index < touches.length; index += 1) {
-    const touch = touches[index]
-
-    if (touch?.identifier === activeTouchId) {
-      return touch
+    if (activeTouchId === null) {
+      return touches[0] ?? null
     }
-  }
 
-  return null
-}
+    for (
+      let index = 0;
+      index < touches.length;
+      index += 1
+    ) {
+      const touch = touches[index]
+
+      if (
+        touch?.identifier === activeTouchId
+      ) {
+        return touch
+      }
+    }
+
+    return null
+  }
 
   const handlePointerDown = (
     event: ReactPointerEvent<HTMLDivElement>
   ) => {
-    // على الموبايل هنستخدم Touch Events لأنها أثبت داخل Link في iOS/Android
+    // على الموبايل هنستخدم Touch Events
+    // لأنها أثبت داخل Link في iOS/Android.
     if (event.pointerType === 'touch') return
 
     if (images.length <= 1) return
-    if (event.pointerType === 'mouse' && event.button !== 0) return
 
-    activePointerIdRef.current = event.pointerId
-    startGesture(event.clientX, event.clientY)
+    if (
+      event.pointerType === 'mouse' &&
+      event.button !== 0
+    ) {
+      return
+    }
+
+    activePointerIdRef.current =
+      event.pointerId
+
+    startGesture(
+      event.clientX,
+      event.clientY
+    )
 
     event.stopPropagation()
 
     try {
-      event.currentTarget.setPointerCapture(event.pointerId)
+      event.currentTarget.setPointerCapture(
+        event.pointerId
+      )
     } catch {
       // Ignore pointer capture errors.
     }
@@ -223,12 +300,17 @@ export default function PropertyImageSlider({
   ) => {
     if (
       activePointerIdRef.current !== null &&
-      event.pointerId !== activePointerIdRef.current
+      event.pointerId !==
+        activePointerIdRef.current
     ) {
       return
     }
 
-    const isHorizontalDrag = updateGesture(event.clientX, event.clientY)
+    const isHorizontalDrag =
+      updateGesture(
+        event.clientX,
+        event.clientY
+      )
 
     if (!isHorizontalDrag) return
 
@@ -241,18 +323,23 @@ export default function PropertyImageSlider({
   ) => {
     if (
       activePointerIdRef.current !== null &&
-      event.pointerId !== activePointerIdRef.current
+      event.pointerId !==
+        activePointerIdRef.current
     ) {
       return
     }
 
     try {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+      event.currentTarget.releasePointerCapture(
+        event.pointerId
+      )
     } catch {
       // Ignore release errors.
     }
 
-    if (dragAxisRef.current === 'horizontal') {
+    if (
+      dragAxisRef.current === 'horizontal'
+    ) {
       event.preventDefault()
       event.stopPropagation()
     }
@@ -265,11 +352,19 @@ export default function PropertyImageSlider({
   ) => {
     if (images.length <= 1) return
 
-    const touch = event.changedTouches[0] ?? event.touches[0]
+    const touch =
+      event.changedTouches[0] ??
+      event.touches[0]
+
     if (!touch) return
 
-    activeTouchIdRef.current = touch.identifier
-    startGesture(touch.clientX, touch.clientY)
+    activeTouchIdRef.current =
+      touch.identifier
+
+    startGesture(
+      touch.clientX,
+      touch.clientY
+    )
 
     event.stopPropagation()
   }
@@ -277,10 +372,17 @@ export default function PropertyImageSlider({
   const handleTouchMove = (
     event: ReactTouchEvent<HTMLDivElement>
   ) => {
-    const touch = getActiveTouch(event.touches)
+    const touch = getActiveTouch(
+      event.touches
+    )
+
     if (!touch) return
 
-    const isHorizontalDrag = updateGesture(touch.clientX, touch.clientY)
+    const isHorizontalDrag =
+      updateGesture(
+        touch.clientX,
+        touch.clientY
+      )
 
     if (!isHorizontalDrag) return
 
@@ -294,9 +396,14 @@ export default function PropertyImageSlider({
   const handleTouchEnd = (
     event: ReactTouchEvent<HTMLDivElement>
   ) => {
-    const touch = getActiveTouch(event.changedTouches)
+    const touch = getActiveTouch(
+      event.changedTouches
+    )
 
-    if (touch && dragAxisRef.current === 'horizontal') {
+    if (
+      touch &&
+      dragAxisRef.current === 'horizontal'
+    ) {
       if (event.nativeEvent.cancelable) {
         event.preventDefault()
       }
@@ -318,7 +425,12 @@ export default function PropertyImageSlider({
   const handleClickCapture = (
     event: ReactMouseEvent<HTMLDivElement>
   ) => {
-    if (!suppressClickRef.current && !isDraggingRef.current) return
+    if (
+      !suppressClickRef.current &&
+      !isDraggingRef.current
+    ) {
+      return
+    }
 
     event.preventDefault()
     event.stopPropagation()
@@ -341,7 +453,9 @@ export default function PropertyImageSlider({
         dir="ltr"
         data-property-image-slider="true"
         className={`property-media-slider ${
-          isDragging ? 'property-media-slider--dragging' : ''
+          isDragging
+            ? 'property-media-slider--dragging'
+            : ''
         }`}
         onClickCapture={handleClickCapture}
         onPointerDown={handlePointerDown}
@@ -355,16 +469,23 @@ export default function PropertyImageSlider({
         onTouchCancel={handleTouchCancel}
         style={{
           overflow: 'hidden',
-          touchAction: images.length > 1 ? 'pan-y' : 'auto',
+
+          touchAction:
+            images.length > 1
+              ? 'pan-y'
+              : 'auto',
+
           cursor:
             images.length > 1
               ? isDragging
                 ? 'grabbing'
                 : 'grab'
               : 'default',
+
           userSelect: 'none',
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
+
           overscrollBehaviorX: 'contain',
         }}
       >
@@ -372,37 +493,75 @@ export default function PropertyImageSlider({
           className="property-media-slider__track"
           style={{
             display: 'flex',
-            width: `${images.length * 100}%`,
+
+            width: `${
+              images.length * 100
+            }%`,
+
             height: '100%',
+
             transform: `translate3d(calc(${
-              -activeIndex * (100 / images.length)
+              -activeIndex *
+              (100 / images.length)
             }% + ${dragOffset}px), 0, 0)`,
-            transition: isDragging ? 'none' : 'transform 260ms ease',
+
+            transition: isDragging
+              ? 'none'
+              : 'transform 260ms ease',
+
             willChange: 'transform',
           }}
         >
-          {images.map((imageUrl, index) => (
-            <div
-              key={`${propertyId}-${index}`}
-              className="property-media-slider__slide"
-              style={{
-                flex: `0 0 ${100 / images.length}%`,
-                width: `${100 / images.length}%`,
-              }}
-            >
-              <img
-                src={imageUrl}
-                alt={`${title} ${index + 1}`}
-                draggable={false}
-                className="h-full w-full object-cover transition duration-700 group-hover/image:scale-[1.04]"
-                style={{
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  pointerEvents: 'none',
-                }}
-              />
-            </div>
-          ))}
+          {images.map(
+            (imageUrl, index) => {
+              const shouldLoad =
+                shouldLoadImage(index)
+
+              return (
+                <div
+                  key={`${propertyId}-${index}`}
+                  className="property-media-slider__slide"
+                  style={{
+                    flex: `0 0 ${
+                      100 / images.length
+                    }%`,
+
+                    width: `${
+                      100 / images.length
+                    }%`,
+
+                    height: '100%',
+
+                    position: 'relative',
+
+                    overflow: 'hidden',
+                  }}
+                >
+                  {shouldLoad && (
+                    <Image
+                      src={imageUrl}
+                      alt={`${title} ${
+                        index + 1
+                      }`}
+                      fill
+                      sizes={IMAGE_SIZES}
+                      quality={75}
+                      loading="lazy"
+                      draggable={false}
+                      className="object-cover transition duration-700 group-hover/image:scale-[1.04]"
+                      style={{
+                        userSelect: 'none',
+                        WebkitUserSelect:
+                          'none',
+                        pointerEvents:
+                          'none',
+                      }}
+                    />
+                  )}
+                </div>
+              )
+            }
+          )}
         </div>
       </div>
 
@@ -412,10 +571,13 @@ export default function PropertyImageSlider({
             <button
               key={`${propertyId}-dot-${index}`}
               type="button"
-              aria-label={`Go to image ${index + 1}`}
+              aria-label={`Go to image ${
+                index + 1
+              }`}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
+
                 goToSlide(index)
               }}
               className={`property-media-slider__dot ${
