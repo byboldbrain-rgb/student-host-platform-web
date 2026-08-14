@@ -2815,6 +2815,23 @@ export async function updatePropertyAction(formData: FormData) {
     finalImages[0].is_cover = true
   }
 
+  // The database enforces one cover image per property through a partial
+  // unique index. Clear the current cover before assigning the new one so
+  // changing the cover can never temporarily create two cover images.
+  const { error: clearExistingCoverError } = await supabase
+    .from('property_images')
+    .update({
+      is_cover: false,
+    })
+    .eq('property_id_ref', propertyDbId)
+    .eq('is_cover', true)
+
+  if (clearExistingCoverError) {
+    throw new Error(
+      `Failed to clear existing property cover: ${clearExistingCoverError.message}`,
+    )
+  }
+
   for (const image of finalImages.filter((img) => img.source === 'existing')) {
     const { error } = await supabase
       .from('property_images')
@@ -2827,7 +2844,7 @@ export async function updatePropertyAction(formData: FormData) {
       .eq('id', image.id)
 
     if (error) {
-      throw new Error(error.message)
+      throw new Error(`Failed to update property image: ${error.message}`)
     }
   }
 
@@ -2845,8 +2862,9 @@ export async function updatePropertyAction(formData: FormData) {
     const { error } = await supabase
       .from('property_images')
       .insert(newRowsToInsert)
+
     if (error) {
-      throw new Error(error.message)
+      throw new Error(`Failed to insert property images: ${error.message}`)
     }
   }
 
