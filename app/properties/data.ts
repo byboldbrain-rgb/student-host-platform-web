@@ -1,4 +1,3 @@
-// app/properties/data.ts
 import 'server-only'
 
 import { unstable_cache } from 'next/cache'
@@ -74,6 +73,7 @@ export type PropertyImage = {
 }
 
 export type PropertySellableOption = {
+  id?: string | null
   code?: string | null
   option_code?: string | null
   price_egp?: number | null
@@ -82,6 +82,7 @@ export type PropertySellableOption = {
 }
 
 export type PropertyRoomSellableOption = {
+  id?: string | null
   code?: string | null
   price_egp?: number | null
   is_active?: boolean | null
@@ -89,6 +90,11 @@ export type PropertyRoomSellableOption = {
 }
 
 export type PropertyRoom = {
+  id?: string | null
+  is_active?: boolean | null
+  deleted_at?: string | null
+  is_reserved_summer_course?: boolean | null
+  is_reserved_academic_year?: boolean | null
   property_room_sellable_options?: PropertyRoomSellableOption[] | null
 }
 
@@ -288,6 +294,7 @@ export const getCachedPopularProperties = unstable_cache(
           sort_order
         ),
         property_sellable_options(
+          id,
           code,
           option_code,
           price_egp,
@@ -295,7 +302,13 @@ export const getCachedPopularProperties = unstable_cache(
           deleted_at
         ),
         property_rooms(
+          id,
+          is_active,
+          deleted_at,
+          is_reserved_summer_course,
+          is_reserved_academic_year,
           property_room_sellable_options(
+            id,
             code,
             price_egp,
             is_active,
@@ -315,7 +328,14 @@ export const getCachedPopularProperties = unstable_cache(
 
     return (data ?? []) as CachedPropertyListing[]
   },
-  ['navienty', 'properties', 'popular', 'published-active', 'limit-300'],
+  [
+    'navienty',
+    'properties',
+    'popular',
+    'published-active',
+    'limit-300',
+    'season-reservation-flags-v1',
+  ],
   {
     tags: [
       NAVIENTY_CACHE_TAGS.propertyListings,

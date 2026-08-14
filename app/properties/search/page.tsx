@@ -110,6 +110,7 @@ type PropertySeasonalPriceRow = {
   property_id?: string | number | null;
   sellable_option_id?: string | null;
   room_sellable_option_id?: string | null;
+  season_id?: string | null;
   price_egp?: number | string | null;
   is_active?: boolean | null;
 };
@@ -132,8 +133,11 @@ type PropertyRoomSellableOption = {
 };
 
 type PropertyRoom = {
+  id?: string | null;
   is_active?: boolean | null;
   deleted_at?: string | null;
+  is_reserved_summer_course?: boolean | null;
+  is_reserved_academic_year?: boolean | null;
   property_room_sellable_options?: PropertyRoomSellableOption[] | null;
 };
 
@@ -533,6 +537,55 @@ function isUsablePriceOption(option: {
     !option.deleted_at &&
     normalizePositivePrice(option.price_egp) !== null
   );
+}
+
+function isRoomReservedForPricingSeason(
+  room: PropertyRoom,
+  seasonCode: PricingSeasonCode,
+) {
+  return seasonCode === "summer_course"
+    ? room.is_reserved_summer_course === true
+    : room.is_reserved_academic_year === true;
+}
+
+function getActivePropertyRooms(property: Property) {
+  return (property.property_rooms ?? []).filter(
+    (room) => room.is_active !== false && !room.deleted_at,
+  );
+}
+
+function isFullApartmentAvailableForSeason(
+  property: Property,
+  seasonCode: PricingSeasonCode,
+) {
+  const activeRooms = getActivePropertyRooms(property);
+
+  // Listings without room rows are legacy listings. Keep them usable instead
+  // of hiding their full-apartment seasonal price.
+  if (activeRooms.length === 0) return true;
+
+  return activeRooms.every(
+    (room) => !isRoomReservedForPricingSeason(room, seasonCode),
+  );
+}
+
+function isAnyRoomAvailableForSeason(
+  property: Property,
+  seasonCode: PricingSeasonCode,
+) {
+  const activeRooms = getActivePropertyRooms(property);
+
+  if (activeRooms.length === 0) return true;
+
+  return activeRooms.some(
+    (room) => !isRoomReservedForPricingSeason(room, seasonCode),
+  );
+}
+
+function getPropertyOptionCode(option?: PropertySellableOption | null) {
+  return String(option?.option_code || option?.code || "")
+    .trim()
+    .toLowerCase();
 }
 
 function getDisplayPriceEgp(property: Property): number {
@@ -1072,8 +1125,11 @@ export default async function SearchResultsPage({
         deleted_at
       ),
       property_rooms(
+        id,
         is_active,
         deleted_at,
+        is_reserved_summer_course,
+        is_reserved_academic_year,
         property_room_sellable_options(
           id,
           code,
@@ -1126,157 +1182,206 @@ export default async function SearchResultsPage({
   let propertiesForFiltering = loadedProperties;
 
   /*
-    عند اختيار فترة السكن، نحاول تحميل الأسعار الموسمية واستخدامها
-    في الكارت والخريطة وفلتر السعر والترتيب.
+    السعر الظاهر لازم يكون أقل سعر "متاح فعليًا" للحجز، وليس أقل سعر مخزن.
 
-    لو قراءة جداول المواسم فشلت بسبب RLS أو لم توجد بيانات قابلة للقراءة،
-    لا نخفي كل العقارات؛ نرجع للأسعار الأساسية بدل ظهور صفحة فارغة.
+    - بدون اختيار موسم: نقرأ السمر كورس + السنة الأكاديمية، ونستبعد أي سعر
+      تابع لغرفة محجوزة في موسمه.
+    - عند اختيار موسم: نستخدم أسعار هذا الموسم فقط، ونخفي العقار إذا لم يعد
+      لديه أي خيار حجز متاح في الموسم المختار.
+    - Full Apartment لا يكون متاحًا في موسم إلا إذا كانت كل الغرف النشطة
+      غير محجوزة في هذا الموسم.
+    - نتجاهل property-level single/double/triple aggregate prices عند وجود
+      room-level prices، لأن السعر التجميعي قد يكون محسوبًا من غرفة محجوزة.
   */
-  if (selectedSeason) {
-    const { data: selectedPricingSeasons, error: pricingSeasonsError } =
-      await supabase
-        .from("property_pricing_seasons")
-        .select("id, code, is_active")
-        .eq("code", selectedSeason)
-        .eq("is_active", true);
+  const seasonCodesToLoad: PricingSeasonCode[] = selectedSeason
+    ? [selectedSeason]
+    : ["summer_course", "academic_year"];
+
+  const propertyIds = loadedProperties.map((property) => String(property.id));
+  let seasonalPricingResolved = false;
+  let seasonalPriceRows: PropertySeasonalPriceRow[] = [];
+  const pricingSeasonCodeById = new Map<string, PricingSeasonCode>();
+
+  if (propertyIds.length > 0) {
+    const { data: pricingSeasons, error: pricingSeasonsError } = await supabase
+      .from("property_pricing_seasons")
+      .select("id, code, is_active")
+      .in("code", seasonCodesToLoad)
+      .eq("is_active", true);
 
     if (pricingSeasonsError) {
       console.error(
-        "Failed to load selected pricing seasons:",
+        "Failed to load pricing seasons for available-price calculation:",
         pricingSeasonsError.message,
       );
-    }
+    } else {
+      for (const season of
+        (pricingSeasons as {
+          id?: string | null;
+          code?: PricingSeasonCode | string | null;
+        }[]) ?? []) {
+        const seasonId = String(season.id ?? "").trim();
+        const seasonCode = normalizePricingSeason(season.code);
 
-    const selectedSeasonIds = Array.from(
-      new Set(
-        ((selectedPricingSeasons as { id?: string | null }[]) ?? [])
-          .map((season) => String(season.id ?? "").trim())
-          .filter(Boolean),
-      ),
-    );
+        if (seasonId && seasonCode) {
+          pricingSeasonCodeById.set(seasonId, seasonCode);
+        }
+      }
 
-    const propertyIds = loadedProperties.map((property) => String(property.id));
-    let selectedSeasonalPriceRows: PropertySeasonalPriceRow[] = [];
-    let seasonalPricesReadSucceeded = false;
+      const seasonIds = Array.from(pricingSeasonCodeById.keys());
 
-    if (
-      !pricingSeasonsError &&
-      selectedSeasonIds.length > 0 &&
-      propertyIds.length > 0
-    ) {
-      const { data: seasonalPriceRows, error: seasonalPricesError } =
-        await supabase
-          .from("property_option_seasonal_prices")
-          .select(
-            "property_id, sellable_option_id, room_sellable_option_id, price_egp, is_active",
-          )
-          .in("season_id", selectedSeasonIds)
-          .eq("is_active", true)
-          .in("property_id", propertyIds);
+      if (seasonIds.length > 0) {
+        const { data: loadedSeasonalPrices, error: seasonalPricesError } =
+          await supabase
+            .from("property_option_seasonal_prices")
+            .select(
+              "property_id, sellable_option_id, room_sellable_option_id, season_id, price_egp, is_active",
+            )
+            .in("season_id", seasonIds)
+            .eq("is_active", true)
+            .in("property_id", propertyIds);
 
-      if (seasonalPricesError) {
-        console.error(
-          "Failed to load seasonal property prices:",
-          seasonalPricesError.message,
-        );
+        if (seasonalPricesError) {
+          console.error(
+            "Failed to load seasonal property prices:",
+            seasonalPricesError.message,
+          );
+        } else {
+          seasonalPricingResolved = true;
+          seasonalPriceRows =
+            (loadedSeasonalPrices as PropertySeasonalPriceRow[]) ?? [];
+        }
       } else {
-        seasonalPricesReadSucceeded = true;
-        selectedSeasonalPriceRows =
-          (seasonalPriceRows as PropertySeasonalPriceRow[]) ?? [];
+        console.warn(
+          `No active pricing seasons found for: ${seasonCodesToLoad.join(", ")}`,
+        );
       }
     }
+  }
 
-    const activePropertyOptionIdsByPropertyId = new Map<string, Set<string>>();
-    const activeRoomOptionIdsByPropertyId = new Map<string, Set<string>>();
+  if (seasonalPricingResolved) {
+    const propertyById = new Map(
+      loadedProperties.map((property) => [String(property.id), property]),
+    );
+
+    const propertyOptionByIdByPropertyId = new Map<
+      string,
+      Map<string, PropertySellableOption>
+    >();
+
+    const roomByOptionIdByPropertyId = new Map<
+      string,
+      Map<string, PropertyRoom>
+    >();
 
     for (const property of loadedProperties) {
       const propertyId = String(property.id);
-      const activePropertyOptionIds = new Set(
-        (property.property_sellable_options ?? [])
-          .filter((option) => option.is_active !== false && !option.deleted_at)
-          .map((option) => String(option.id ?? "").trim())
-          .filter(Boolean),
-      );
-      const activeRoomOptionIds = new Set(
-        (property.property_rooms ?? [])
-          .filter((room) => room.is_active !== false && !room.deleted_at)
-          .flatMap((room) => room.property_room_sellable_options ?? [])
-          .filter((option) => option.is_active !== false && !option.deleted_at)
-          .map((option) => String(option.id ?? "").trim())
-          .filter(Boolean),
-      );
 
-      activePropertyOptionIdsByPropertyId.set(
-        propertyId,
-        activePropertyOptionIds,
-      );
-      activeRoomOptionIdsByPropertyId.set(propertyId, activeRoomOptionIds);
+      const propertyOptionsById = new Map<string, PropertySellableOption>();
+      for (const option of property.property_sellable_options ?? []) {
+        if (option.is_active === false || option.deleted_at) continue;
+
+        const optionId = String(option.id ?? "").trim();
+        if (optionId) propertyOptionsById.set(optionId, option);
+      }
+
+      propertyOptionByIdByPropertyId.set(propertyId, propertyOptionsById);
+
+      const roomsByOptionId = new Map<string, PropertyRoom>();
+      for (const room of getActivePropertyRooms(property)) {
+        for (const option of room.property_room_sellable_options ?? []) {
+          if (option.is_active === false || option.deleted_at) continue;
+
+          const optionId = String(option.id ?? "").trim();
+          if (optionId) roomsByOptionId.set(optionId, room);
+        }
+      }
+
+      roomByOptionIdByPropertyId.set(propertyId, roomsByOptionId);
     }
 
-    const seasonalPricesByPropertyId = new Map<string, number[]>();
+    const availableSeasonalPricesByPropertyId = new Map<string, number[]>();
 
-    for (const row of selectedSeasonalPriceRows) {
+    for (const row of seasonalPriceRows) {
       if (!row.property_id || row.is_active === false) continue;
 
       const propertyId = String(row.property_id);
+      const property = propertyById.get(propertyId);
+      if (!property) continue;
+
+      const seasonCode = pricingSeasonCodeById.get(
+        String(row.season_id ?? "").trim(),
+      );
+      if (!seasonCode) continue;
+
       const price = normalizePositivePrice(row.price_egp);
       if (price === null) continue;
 
       const propertyOptionId = String(row.sellable_option_id ?? "").trim();
       const roomOptionId = String(row.room_sellable_option_id ?? "").trim();
 
-      const hasNoOptionLink = !propertyOptionId && !roomOptionId;
-      const belongsToActivePropertyOption = Boolean(
-        propertyOptionId &&
-        activePropertyOptionIdsByPropertyId
+      let priceIsAvailable = false;
+
+      if (roomOptionId) {
+        const room = roomByOptionIdByPropertyId
           .get(propertyId)
-          ?.has(propertyOptionId),
-      );
-      const belongsToActiveRoomOption = Boolean(
-        roomOptionId &&
-        activeRoomOptionIdsByPropertyId.get(propertyId)?.has(roomOptionId),
-      );
+          ?.get(roomOptionId);
 
-      /*
-        نقبل السعر إذا كان مرتبطًا بخيار فعال، أو كان من بيانات قديمة
-        مرتبطة بالعقار مباشرة من غير option id.
-      */
-      if (
-        !hasNoOptionLink &&
-        !belongsToActivePropertyOption &&
-        !belongsToActiveRoomOption
-      ) {
-        continue;
+        priceIsAvailable = Boolean(
+          room && !isRoomReservedForPricingSeason(room, seasonCode),
+        );
+      } else if (propertyOptionId) {
+        const propertyOption = propertyOptionByIdByPropertyId
+          .get(propertyId)
+          ?.get(propertyOptionId);
+
+        const optionCode = getPropertyOptionCode(propertyOption);
+
+        /*
+          property_sellable_options يحتوي أيضًا على single/double/triple
+          مجمعة بأقل سعر عبر كل الغرف. لا نستخدمها هنا لأن أقل سعر مجمع قد
+          يكون صادرًا من غرفة محجوزة. أسعار room_sellable_options هي المصدر
+          الأدق لتحديد "أقل سعر متاح".
+        */
+        if (optionCode === "full_apartment") {
+          priceIsAvailable = isFullApartmentAvailableForSeason(
+            property,
+            seasonCode,
+          );
+        }
+      } else {
+        /*
+          دعم بيانات قديمة مرتبطة بالعقار مباشرة بدون option id.
+          لا نستخدمها إلا لو يوجد على الأقل جزء متاح من العقار في الموسم.
+        */
+        priceIsAvailable = isAnyRoomAvailableForSeason(property, seasonCode);
       }
 
-      const currentPrices = seasonalPricesByPropertyId.get(propertyId) ?? [];
+      if (!priceIsAvailable) continue;
+
+      const currentPrices =
+        availableSeasonalPricesByPropertyId.get(propertyId) ?? [];
       currentPrices.push(price);
-      seasonalPricesByPropertyId.set(propertyId, currentPrices);
+      availableSeasonalPricesByPropertyId.set(propertyId, currentPrices);
     }
 
-    if (seasonalPricesByPropertyId.size > 0) {
-      propertiesForFiltering = loadedProperties
-        .map((property) => ({
-          ...property,
-          selected_season_prices:
-            seasonalPricesByPropertyId.get(String(property.id)) ?? [],
-        }))
-        .filter(
-          (property) => (property.selected_season_prices?.length ?? 0) > 0,
-        );
-    } else {
-      if (selectedSeasonIds.length === 0) {
-        console.warn(
-          `No active pricing season found for code: ${selectedSeason}`,
-        );
-      } else if (seasonalPricesReadSucceeded) {
-        console.warn(
-          `No readable seasonal prices found for season: ${selectedSeason}`,
-        );
-      }
+    propertiesForFiltering = loadedProperties.map((property) => ({
+      ...property,
+      selected_season_prices:
+        availableSeasonalPricesByPropertyId.get(String(property.id)) ?? [],
+    }));
 
-      propertiesForFiltering = loadedProperties;
+    if (selectedSeason) {
+      propertiesForFiltering = propertiesForFiltering.filter(
+        (property) => (property.selected_season_prices?.length ?? 0) > 0,
+      );
     }
+  } else if (selectedSeason) {
+    /*
+      Fail-open فقط عند فشل قراءة جداول التسعير نفسها.
+      في هذه الحالة نُبقي النتائج بدل تحويل الصفحة كلها إلى صفر عقارات.
+    */
+    propertiesForFiltering = loadedProperties;
   }
 
   /*
