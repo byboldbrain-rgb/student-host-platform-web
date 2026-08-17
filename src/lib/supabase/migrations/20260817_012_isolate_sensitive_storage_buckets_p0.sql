@@ -16,21 +16,29 @@ using (
       'lost-items',
       'food-grocery',
       'doctor-photos',
-      'community-posts',
-      'property-videos',
-      'property-owner-documents',
-      'home-banners',
-      'service-provider-images',
-      'career-assets',
-      'student-activity-assets',
-      'coworking-images',
-      'now-home-banners'
+      'student-activities',
+      'community-posts'
     ]::text[]
   )
 );
 
--- Keep legacy generic client uploads constrained to the same public-media allowlist.
--- The exact policy names are retained for compatibility with the existing project.
+alter policy "Allow authenticated upload 1k7agta_0"
+on storage.objects
+with check (
+  auth.role() = 'authenticated'
+  and bucket_id = any (
+    array[
+      'property-images',
+      'Brokers-images',
+      'lost-items',
+      'food-grocery',
+      'doctor-photos',
+      'student-activities',
+      'community-posts'
+    ]::text[]
+  )
+);
+
 alter policy "upload 1k7agta_0"
 on storage.objects
 with check (
@@ -41,15 +49,8 @@ with check (
       'lost-items',
       'food-grocery',
       'doctor-photos',
-      'community-posts',
-      'property-videos',
-      'property-owner-documents',
-      'home-banners',
-      'service-provider-images',
-      'career-assets',
-      'student-activity-assets',
-      'coworking-images',
-      'now-home-banners'
+      'student-activities',
+      'community-posts'
     ]::text[]
   )
 );
