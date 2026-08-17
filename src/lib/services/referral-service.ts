@@ -15,6 +15,23 @@ type SupabaseLikeClient = {
   from: (table: string) => any
 }
 
+type ReferralValidationRpcResult = {
+  valid?: boolean
+  reason?: string | null
+  inviter_user_id?: string | null
+  inviter_name?: string | null
+  referral_code?: string | null
+}
+
+type ApplyReferralRpcResult = {
+  success?: boolean
+  referral_id?: string | null
+  inviter_user_id?: string | null
+  inviter_name?: string | null
+  referral_code?: string | null
+  signup_bonus?: unknown
+}
+
 async function getSettingNumber(
   supabase: SupabaseLikeClient,
   key: string,
@@ -47,9 +64,17 @@ export async function getReferralConstants() {
     invitedFirstPaidBonusAmount,
   ] = await Promise.all([
     getSettingNumber(supabase, 'signup_bonus_amount', 100),
-    getSettingNumber(supabase, 'referral_inviter_bonus', 100),
-    getSettingNumber(supabase, 'referral_invited_signup_bonus', 100),
-    getSettingNumber(supabase, 'referral_invited_first_paid_bonus', 100),
+    getSettingNumber(
+      supabase,
+      'referral_inviter_first_paid_bonus_amount',
+      100
+    ),
+    getSettingNumber(supabase, 'referral_invited_signup_bonus_amount', 100),
+    getSettingNumber(
+      supabase,
+      'referral_invited_first_paid_bonus_amount',
+      100
+    ),
   ])
 
   return {
@@ -105,28 +130,23 @@ export async function validateReferralCode(referralCode: string) {
     throw new Error('REFERRAL_CODE_REQUIRED')
   }
 
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('id, full_name, referral_code')
-    .ilike('referral_code', code)
-    .maybeSingle()
+  const {
+    data,
+    error,
+  } = await supabase.rpc('validate_referral_code_for_current_user', {
+    p_referral_code: code,
+  })
 
   if (error) throw error
 
-  if (!data) {
-    return {
-      valid: false,
-      inviterUserId: null,
-      inviterName: null,
-      referralCode: code,
-    }
-  }
+  const result = (data ?? {}) as ReferralValidationRpcResult
 
   return {
-    valid: true,
-    inviterUserId: data.id,
-    inviterName: data.full_name,
-    referralCode: data.referral_code,
+    valid: result.valid === true,
+    inviterUserId: result.inviter_user_id ?? null,
+    inviterName: result.inviter_name ?? null,
+    referralCode: result.referral_code ?? code,
+    reason: result.reason ?? null,
   }
 }
 
@@ -147,81 +167,26 @@ export async function applyReferralCodeForCurrentUser(referralCode: string) {
     throw new Error('REFERRAL_CODE_REQUIRED')
   }
 
-  const { data: myProfile, error: myProfileError } = await supabase
-    .from('user_profiles')
-    .select('id, referral_code, referred_by_user_id')
-    .eq('id', user.id)
-    .single()
-
-  if (myProfileError) throw myProfileError
-
-  if (myProfile.referred_by_user_id) {
-    throw new Error('REFERRAL_ALREADY_USED')
-  }
-
-  const { data: inviterProfile, error: inviterError } = await supabase
-    .from('user_profiles')
-    .select('id, referral_code, full_name')
-    .ilike('referral_code', code)
-    .maybeSingle()
-
-  if (inviterError) throw inviterError
-  if (!inviterProfile) throw new Error('INVALID_REFERRAL_CODE')
-
-  if (inviterProfile.id === user.id) {
-    throw new Error('SELF_REFERRAL_NOT_ALLOWED')
-  }
-
-  const now = new Date().toISOString()
-
-  const { error: profileUpdateError } = await supabase
-    .from('user_profiles')
-    .update({
-      referred_by_user_id: inviterProfile.id,
-      updated_at: now,
-    })
-    .eq('id', user.id)
-    .is('referred_by_user_id', null)
-
-  if (profileUpdateError) throw profileUpdateError
-
-  const { error: referralInsertError } = await supabase
-    .from('user_referrals')
-    .insert({
-      inviter_user_id: inviterProfile.id,
-      invited_user_id: user.id,
-      referral_code: inviterProfile.referral_code,
-      status: 'pending',
-      inviter_reward_amount: 0,
-      invited_reward_amount: 0,
-    })
-
-  if (referralInsertError) {
-    await supabase
-      .from('user_profiles')
-      .update({
-        referred_by_user_id: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id)
-
-    throw referralInsertError
-  }
-
-  const { error: signupReferralBonusError } = await supabase.rpc(
-    'award_referral_signup_bonus',
+  const { data, error } = await supabase.rpc(
+    'apply_referral_code_for_current_user',
     {
-      p_invited_user_id: user.id,
+      p_referral_code: code,
     }
   )
 
-  if (signupReferralBonusError) throw signupReferralBonusError
+  if (error) throw error
+
+  const result = (data ?? {}) as ApplyReferralRpcResult
+
+  if (result.success !== true) {
+    throw new Error('REFERRAL_APPLICATION_FAILED')
+  }
 
   return {
     success: true,
-    inviterUserId: inviterProfile.id,
-    inviterName: inviterProfile.full_name,
-    referralCode: inviterProfile.referral_code,
+    inviterUserId: result.inviter_user_id ?? null,
+    inviterName: result.inviter_name ?? null,
+    referralCode: result.referral_code ?? code,
     constants: await getReferralConstants(),
   }
 }
@@ -251,7 +216,7 @@ export async function rewardReferralAfterQualifiedReservation(
   const { error } = await admin.rpc('award_referral_first_paid_bonus', {
     p_invited_user_id: input.invitedUserId,
     p_source_reservation_id: input.sourceReservationId,
-    p_admin_user_id: input.adminUserId ?? null,
+    p_created_by_admin_id: input.adminUserId ?? null,
   })
 
   if (error) throw error
