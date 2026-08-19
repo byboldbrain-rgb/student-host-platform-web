@@ -365,7 +365,7 @@ export default async function AdminPropertiesPage({
     redirect('/admin/properties/booking-requests')
   }
 
-  let query = supabase
+  let query = adminSupabase
     .from('properties')
     .select(`
       id,
