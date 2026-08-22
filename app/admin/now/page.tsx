@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import {
+  AlertTriangle,
   ArrowLeft,
   ClipboardList,
   Database,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { requireNowAdmin } from './lib/admin-data';
+import { getNowSchemaCatalog } from './lib/table-data';
 import {
   canAccessNowTable,
   NOW_ADMIN_GROUPS,
@@ -16,8 +18,15 @@ import {
 } from './lib/table-registry';
 
 export default async function NavientyNowAdminPage() {
-  const { access } = await requireNowAdmin();
+  const [{ access }, schemaCatalog] = await Promise.all([
+    requireNowAdmin(),
+    getNowSchemaCatalog(),
+  ]);
   const accessibleTables = NOW_TABLES.filter((table) => canAccessNowTable(access, table));
+  const registeredNames = new Set(NOW_TABLES.map((table) => table.table));
+  const unregisteredTables = schemaCatalog.filter(
+    (table) => !registeredNames.has(table.table_name),
+  );
   const groups = (Object.entries(NOW_ADMIN_GROUPS) as Array<
     [NowAdminGroup, (typeof NOW_ADMIN_GROUPS)[NowAdminGroup]]
   >)
@@ -76,13 +85,19 @@ export default async function NavientyNowAdminPage() {
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
             <p className="text-xs font-black uppercase tracking-widest text-slate-400">
-              Database coverage
+              Live database coverage
             </p>
             <p className="mt-2 text-5xl font-black text-white">
-              {NOW_TABLES.length}/{NOW_TABLES.length}
+              {NOW_TABLES.length}/{schemaCatalog.length}
             </p>
-            <p className="mt-2 text-sm font-bold text-emerald-300">
-              كل جداول schema now مسجلة في الـAdmin Registry
+            <p
+              className={`mt-2 text-sm font-bold ${
+                unregisteredTables.length === 0 ? 'text-emerald-300' : 'text-amber-300'
+              }`}
+            >
+              {unregisteredTables.length === 0
+                ? 'كل جداول schema now مسجلة في الـAdmin Registry'
+                : `${unregisteredTables.length} جدول جديد يحتاج تصنيف`}
             </p>
             <div className="mt-5 border-t border-white/10 pt-4 text-xs text-slate-400">
               المتاح بصلاحيتك الحالية: {accessibleTables.length} جدول
@@ -90,6 +105,22 @@ export default async function NavientyNowAdminPage() {
           </div>
         </div>
       </section>
+
+      {unregisteredTables.length > 0 && access.permissions.manage_settings ? (
+        <Link
+          href="/admin/now/data?group=system"
+          className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-900 shadow-sm transition hover:bg-amber-100"
+        >
+          <AlertTriangle className="mt-0.5 shrink-0" size={21} />
+          <div>
+            <p className="font-black">Schema Coverage Guard يحتاج انتباهك</p>
+            <p className="mt-1 text-sm leading-6">
+              قاعدة البيانات فيها {unregisteredTables.length} جدول غير مسجل. الجداول مكتشفة
+              تلقائيًا ومتاح عرضها Read-only لحد ما نحدد صلاحياتها وWorkflow التعديل الآمن.
+            </p>
+          </div>
+        </Link>
+      ) : null}
 
       <section>
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -135,7 +166,7 @@ export default async function NavientyNowAdminPage() {
               Orders history، voucher redemptions، notification logs وباقي سجلات الـaudit لا يتم
               تعديلها Raw. العمليات التي لها RPC أو state transition تستخدم مسارها الآمن، بينما
               المحتوى والإعدادات فقط هي التي تستخدم CRUD المباشر بعد التحقق من صلاحيات الأدمن على
-              السيرفر.
+              السيرفر. وأي جدول جديد يظهر تلقائيًا Read-only بدل ما يختفي من الواجهة.
             </p>
           </div>
         </div>
