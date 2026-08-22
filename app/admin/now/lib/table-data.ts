@@ -14,30 +14,107 @@ import {
 
 export type NowAdminRow = Record<string, unknown>;
 
+export type NowSchemaTable = {
+  table_name: string;
+  primary_key_columns: string[];
+  column_names: string[];
+};
+
 function getErrorMessage(error: { message?: string; details?: string } | null) {
   return [error?.message, error?.details].filter(Boolean).join(' — ') || 'تعذر تحميل البيانات.';
 }
 
-export async function requireNowTableAccess(tableName: string, mutation = false) {
-  const definition = getNowTableDefinition(tableName);
+async function loadNowSchemaCatalog(
+  context: Awaited<ReturnType<typeof requireNowAdmin>>,
+) {
+  const { data, error } = await context.supabase
+    .schema('now')
+    .rpc('get_admin_schema_catalog');
 
-  if (!definition) {
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+
+  return (data ?? []) as NowSchemaTable[];
+}
+
+export async function getNowSchemaCatalog() {
+  const context = await requireNowAdmin();
+  return loadNowSchemaCatalog(context);
+}
+
+function createUnregisteredTableDefinition(
+  schemaTable: NowSchemaTable,
+): NowTableDefinition {
+  const primaryKey = schemaTable.primary_key_columns ?? [];
+  const columns = schemaTable.column_names ?? [];
+  const fallbackColumn = primaryKey[0] ?? columns[0] ?? 'id';
+
+  return {
+    table: schemaTable.table_name,
+    labelAr: `جدول غير مسجل: ${schemaTable.table_name}`,
+    descriptionAr:
+      'تم اكتشاف هذا الجدول تلقائيًا في schema now لكنه غير موجود بعد في Admin Registry. يظهر للـmanage_settings كقراءة فقط حتى يتم تصنيفه وتحديد صلاحيات التعديل الآمنة.',
+    group: 'system',
+    permission: 'manage_settings',
+    mutationMode: 'readonly',
+    primaryKey: primaryKey.length > 0 ? primaryKey : [fallbackColumn],
+    titleColumns: primaryKey.length > 0 ? primaryKey : [fallbackColumn],
+    orderBy: fallbackColumn,
+    orderAscending: true,
+  };
+}
+
+export async function resolveNowTableAccess(tableName: string) {
+  const context = await requireNowAdmin();
+  const registered = getNowTableDefinition(tableName);
+
+  if (registered) {
+    if (!canAccessNowTable(context.access, registered)) {
+      redirect('/admin/unauthorized');
+    }
+
+    return {
+      ...context,
+      definition: registered,
+      isRegistered: true,
+    };
+  }
+
+  if (!context.access.permissions.manage_settings) {
+    redirect('/admin/unauthorized');
+  }
+
+  const catalog = await loadNowSchemaCatalog(context);
+  const schemaTable = catalog.find((table) => table.table_name === tableName);
+
+  if (!schemaTable) {
+    return null;
+  }
+
+  return {
+    ...context,
+    definition: createUnregisteredTableDefinition(schemaTable),
+    isRegistered: false,
+  };
+}
+
+export async function requireNowTableAccess(tableName: string, mutation = false) {
+  const resolved = await resolveNowTableAccess(tableName);
+
+  if (!resolved) {
     throw new Error('unknown_navienty_now_table');
   }
 
-  const context = await requireNowAdmin();
   const allowed = mutation
-    ? canMutateNowTable(context.access, definition)
-    : canAccessNowTable(context.access, definition);
+    ? resolved.isRegistered && canMutateNowTable(resolved.access, resolved.definition)
+    : canAccessNowTable(resolved.access, resolved.definition);
 
   if (!allowed) {
     redirect('/admin/unauthorized');
   }
 
-  return {
-    ...context,
-    definition,
-  };
+  return resolved;
 }
 
 export async function getAdminTableRows(input: {
@@ -46,7 +123,7 @@ export async function getAdminTableRows(input: {
   pageSize?: number;
   search?: string | null;
 }) {
-  const { definition } = await requireNowTableAccess(input.tableName);
+  const { definition, isRegistered } = await requireNowTableAccess(input.tableName);
   const admin = createAdminClient();
   const pageSize = Math.min(Math.max(input.pageSize ?? 50, 10), 100);
   const page = Math.max(input.page ?? 1, 1);
@@ -76,6 +153,7 @@ export async function getAdminTableRows(input: {
 
   return {
     definition,
+    isRegistered,
     rows: (data ?? []) as NowAdminRow[],
     pagination: {
       page,
