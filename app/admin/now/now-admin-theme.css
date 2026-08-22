@@ -16,6 +16,23 @@
   box-sizing: border-box;
 }
 
+.now-admin-shell .font-black,
+.now-admin-shell .font-extrabold {
+  font-weight: 600 !important;
+}
+
+.now-admin-shell .rounded-2xl {
+  border-radius: 24px !important;
+}
+
+.now-admin-shell .rounded-3xl {
+  border-radius: 32px !important;
+}
+
+.now-admin-shell .shadow-sm {
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
 .now-admin-shell input:not([type='checkbox']):not([type='radio']):not([type='file']),
 .now-admin-shell textarea,
 .now-admin-shell select {
@@ -63,6 +80,7 @@
   --tw-gradient-from: #2563eb var(--tw-gradient-from-position) !important;
   --tw-gradient-to: rgb(37 99 235 / 0) var(--tw-gradient-to-position) !important;
 }
+
 .now-admin-shell .to-indigo-600 {
   --tw-gradient-to: #1d4ed8 var(--tw-gradient-to-position) !important;
 }
