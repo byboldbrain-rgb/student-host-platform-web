@@ -72,13 +72,13 @@ function Field({
   if (kind === 'boolean') {
     const checked = value === true || value === 'true';
     return (
-      <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-violet-200 hover:bg-violet-50/40">
+      <label className="flex cursor-pointer items-start justify-between gap-4 rounded-[20px] border border-black/[0.06] bg-[#fafbfc] p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
         {hiddenKind}
         <span>
-          <span className="block text-sm font-black text-slate-800">{label}</span>
-          {help ? <span className="mt-1 block text-[11px] font-semibold leading-5 text-slate-500">{help}</span> : null}
+          <span className="block text-sm font-semibold text-[#111827]">{label}</span>
+          {help ? <span className="mt-1 block text-[11px] font-medium leading-5 text-gray-500">{help}</span> : null}
         </span>
-        <input type="checkbox" name={controlName} defaultChecked={checked} className="mt-1 h-5 w-5 shrink-0 accent-violet-600" />
+        <input type="checkbox" name={controlName} defaultChecked={checked} className="mt-1 h-5 w-5 shrink-0 accent-blue-600" />
       </label>
     );
   }
@@ -92,7 +92,7 @@ function Field({
           {!required ? <option value="">بدون تحديد</option> : <option value="">اختر...</option>}
           {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
-        {help ? <span className="mt-1.5 block text-[11px] font-semibold leading-5 text-slate-400">{help}</span> : null}
+        {help ? <span className="mt-1.5 block text-[11px] font-medium leading-5 text-gray-400">{help}</span> : null}
       </label>
     );
   }
@@ -110,7 +110,7 @@ function Field({
           dir="ltr"
           className={`${textareaClass} min-h-36 font-mono text-xs`}
         />
-        {help ? <span className="mt-1.5 block text-[11px] font-semibold leading-5 text-slate-400">{help}</span> : null}
+        {help ? <span className="mt-1.5 block text-[11px] font-medium leading-5 text-gray-400">{help}</span> : null}
       </label>
     );
   }
@@ -121,7 +121,7 @@ function Field({
         {hiddenKind}
         {label}{required ? ' *' : ''}
         <textarea name={controlName} defaultValue={String(value ?? '')} required={required} className={textareaClass} />
-        {help ? <span className="mt-1.5 block text-[11px] font-semibold leading-5 text-slate-400">{help}</span> : null}
+        {help ? <span className="mt-1.5 block text-[11px] font-medium leading-5 text-gray-400">{help}</span> : null}
       </label>
     );
   }
@@ -142,7 +142,7 @@ function Field({
         dir={['url', 'email', 'phone'].includes(kind) ? 'ltr' : undefined}
         className={inputClass}
       />
-      {help ? <span className="mt-1.5 block text-[11px] font-semibold leading-5 text-slate-400">{help}</span> : null}
+      {help ? <span className="mt-1.5 block text-[11px] font-medium leading-5 text-gray-400">{help}</span> : null}
     </label>
   );
 }
@@ -198,11 +198,11 @@ export default function RecordForm({
       </div>
 
       {advanced.length > 0 ? (
-        <details className="rounded-2xl border border-slate-200 bg-slate-50/70">
-          <summary className="cursor-pointer list-none p-4 text-sm font-black text-slate-600">
+        <details className="rounded-[20px] border border-black/[0.06] bg-[#fafbfc]">
+          <summary className="cursor-pointer list-none p-4 text-sm font-semibold text-gray-600">
             إعدادات متقدمة — غالبًا لن تحتاج لتعديلها
           </summary>
-          <div className="grid gap-4 border-t border-slate-200 p-4 md:grid-cols-2">
+          <div className="grid gap-4 border-t border-gray-200 p-4 md:grid-cols-2">
             {advanced.map((column) => (
               <Field
                 key={column.column_name}
@@ -216,8 +216,11 @@ export default function RecordForm({
         </details>
       ) : null}
 
-      <div className="flex justify-end border-t border-slate-100 pt-4">
-        <button type="submit" className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-black text-white shadow-sm shadow-violet-200 transition hover:bg-violet-700">
+      <div className="flex justify-end border-t border-gray-100 pt-4">
+        <button
+          type="submit"
+          className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-blue-600 bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all duration-200 hover:-translate-y-[1px] hover:bg-blue-700 hover:shadow-[0_12px_26px_rgba(37,99,235,0.28)]"
+        >
           {mode === 'create' ? 'إضافة' : 'حفظ التعديلات'}
         </button>
       </div>

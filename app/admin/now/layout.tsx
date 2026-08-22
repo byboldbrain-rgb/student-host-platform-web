@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import NowAdminShell from './components/admin-shell';
 import { requireNowAdmin } from './lib/admin-data';
+import './now-admin-theme.css';
 
 export default async function NavientyNowAdminLayout({
   children,

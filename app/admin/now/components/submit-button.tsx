@@ -18,7 +18,7 @@ export default function SubmitButton({
       type="submit"
       disabled={pending}
       className={[
-        'rounded-xl px-4 py-2.5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex min-h-[46px] items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60',
         className,
       ].join(' ')}
     >
