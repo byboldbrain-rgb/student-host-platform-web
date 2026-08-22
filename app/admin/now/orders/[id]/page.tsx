@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   ArrowRight,
+  CheckCircle2,
   Clock3,
   MapPin,
   MessageCircle,
+  PackageCheck,
   Phone,
   ReceiptText,
   ShieldCheck,
@@ -12,584 +14,110 @@ import {
   UserRound,
 } from 'lucide-react';
 
-import {
-  getOrderStatusLabel,
-  OrderStatusBadge,
-  PaymentStatusBadge,
-} from '../../components/status-badge';
+import { Notice, PageHeader } from '../../components/ui-kit';
+import { getOrderStatusLabel, OrderStatusBadge, PaymentStatusBadge } from '../../components/status-badge';
 import SubmitButton from '../../components/submit-button';
-import {
-  getAdminOrder,
-  requireNowAdmin,
-} from '../../lib/admin-data';
-import type {
-  AdminOrderDetail,
-  OrderStatus,
-} from '../../lib/types';
+import { getAdminOrder, requireNowAdmin } from '../../lib/admin-data';
+import type { AdminOrderDetail, OrderStatus } from '../../lib/types';
 import { transitionOrderStatus } from './actions';
 
-function formatDate(value: string | null): string {
-  if (!value) return 'غير متاح';
+function formatDate(value: string | null) { if (!value) return '—'; return new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Cairo' }).format(new Date(value)); }
+function numberValue(value: number | string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+function money(value: number | string, symbol: string) { return `${numberValue(value).toLocaleString('ar-EG')} ${symbol}`; }
+function phoneDigits(value: string) { return value.replace(/\D/g, ''); }
 
-  return new Intl.DateTimeFormat('ar-EG', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Africa/Cairo',
-  }).format(new Date(value));
-}
-
-function numberValue(value: number | string): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function nextTransition(status: OrderStatus): {
-  status: OrderStatus;
-  label: string;
-  note: string;
-  className: string;
-} | null {
+function nextTransition(status: OrderStatus): { status: OrderStatus; label: string; description: string; note: string } | null {
   switch (status) {
-    case 'waiting_confirmation':
-      return {
-        status: 'confirmed',
-        label: 'تأكيد الطلب',
-        note: 'تم تأكيد توافر المنتجات والمبلغ.',
-        className: 'bg-emerald-600 text-white hover:bg-emerald-700',
-      };
-
-    case 'confirmed':
-      return {
-        status: 'preparing',
-        label: 'بدء التجهيز',
-        note: 'بدأ المتجر تجهيز الطلب.',
-        className: 'bg-orange-500 text-white hover:bg-orange-600',
-      };
-
-    case 'preparing':
-      return {
-        status: 'out_for_delivery',
-        label: 'خرج للتوصيل',
-        note: 'تم تسليم الطلب للمندوب.',
-        className: 'bg-sky-600 text-white hover:bg-sky-700',
-      };
-
-    case 'out_for_delivery':
-      return {
-        status: 'delivered',
-        label: 'تم التوصيل',
-        note: 'تم توصيل الطلب بنجاح.',
-        className: 'bg-green-600 text-white hover:bg-green-700',
-      };
-
-    default:
-      return null;
+    case 'waiting_confirmation': return { status: 'confirmed', label: 'تأكيد الطلب', description: 'أكد بعد التأكد من توافر المنتجات والمبلغ.', note: 'تم تأكيد توافر المنتجات والمبلغ.' };
+    case 'confirmed': return { status: 'preparing', label: 'بدء التجهيز', description: 'اضغط عندما يبدأ المتجر تجهيز الطلب.', note: 'بدأ المتجر تجهيز الطلب.' };
+    case 'preparing': return { status: 'out_for_delivery', label: 'خرج للتوصيل', description: 'اضغط بعد تسليم الطلب للمندوب.', note: 'تم تسليم الطلب للمندوب.' };
+    case 'out_for_delivery': return { status: 'delivered', label: 'تأكيد التوصيل', description: 'اضغط بعد التأكد أن العميل استلم الطلب.', note: 'تم توصيل الطلب بنجاح.' };
+    default: return null;
   }
 }
+function canCancel(status: OrderStatus) { return !['delivered', 'cancelled'].includes(status); }
 
-function canCancel(status: OrderStatus): boolean {
-  return !['delivered', 'cancelled'].includes(status);
-}
-
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0">
-      <span className="text-xs font-bold text-slate-500">
-        {label}
-      </span>
-
-      <span className="max-w-[70%] text-left text-sm font-bold text-slate-900">
-        {value}
-      </span>
+function Timeline({ order }: { order: AdminOrderDetail }) {
+  if (order.status_history.length === 0) return <p className="text-sm font-semibold text-slate-500">لا يوجد سجل حالات بعد.</p>;
+  return <div className="space-y-4">{order.status_history.map((item, index) => (
+    <div key={item.id} className="relative flex gap-3">
+      {index < order.status_history.length - 1 ? <div className="absolute right-[7px] top-5 h-[calc(100%+8px)] w-px bg-slate-200" /> : null}
+      <div className="relative z-10 mt-1.5 h-4 w-4 shrink-0 rounded-full border-4 border-white bg-violet-600 shadow" />
+      <div className="min-w-0 flex-1 rounded-xl bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-black text-slate-800">{item.old_status ? `${getOrderStatusLabel(item.old_status)} ← ${getOrderStatusLabel(item.new_status)}` : getOrderStatusLabel(item.new_status)}</p><p className="text-[11px] font-semibold text-slate-400">{formatDate(item.created_at)}</p></div>
+        {item.note ? <p className="mt-2 text-xs font-semibold leading-6 text-slate-500">{item.note}</p> : null}
+      </div>
     </div>
-  );
+  ))}</div>;
 }
 
-function Timeline({
-  order,
-}: {
-  order: AdminOrderDetail;
-}) {
-  return (
-    <div className="space-y-4">
-      {order.status_history.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          لا يوجد سجل حالات لهذا الطلب.
-        </p>
-      ) : (
-        order.status_history.map((item, index) => (
-          <div
-            key={item.id}
-            className="relative flex gap-3"
-          >
-            {index < order.status_history.length - 1 && (
-              <div className="absolute right-[7px] top-5 h-[calc(100%+8px)] w-px bg-slate-200" />
-            )}
-
-            <div className="relative z-10 mt-1.5 h-4 w-4 shrink-0 rounded-full border-4 border-white bg-violet-600 shadow" />
-
-            <div className="min-w-0 flex-1 rounded-xl bg-slate-50 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-black">
-                  {item.old_status
-                    ? `${getOrderStatusLabel(
-                        item.old_status,
-                      )} ← ${getOrderStatusLabel(
-                        item.new_status,
-                      )}`
-                    : getOrderStatusLabel(item.new_status)}
-                </p>
-
-                <p className="text-xs text-slate-400">
-                  {formatDate(item.created_at)}
-                </p>
-              </div>
-
-              {item.note && (
-                <p className="mt-2 text-xs leading-6 text-slate-600">
-                  {item.note}
-                </p>
-              )}
-
-              <p className="mt-2 text-[11px] font-bold text-slate-400">
-                المنفذ: {item.changed_by_type}
-                {item.actor_reference
-                  ? ` — ${item.actor_reference}`
-                  : ''}
-              </p>
-            </div>
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-export default async function NavientyNowOrderDetailsPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const [{ id }, query, { access }] = await Promise.all([
-    params,
-    searchParams,
-    requireNowAdmin(),
-  ]);
-
+export default async function NavientyNowOrderDetailsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const [{ id }, query, { access }] = await Promise.all([params, searchParams, requireNowAdmin()]);
   let order: AdminOrderDetail;
-
-  try {
-    order = await getAdminOrder(id);
-  } catch {
-    notFound();
-  }
-
-  const error = Array.isArray(query.error)
-    ? query.error[0]
-    : query.error;
-
-  const success = Array.isArray(query.success)
-    ? query.success[0]
-    : query.success;
-
+  try { order = await getAdminOrder(id); } catch { notFound(); }
+  const errorRaw = Array.isArray(query.error) ? query.error[0] : query.error;
+  const successRaw = Array.isArray(query.success) ? query.success[0] : query.success;
   const transition = nextTransition(order.status);
   const manageOrders = access.permissions.manage_orders;
+  const whatsappUrl = `https://wa.me/${phoneDigits(order.customer.phone)}`;
 
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <Link
-            href="/admin/now/orders"
-            className="inline-flex items-center gap-1 text-sm font-black text-violet-700 hover:text-violet-900"
-          >
-            <ArrowRight size={17} />
-            العودة إلى الطلبات
-          </Link>
+    <div className="space-y-6">
+      <div><Link href="/admin/now/orders" className="inline-flex items-center gap-1 text-xs font-black text-slate-500 hover:text-violet-700"><ArrowRight size={15} /> العودة للطلبات</Link></div>
+      <PageHeader
+        eyebrow="تفاصيل الطلب"
+        title={`الطلب ${order.order_code}`}
+        description={`تم إنشاؤه ${formatDate(order.timestamps.created_at)} · ${order.store.name_ar}`}
+        actions={<div className="flex flex-wrap items-center gap-2"><OrderStatusBadge status={order.status} /><PaymentStatusBadge status={order.payment_status} /></div>}
+      />
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <h2
-              dir="ltr"
-              className="text-3xl font-black"
-            >
-              {order.order_code}
-            </h2>
+      {errorRaw ? <Notice tone="warning" title="تعذر تنفيذ الخطوة">{decodeURIComponent(errorRaw)}</Notice> : null}
+      {successRaw ? <Notice tone="success" title={decodeURIComponent(successRaw)} /> : null}
+      {!manageOrders ? <Notice tone="info" title="صلاحية مشاهدة فقط">يمكنك مراجعة كل تفاصيل الطلب لكن لا يمكنك تغيير حالته.</Notice> : null}
 
-            <OrderStatusBadge status={order.status} />
-            <PaymentStatusBadge status={order.payment_status} />
-          </div>
-
-          <p className="mt-2 text-sm text-slate-500">
-            تم الإنشاء {formatDate(order.timestamps.created_at)}
-          </p>
-        </div>
-
-        {manageOrders && (
-          <div className="flex flex-col gap-3 sm:min-w-[340px]">
-            {transition && (
-              <form action={transitionOrderStatus}>
-                <input
-                  type="hidden"
-                  name="order_id"
-                  value={order.id}
-                />
-                <input
-                  type="hidden"
-                  name="new_status"
-                  value={transition.status}
-                />
-                <input
-                  type="hidden"
-                  name="note"
-                  value={transition.note}
-                />
-
-                <SubmitButton
-                  idleText={transition.label}
-                  className={`w-full ${transition.className}`}
-                />
-              </form>
-            )}
-
-            {canCancel(order.status) && (
-              <form
-                action={transitionOrderStatus}
-                className="rounded-2xl border border-red-200 bg-red-50 p-3"
-              >
-                <input
-                  type="hidden"
-                  name="order_id"
-                  value={order.id}
-                />
-                <input
-                  type="hidden"
-                  name="new_status"
-                  value="cancelled"
-                />
-
-                <label className="text-xs font-black text-red-800">
-                  سبب إلغاء الطلب
-                </label>
-
-                <textarea
-                  required
-                  minLength={3}
-                  name="cancellation_reason"
-                  placeholder="مثال: المنتج غير متوفر"
-                  className="mt-2 min-h-20 w-full resize-y rounded-xl border border-red-200 bg-white p-3 text-sm outline-none focus:border-red-400"
-                />
-
-                <input
-                  type="hidden"
-                  name="note"
-                  value="إلغاء الطلب بواسطة فريق تشغيل Navienty Now."
-                />
-
-                <SubmitButton
-                  idleText="إلغاء الطلب"
-                  className="mt-2 w-full bg-red-600 text-white hover:bg-red-700"
-                />
-              </form>
-            )}
-          </div>
-        )}
-      </div>
-
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">
-          {decodeURIComponent(error)}
-        </div>
-      )}
-
-      {success && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
-          {decodeURIComponent(success)}
-        </div>
-      )}
-
-      {!manageOrders && (
-        <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-          <ShieldCheck size={20} />
-          حسابك يملك صلاحية عرض الطلب فقط.
-        </div>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-                  <Store size={21} />
-                </div>
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700"><Store size={18} /></span><div><p className="text-[10px] font-black text-slate-400">المتجر</p><p className="mt-1 font-black text-slate-800">{order.store.icon ?? '🏪'} {order.store.name_ar}</p></div></div></article>
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><ReceiptText size={18} /></span><div><p className="text-[10px] font-black text-slate-400">الإجمالي</p><p className="mt-1 text-lg font-black text-slate-900">{money(order.summary.total_amount, order.summary.currency_symbol)}</p></div></div></article>
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-700"><PackageCheck size={18} /></span><div><p className="text-[10px] font-black text-slate-400">عدد المنتجات</p><p className="mt-1 text-lg font-black text-slate-900">{order.items.reduce((sum, item) => sum + item.quantity, 0).toLocaleString('ar-EG')}</p></div></div></article>
+          </section>
 
-                <div>
-                  <p className="text-xs font-bold text-slate-500">
-                    المتجر
-                  </p>
-
-                  <h3 className="font-black">
-                    {order.store.icon ?? '🏪'}{' '}
-                    {order.store.name_ar}
-                  </h3>
-                </div>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-5 py-4"><h2 className="font-black text-slate-950">محتويات الطلب</h2></div>
+            <div className="divide-y divide-slate-100">{order.items.map((item) => (
+              <div key={item.id} className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
+                <div className="min-w-0"><p className="font-black text-slate-800">{item.name_ar}{item.variant_name_ar ? ` — ${item.variant_name_ar}` : ''}</p><p className="mt-1 text-xs font-semibold text-slate-400">الكمية: {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>{item.requires_prescription || item.is_age_restricted ? <div className="mt-2 flex flex-wrap gap-2">{item.requires_prescription ? <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-800">يحتاج روشتة</span> : null}{item.is_age_restricted ? <span className="rounded-full bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-800">تحقق من العمر</span> : null}</div> : null}</div>
+                <div className="shrink-0 text-left"><p className="font-black text-slate-900">{money(item.line_total, order.summary.currency_symbol)}</p><p className="mt-1 text-[11px] font-semibold text-slate-400">{money(item.unit_price, order.summary.currency_symbol)} للوحدة</p></div>
               </div>
-            </article>
+            ))}</div>
+            <div className="space-y-2 bg-slate-50 p-5 text-sm"><div className="flex justify-between"><span className="font-semibold text-slate-500">المنتجات</span><span className="font-black">{money(order.summary.subtotal, order.summary.currency_symbol)}</span></div><div className="flex justify-between"><span className="font-semibold text-slate-500">التوصيل</span><span className="font-black">{money(order.summary.delivery_fee, order.summary.currency_symbol)}</span></div><div className="flex justify-between border-t border-slate-200 pt-3 text-base"><span className="font-black">الإجمالي</span><span className="font-black text-violet-700">{money(order.summary.total_amount, order.summary.currency_symbol)}</span></div></div>
+          </section>
 
-            <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                  <ReceiptText size={21} />
-                </div>
-
-                <div>
-                  <p className="text-xs font-bold text-slate-500">
-                    الإجمالي النهائي
-                  </p>
-
-                  <h3 className="text-xl font-black">
-                    {numberValue(
-                      order.summary.total_amount,
-                    ).toLocaleString('ar-EG')}{' '}
-                    {order.summary.currency_symbol}
-                  </h3>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-black">
-                منتجات الطلب
-              </h3>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {order.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center"
-                >
-                  <div>
-                    <p className="font-black">
-                      {item.name_ar}
-                      {item.variant_name_ar
-                        ? ` — ${item.variant_name_ar}`
-                        : ''}
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      الكمية: {item.quantity}
-                      {item.sku ? ` • SKU: ${item.sku}` : ''}
-                    </p>
-
-                    {(item.requires_prescription ||
-                      item.is_age_restricted) && (
-                      <p className="mt-2 text-xs font-bold text-amber-700">
-                        {item.requires_prescription
-                          ? 'يتطلب روشتة'
-                          : ''}
-                        {item.requires_prescription &&
-                        item.is_age_restricted
-                          ? ' • '
-                          : ''}
-                        {item.is_age_restricted
-                          ? 'مقيد بالعمر'
-                          : ''}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="text-left">
-                    <p className="font-black">
-                      {numberValue(
-                        item.line_total,
-                      ).toLocaleString('ar-EG')}{' '}
-                      {order.summary.currency_symbol}
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-400">
-                      {numberValue(
-                        item.unit_price,
-                      ).toLocaleString('ar-EG')}{' '}
-                      للوحدة
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-5">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">
-                  إجمالي المنتجات
-                </span>
-
-                <span className="font-black">
-                  {numberValue(
-                    order.summary.subtotal,
-                  ).toLocaleString('ar-EG')}{' '}
-                  {order.summary.currency_symbol}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">
-                  رسوم التوصيل
-                </span>
-
-                <span className="font-black">
-                  {numberValue(
-                    order.summary.delivery_fee,
-                  ).toLocaleString('ar-EG')}{' '}
-                  {order.summary.currency_symbol}
-                </span>
-              </div>
-
-              <div className="flex justify-between border-t border-slate-200 pt-3 text-lg">
-                <span className="font-black">الإجمالي</span>
-
-                <span className="font-black text-violet-700">
-                  {numberValue(
-                    order.summary.total_amount,
-                  ).toLocaleString('ar-EG')}{' '}
-                  {order.summary.currency_symbol}
-                </span>
-              </div>
-            </div>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-lg font-black">
-              سجل حالات الطلب
-            </h3>
-
-            <div className="mt-5">
-              <Timeline order={order} />
-            </div>
-          </article>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Clock3 size={17} className="text-violet-700" /><h2 className="font-black text-slate-950">سجل الطلب</h2></div><div className="mt-5"><Timeline order={order} /></div></section>
         </div>
 
-        <aside className="space-y-6">
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2">
-              <UserRound size={19} className="text-violet-700" />
-              <h3 className="font-black">بيانات العميل</h3>
-            </div>
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          {manageOrders ? (
+            <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
+              <p className="text-[10px] font-black text-violet-600">الخطوة التالية</p>
+              {transition ? <><h2 className="mt-2 text-xl font-black text-slate-950">{transition.label}</h2><p className="mt-2 text-xs font-semibold leading-6 text-slate-500">{transition.description}</p><form action={transitionOrderStatus} className="mt-4"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="new_status" value={transition.status} /><input type="hidden" name="note" value={transition.note} /><SubmitButton idleText={transition.label} className="w-full bg-violet-600 text-white hover:bg-violet-700" /></form></> : order.status === 'awaiting_whatsapp_send' ? <><h2 className="mt-2 text-lg font-black">تواصل مع العميل على واتساب</h2><p className="mt-2 text-xs font-semibold leading-6 text-slate-500">الطلب لم ينتقل بعد لمرحلة التأكيد.</p><a href={whatsappUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white"><MessageCircle size={16} /> فتح واتساب</a></> : <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-black text-emerald-800"><CheckCircle2 size={18} /> لا توجد خطوة تشغيلية مطلوبة</div>}
+            </section>
+          ) : null}
 
-            <div className="mt-4">
-              <InfoRow label="الاسم" value={order.customer.name} />
-              <InfoRow label="الموبايل" value={order.customer.phone} />
-            </div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2"><UserRound size={17} className="text-violet-700" /><h2 className="font-black">العميل</h2></div>
+            <p className="mt-4 text-base font-black text-slate-900">{order.customer.name}</p><p dir="ltr" className="mt-1 text-right text-sm font-semibold text-slate-500">{order.customer.phone}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2"><a href={`tel:${order.customer.phone}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700"><Phone size={14} /> اتصال</a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800"><MessageCircle size={14} /> واتساب</a></div>
+          </section>
 
-            <a
-              href={`tel:${order.customer.phone}`}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white hover:bg-violet-700"
-            >
-              <Phone size={17} />
-              الاتصال بالعميل
-            </a>
-          </article>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><MapPin size={17} className="text-violet-700" /><h2 className="font-black">عنوان التوصيل</h2></div><p className="mt-4 text-sm font-black text-slate-800">{order.delivery.area_name_ar}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{order.delivery.address}</p>{order.delivery.landmark ? <p className="mt-2 text-xs font-semibold text-slate-400">علامة مميزة: {order.delivery.landmark}</p> : null}{order.delivery.notes ? <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold leading-6 text-amber-900">ملاحظة العميل: {order.delivery.notes}</div> : null}</section>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2">
-              <MapPin size={19} className="text-violet-700" />
-              <h3 className="font-black">عنوان التوصيل</h3>
-            </div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><ReceiptText size={17} className="text-violet-700" /><h2 className="font-black">الدفع</h2></div><div className="mt-4 flex items-center justify-between gap-3"><div><p className="text-sm font-black text-slate-800">{order.payment.payment_method_name}</p><p className="mt-1 text-xs font-semibold text-slate-400">{money(order.summary.total_amount, order.summary.currency_symbol)}</p></div><PaymentStatusBadge status={order.payment_status} /></div></section>
 
-            <div className="mt-4">
-              <InfoRow
-                label="المنطقة"
-                value={order.delivery.area_name_ar}
-              />
-              <InfoRow
-                label="العنوان"
-                value={order.delivery.address}
-              />
-              <InfoRow
-                label="علامة مميزة"
-                value={order.delivery.landmark || 'لا يوجد'}
-              />
-              <InfoRow
-                label="ملاحظات"
-                value={order.delivery.notes || 'لا يوجد'}
-              />
-            </div>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2">
-              <MessageCircle
-                size={19}
-                className="text-emerald-700"
-              />
-              <h3 className="font-black">واتساب والدفع</h3>
-            </div>
-
-            <div className="mt-4">
-              <InfoRow
-                label="طريقة الدفع"
-                value={order.payment.payment_method_name}
-              />
-              <InfoRow
-                label="فتح واتساب"
-                value={formatDate(order.whatsapp.opened_at)}
-              />
-              <InfoRow
-                label="تأكيد الإرسال"
-                value={formatDate(
-                  order.whatsapp.sent_confirmed_at,
-                )}
-              />
-            </div>
-          </article>
-
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Clock3 size={19} className="text-violet-700" />
-              <h3 className="font-black">التوقيتات</h3>
-            </div>
-
-            <div className="mt-4">
-              <InfoRow
-                label="إنشاء الطلب"
-                value={formatDate(order.timestamps.created_at)}
-              />
-              <InfoRow
-                label="آخر تحديث"
-                value={formatDate(order.timestamps.updated_at)}
-              />
-              <InfoRow
-                label="التأكيد"
-                value={formatDate(order.timestamps.confirmed_at)}
-              />
-              <InfoRow
-                label="بدء التجهيز"
-                value={formatDate(order.timestamps.preparing_at)}
-              />
-              <InfoRow
-                label="خرج للتوصيل"
-                value={formatDate(
-                  order.timestamps.out_for_delivery_at,
-                )}
-              />
-              <InfoRow
-                label="تم التوصيل"
-                value={formatDate(order.timestamps.delivered_at)}
-              />
-            </div>
-          </article>
+          {manageOrders && canCancel(order.status) ? <details className="rounded-2xl border border-rose-100 bg-white"><summary className="cursor-pointer list-none p-4 text-xs font-black text-rose-700">إلغاء الطلب</summary><form action={transitionOrderStatus} className="border-t border-rose-100 p-4"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="new_status" value="cancelled" /><input type="hidden" name="note" value="إلغاء الطلب بواسطة فريق تشغيل Navienty Now." /><label className="text-xs font-black text-slate-700">سبب الإلغاء<textarea required minLength={3} name="cancellation_reason" placeholder="مثال: المنتج غير متوفر" className="mt-2 min-h-20 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-rose-300" /></label><SubmitButton idleText="تأكيد إلغاء الطلب" className="mt-3 w-full bg-rose-600 text-white hover:bg-rose-700" /></form></details> : null}
         </aside>
       </div>
-    </section>
+    </div>
   );
 }

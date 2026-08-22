@@ -1,139 +1,202 @@
 import Link from 'next/link';
 import {
-  AlertTriangle,
   ArrowLeft,
-  Database,
+  Banknote,
+  Bell,
+  Boxes,
+  ClipboardCheck,
+  ClipboardList,
+  MapPinned,
+  Megaphone,
+  PackageSearch,
   Settings,
   ShieldCheck,
-  Sparkles,
+  Store,
+  Wrench,
 } from 'lucide-react';
 
-import { requireNowAdmin } from './lib/admin-data';
-import { getNowSchemaCatalog } from './lib/table-data';
-import {
-  canAccessNowTable,
-  NOW_ADMIN_GROUPS,
-  NOW_TABLES,
-  type NowAdminGroup,
-} from './lib/table-registry';
+import { MetricCard, Notice, PageHeader } from './components/ui-kit';
+import { getNowEmployeeDashboardData } from './lib/dashboard-data';
+
+type Module = {
+  title: string;
+  description: string;
+  href: string;
+  icon: typeof Store;
+  visible: boolean;
+  note?: string;
+};
 
 export default async function NavientyNowAdminPage() {
-  const [{ access }, schemaCatalog] = await Promise.all([
-    requireNowAdmin(),
-    getNowSchemaCatalog(),
-  ]);
-  const accessibleTables = NOW_TABLES.filter((table) => canAccessNowTable(access, table));
-  const registeredNames = new Set(NOW_TABLES.map((table) => table.table));
-  const unregisteredTables = schemaCatalog.filter((table) => !registeredNames.has(table.table_name));
-  const groups = (Object.entries(NOW_ADMIN_GROUPS) as Array<
-    [NowAdminGroup, (typeof NOW_ADMIN_GROUPS)[NowAdminGroup]]
-  >)
-    .map(([key, value]) => ({
-      key,
-      ...value,
-      tables: accessibleTables.filter((table) => table.group === key),
-    }))
-    .filter((group) => group.tables.length > 0);
+  const data = await getNowEmployeeDashboardData();
+  const { access, orders, settings, counts } = data;
+  const summary = orders?.summary;
+
+  const modules: Module[] = [
+    {
+      title: 'الطلبات',
+      description: 'تابع الطلب من وصوله لحد التسليم، وحدّث حالته خطوة بخطوة.',
+      href: '/admin/now/orders',
+      icon: ClipboardList,
+      visible: access.permissions.view_orders,
+      note: summary ? `${summary.total} طلب مسجل` : undefined,
+    },
+    {
+      title: 'المتاجر والمنتجات',
+      description: 'أضف المتاجر، عدّل المواعيد، الأقسام، المنتجات والأسعار والتوفر.',
+      href: '/admin/now/sections/catalog',
+      icon: Store,
+      visible: access.permissions.manage_catalog,
+      note: counts.products !== null ? `${counts.products} منتج` : undefined,
+    },
+    {
+      title: 'العروض والكوبونات',
+      description: 'تحكم في البانرات والعروض وأكواد الخصم ومواعيد ظهورها.',
+      href: '/admin/now/sections/marketing',
+      icon: Megaphone,
+      visible: access.permissions.manage_catalog,
+      note: counts.vouchers !== null ? `${counts.vouchers} كوبون` : undefined,
+    },
+    {
+      title: 'مناطق التغطية',
+      description: 'حدد المدن والمناطق ورسوم التوصيل والحد الأدنى ووقت الوصول.',
+      href: '/admin/now/sections/geography',
+      icon: MapPinned,
+      visible: access.permissions.manage_settings,
+    },
+    {
+      title: 'الدفع والتحصيل',
+      description: 'طرق الدفع، حسابات التحويل، الرسوم وإثباتات الدفع.',
+      href: '/admin/now/sections/payments',
+      icon: Banknote,
+      visible: access.permissions.manage_finance,
+    },
+    {
+      title: 'الخدمات والحجوزات',
+      description: 'إدارة باقات الخدمات ومتابعة الحجوزات حتى اكتمالها.',
+      href: '/admin/now/sections/services',
+      icon: Wrench,
+      visible: access.permissions.manage_catalog || access.permissions.manage_orders,
+      note: counts.serviceBookings !== null ? `${counts.serviceBookings} حجز` : undefined,
+    },
+    {
+      title: 'التحقق والامتثال',
+      description: 'الروشتات، التحقق من العمر، وإجراءات حذف الحساب.',
+      href: '/admin/now/sections/compliance',
+      icon: ShieldCheck,
+      visible: access.permissions.manage_orders || access.permissions.manage_settings,
+    },
+    {
+      title: 'الإشعارات',
+      description: 'تابع أجهزة العملاء وحالة إرسال Push Notifications والأخطاء.',
+      href: '/admin/now/sections/notifications',
+      icon: Bell,
+      visible: access.permissions.manage_settings,
+    },
+    {
+      title: 'إعدادات التطبيق',
+      description: 'تشغيل وإيقاف الطلبات، الصيانة، الدعم، التغطية وبوابات التحقق.',
+      href: '/admin/now/settings',
+      icon: Settings,
+      visible: access.permissions.manage_settings,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-xl">
-        <div className="grid gap-8 p-7 sm:p-10 lg:grid-cols-[1.4fr_0.6fr] lg:items-center">
-          <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-black text-violet-200">
-              <Sparkles size={14} /> Navienty Now Control Center
-            </div>
-            <h2 className="text-3xl font-black leading-tight sm:text-4xl">
-              التحكم في التطبيق كله — وليس الطلبات فقط
-            </h2>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
-              كل جزء في Navienty Now له الآن مدخل واضح: المتاجر والكتالوج، المنتجات والأسعار،
-              البانرات والكوبونات، المدن والتغطية، الدفع، الخدمات، الامتثال، Push Notifications،
-              إعدادات التطبيق والـsystem logs. Database Manager أصبح طبقة Advanced وليس الواجهة الرئيسية.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {access.permissions.manage_settings ? (
-                <Link href="/admin/now/settings" className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white hover:bg-violet-500">
-                  <Settings size={17} /> إعدادات التطبيق الحية
-                </Link>
-              ) : null}
-              <Link href="#control-sections" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15">
-                <Sparkles size={17} /> كل أقسام التحكم
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="مركز تشغيل Navienty Now"
+        title="كل اللي محتاجه لتشغيل التطبيق في مكان واحد"
+        description="ابدأ من المهام المعلقة، وبعدها ادخل على القسم اللي محتاج تعدله. الواجهة مصممة للتشغيل اليومي بدون التعامل مع قاعدة البيانات أو أكواد داخلية."
+        icon={<Boxes size={16} />}
+        actions={
+          <>
+            {access.permissions.view_orders ? (
+              <Link href="/admin/now/orders" className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-violet-200 hover:bg-violet-700">
+                <ClipboardList size={16} /> فتح الطلبات
               </Link>
-              <Link href="/admin/now/data" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-black text-white hover:bg-white/15">
-                <Database size={17} /> Advanced Database Manager
+            ) : null}
+            {data.pendingReviews > 0 ? (
+              <Link href="/admin/now/review" className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-900 hover:bg-amber-100">
+                <ClipboardCheck size={16} /> {data.pendingReviews} مراجعة معلقة
               </Link>
-            </div>
-          </div>
+            ) : null}
+          </>
+        }
+      />
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">Live database coverage</p>
-            <p className="mt-2 text-5xl font-black text-white">{NOW_TABLES.length}/{schemaCatalog.length}</p>
-            <p className={`mt-2 text-sm font-bold ${unregisteredTables.length === 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
-              {unregisteredTables.length === 0
-                ? 'كل جداول schema now موجودة في خريطة التحكم'
-                : `${unregisteredTables.length} جدول جديد يحتاج تصنيف`}
-            </p>
-            <div className="mt-5 border-t border-white/10 pt-4 text-xs text-slate-400">
-              المتاح بصلاحيتك الحالية: {accessibleTables.length} جدول
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {unregisteredTables.length > 0 && access.permissions.manage_settings ? (
-        <Link href="/admin/now/data?group=system" className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-900 shadow-sm transition hover:bg-amber-100">
-          <AlertTriangle className="mt-0.5 shrink-0" size={21} />
-          <div>
-            <p className="font-black">Schema Coverage Guard يحتاج انتباهك</p>
-            <p className="mt-1 text-sm leading-6">
-              قاعدة البيانات فيها {unregisteredTables.length} جدول غير مسجل. يظهر تلقائيًا Read-only حتى يتم تصنيفه وتحديد Workflow التعديل الآمن.
-            </p>
-          </div>
-        </Link>
+      {settings?.maintenance_mode ? (
+        <Notice tone="warning" title="وضع الصيانة مفعّل حاليًا">
+          تجربة العميل قد تكون متوقفة أو محدودة. راجع إعدادات التطبيق قبل استمرار التشغيل.
+        </Notice>
       ) : null}
 
-      <section id="control-sections">
-        <div className="mb-4">
-          <h3 className="text-2xl font-black">Control Centers حسب وظيفة التطبيق</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            كل Card أدناه يفتح Section مستقل يعرض جميع مصادر البيانات التابعة له وعدد سجلاتها الحي ونوع التحكم المسموح لكل مصدر.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {groups.map((group) => (
-            <Link key={group.key} href={`/admin/now/sections/${group.key}`} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h4 className="text-lg font-black">{group.labelAr}</h4>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{group.descriptionAr}</p>
-                </div>
-                <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">{group.tables.length}</span>
-              </div>
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <p className="text-[11px] font-bold text-slate-400">
-                  {group.tables.slice(0, 4).map((table) => table.labelAr).join(' · ')}
-                  {group.tables.length > 4 ? ` · +${group.tables.length - 4}` : ''}
-                </p>
-                <div className="mt-3 flex items-center gap-2 text-sm font-black text-violet-700">
-                  فتح مركز التحكم <ArrowLeft size={16} className="transition group-hover:-translate-x-1" />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 shrink-0 text-emerald-600" size={21} />
-          <div>
-            <h3 className="font-black">التحكم الكامل لا يعني تعديل الـaudit بشكل خطر</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              المحتوى والإعدادات القابلة للإدارة لها CRUD/Update واضح، بينما الطلبات، إثباتات الدفع، الروشتات، حذف الحساب والحجوزات تستخدم Workflows آمنة. سجلات التاريخ والاستخدام والإشعارات تظل Read-only حتى لا نفقد أثر العمليات أو نكسر المحاسبة والامتثال.
-            </p>
+      {summary ? (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">محتاج متابعة دلوقتي</h2>
+              <p className="mt-1 text-xs font-semibold text-slate-500">الأرقام دي توصلك مباشرة للطلبات اللي محتاجة إجراء.</p>
+            </div>
+            <Link href="/admin/now/orders" className="text-xs font-black text-violet-700 hover:text-violet-900">عرض كل الطلبات</Link>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="في انتظار واتساب" value={summary.awaiting_whatsapp_send} href="/admin/now/orders?status=awaiting_whatsapp_send" tone="amber" icon={<ClipboardList size={17} />} />
+            <MetricCard label="في انتظار التأكيد" value={summary.waiting_confirmation} href="/admin/now/orders?status=waiting_confirmation" tone="violet" icon={<ClipboardCheck size={17} />} />
+            <MetricCard label="جاري التجهيز" value={summary.preparing} href="/admin/now/orders?status=preparing" tone="sky" icon={<PackageSearch size={17} />} />
+            <MetricCard label="خرج للتوصيل" value={summary.out_for_delivery} href="/admin/now/orders?status=out_for_delivery" tone="emerald" icon={<ArrowLeft size={17} />} />
+            <MetricCard label="مراجعات معلقة" value={data.pendingReviews} href="/admin/now/review" tone={data.pendingReviews > 0 ? 'amber' : 'slate'} icon={<ShieldCheck size={17} />} />
+          </div>
+        </section>
+      ) : null}
+
+      {settings ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-black text-slate-500">استقبال الطلبات</p>
+            <p className={`mt-2 text-sm font-black ${settings.orders_enabled ? 'text-emerald-700' : 'text-rose-700'}`}>{settings.orders_enabled ? 'يعمل بشكل طبيعي' : 'متوقف'}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-black text-slate-500">عرض المنتجات</p>
+            <p className={`mt-2 text-sm font-black ${settings.catalog_enabled ? 'text-emerald-700' : 'text-rose-700'}`}>{settings.catalog_enabled ? 'الكتالوج يعمل' : 'الكتالوج متوقف'}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-black text-slate-500">المتاجر المسجلة</p>
+            <p className="mt-2 text-2xl font-black text-slate-900">{counts.stores ?? '—'}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-black text-slate-500">التحقق من التغطية</p>
+            <p className={`mt-2 text-sm font-black ${settings.location_geofencing_enabled ? 'text-emerald-700' : 'text-amber-700'}`}>{settings.location_geofencing_enabled ? 'مفعّل' : 'غير مفعّل'}</p>
+          </div>
+        </section>
+      ) : null}
+
+      <section>
+        <div className="mb-4">
+          <h2 className="text-xl font-black text-slate-950">إدارة التطبيق</h2>
+          <p className="mt-1 text-sm font-medium text-slate-500">اختار المهمة اللي عايز تعملها بدل ما تدور على اسم جدول أو حقل.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {modules.filter((module) => module.visible).map((module) => {
+            const Icon = module.icon;
+            return (
+              <Link key={module.href} href={module.href} className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md">
+                <div className="flex items-start gap-4">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 transition group-hover:bg-violet-600 group-hover:text-white">
+                    <Icon size={20} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-black text-slate-950">{module.title}</h3>
+                      {module.note ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">{module.note}</span> : null}
+                    </div>
+                    <p className="mt-2 text-sm font-medium leading-6 text-slate-500">{module.description}</p>
+                    <div className="mt-4 flex items-center gap-1 text-xs font-black text-violet-700">فتح القسم <ArrowLeft size={14} className="transition group-hover:-translate-x-1" /></div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
     </div>
