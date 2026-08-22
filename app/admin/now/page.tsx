@@ -103,21 +103,27 @@ export default async function NavientyNowAdminPage() {
   ];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="مركز تشغيل Navienty Now"
-        title="كل اللي محتاجه لتشغيل التطبيق في مكان واحد"
-        description="ابدأ من المهام المعلقة، وبعدها ادخل على القسم اللي محتاج تعدله. الواجهة مصممة للتشغيل اليومي بدون التعامل مع قاعدة البيانات أو أكواد داخلية."
+        eyebrow="Navienty Now"
+        title="لوحة تشغيل موحّدة"
+        description="كل مهام التشغيل اليومية في مكان واحد، بنفس هوية وتجربة لوحة Navienty الرئيسية."
         icon={<Boxes size={16} />}
         actions={
           <>
             {access.permissions.view_orders ? (
-              <Link href="/admin/now/orders" className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-violet-200 hover:bg-violet-700">
+              <Link
+                href="/admin/now/orders"
+                className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-blue-600 bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.22)] transition-all hover:-translate-y-[1px] hover:bg-blue-700"
+              >
                 <ClipboardList size={16} /> فتح الطلبات
               </Link>
             ) : null}
             {data.pendingReviews > 0 ? (
-              <Link href="/admin/now/review" className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-900 hover:bg-amber-100">
+              <Link
+                href="/admin/now/review"
+                className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
+              >
                 <ClipboardCheck size={16} /> {data.pendingReviews} مراجعة معلقة
               </Link>
             ) : null}
@@ -132,13 +138,16 @@ export default async function NavientyNowAdminPage() {
       ) : null}
 
       {summary ? (
-        <section>
-          <div className="mb-3 flex items-end justify-between gap-3">
+        <section className="rounded-[32px] border border-black/[0.05] bg-white p-5 shadow-[0_12px_36px_rgba(15,23,42,0.05)] md:p-6">
+          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
-              <h2 className="text-lg font-black text-slate-950">محتاج متابعة دلوقتي</h2>
-              <p className="mt-1 text-xs font-semibold text-slate-500">الأرقام دي توصلك مباشرة للطلبات اللي محتاجة إجراء.</p>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Live Operations</div>
+              <h2 className="mt-1.5 text-xl font-semibold tracking-tight text-[#111827]">محتاج متابعة دلوقتي</h2>
+              <p className="mt-1 text-sm font-medium text-gray-500">اختصارات مباشرة للطلبات والحالات اللي محتاجة إجراء.</p>
             </div>
-            <Link href="/admin/now/orders" className="text-xs font-black text-violet-700 hover:text-violet-900">عرض كل الطلبات</Link>
+            <Link href="/admin/now/orders" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900">
+              عرض كل الطلبات <ArrowLeft size={14} />
+            </Link>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="في انتظار واتساب" value={summary.awaiting_whatsapp_send} href="/admin/now/orders?status=awaiting_whatsapp_send" tone="amber" icon={<ClipboardList size={17} />} />
@@ -151,47 +160,65 @@ export default async function NavientyNowAdminPage() {
       ) : null}
 
       {settings ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black text-slate-500">استقبال الطلبات</p>
-            <p className={`mt-2 text-sm font-black ${settings.orders_enabled ? 'text-emerald-700' : 'text-rose-700'}`}>{settings.orders_enabled ? 'يعمل بشكل طبيعي' : 'متوقف'}</p>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-[26px] border border-black/[0.06] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.05)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-gray-400">استقبال الطلبات</p>
+            <p className={`mt-3 text-base font-semibold ${settings.orders_enabled ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {settings.orders_enabled ? 'يعمل بشكل طبيعي' : 'متوقف'}
+            </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black text-slate-500">عرض المنتجات</p>
-            <p className={`mt-2 text-sm font-black ${settings.catalog_enabled ? 'text-emerald-700' : 'text-rose-700'}`}>{settings.catalog_enabled ? 'الكتالوج يعمل' : 'الكتالوج متوقف'}</p>
+          <div className="rounded-[26px] border border-black/[0.06] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.05)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-gray-400">عرض المنتجات</p>
+            <p className={`mt-3 text-base font-semibold ${settings.catalog_enabled ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {settings.catalog_enabled ? 'الكتالوج يعمل' : 'الكتالوج متوقف'}
+            </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black text-slate-500">المتاجر المسجلة</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{counts.stores ?? '—'}</p>
+          <div className="rounded-[26px] border border-black/[0.06] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.05)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-gray-400">المتاجر المسجلة</p>
+            <p className="mt-3 text-3xl font-semibold tracking-tight text-[#111827]">{counts.stores ?? '—'}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black text-slate-500">التحقق من التغطية</p>
-            <p className={`mt-2 text-sm font-black ${settings.location_geofencing_enabled ? 'text-emerald-700' : 'text-amber-700'}`}>{settings.location_geofencing_enabled ? 'مفعّل' : 'غير مفعّل'}</p>
+          <div className="rounded-[26px] border border-black/[0.06] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.05)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-gray-400">التحقق من التغطية</p>
+            <p className={`mt-3 text-base font-semibold ${settings.location_geofencing_enabled ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {settings.location_geofencing_enabled ? 'مفعّل' : 'غير مفعّل'}
+            </p>
           </div>
         </section>
       ) : null}
 
-      <section>
-        <div className="mb-4">
-          <h2 className="text-xl font-black text-slate-950">إدارة التطبيق</h2>
-          <p className="mt-1 text-sm font-medium text-slate-500">اختار المهمة اللي عايز تعملها بدل ما تدور على اسم جدول أو حقل.</p>
+      <section className="rounded-[32px] border border-black/[0.05] bg-white p-5 shadow-[0_12px_36px_rgba(15,23,42,0.05)] md:p-6">
+        <div className="mb-5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Workspace</div>
+          <h2 className="mt-1.5 text-xl font-semibold tracking-tight text-[#111827]">إدارة التطبيق</h2>
+          <p className="mt-1 text-sm font-medium text-gray-500">اختار المهمة مباشرة، وكل قسم بيستخدم نفس نمط الواجهة والـcontrols.</p>
         </div>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {modules.filter((module) => module.visible).map((module) => {
             const Icon = module.icon;
             return (
-              <Link key={module.href} href={module.href} className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md">
+              <Link
+                key={module.href}
+                href={module.href}
+                className="group rounded-[26px] border border-black/[0.06] bg-[#fcfcfd] p-5 shadow-[0_6px_22px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_12px_30px_rgba(15,23,42,0.07)]"
+              >
                 <div className="flex items-start gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 transition group-hover:bg-violet-600 group-hover:text-white">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-blue-100 bg-blue-50 text-blue-700 transition group-hover:bg-blue-600 group-hover:text-white">
                     <Icon size={20} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="font-black text-slate-950">{module.title}</h3>
-                      {module.note ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">{module.note}</span> : null}
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="font-semibold text-[#111827]">{module.title}</h3>
+                      {module.note ? (
+                        <span className="rounded-full bg-[#f3f5f8] px-2.5 py-1 text-[10px] font-semibold text-gray-500">
+                          {module.note}
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="mt-2 text-sm font-medium leading-6 text-slate-500">{module.description}</p>
-                    <div className="mt-4 flex items-center gap-1 text-xs font-black text-violet-700">فتح القسم <ArrowLeft size={14} className="transition group-hover:-translate-x-1" /></div>
+                    <p className="mt-2 text-sm font-medium leading-6 text-gray-500">{module.description}</p>
+                    <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-blue-700">
+                      فتح القسم <ArrowLeft size={14} className="transition group-hover:-translate-x-1" />
+                    </div>
                   </div>
                 </div>
               </Link>
