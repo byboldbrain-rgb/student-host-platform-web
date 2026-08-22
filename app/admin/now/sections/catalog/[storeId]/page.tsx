@@ -6,9 +6,12 @@ import {
   ArrowRight,
   CalendarClock,
   Clock3,
+  ImagePlus,
   Layers3,
   Package2,
   Plus,
+  Save,
+  Settings2,
   Store,
 } from 'lucide-react';
 
@@ -19,6 +22,7 @@ import {
   updateCatalogStoreHours,
 } from '../actions';
 import { getCatalogStoreData } from '../catalog-data';
+import { updateCatalogStore } from '../store-actions';
 
 const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
@@ -43,7 +47,7 @@ export default async function CatalogStorePage({
   if (!data) notFound();
 
   const { store, categories, products, hours } = data;
-  const tab = query.tab === 'hours' ? 'hours' : 'products';
+  const tab = query.tab === 'hours' ? 'hours' : query.tab === 'store' ? 'store' : 'products';
   const hoursMap = new Map(hours.map((hour) => [Number(hour.day_of_week), hour]));
   const storeHero = store.cover_image_url || store.logo_url;
 
@@ -56,10 +60,13 @@ export default async function CatalogStorePage({
       <PageHeader
         eyebrow={store.categoryName}
         title={store.name_ar}
-        description="إدارة منتجات المتجر ومواعيد العمل من نفس المكان."
+        description="إدارة بيانات المتجر وصوره ومنتجاته ومواعيد العمل من نفس المكان."
         icon={<Store size={16} />}
         actions={(
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/admin/now/sections/catalog/${storeId}?tab=store`} className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700 transition hover:bg-violet-100">
+              <ImagePlus size={14} /> تعديل الصور
+            </Link>
             <span className={`rounded-full px-3 py-1.5 text-xs font-black ${store.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
               {store.is_active ? 'المتجر نشط' : 'المتجر غير نشط'}
             </span>
@@ -97,7 +104,7 @@ export default async function CatalogStorePage({
         </div>
       </section>
 
-      <nav className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      <nav className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-3">
         <Link
           href={`/admin/now/sections/catalog/${storeId}?tab=products`}
           className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${tab === 'products' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -109,6 +116,12 @@ export default async function CatalogStorePage({
           className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${tab === 'hours' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
         >
           <CalendarClock size={17} /> مواعيد المتجر
+        </Link>
+        <Link
+          href={`/admin/now/sections/catalog/${storeId}?tab=store`}
+          className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${tab === 'store' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+        >
+          <Settings2 size={17} /> بيانات المتجر
         </Link>
       </nav>
 
@@ -224,6 +237,85 @@ export default async function CatalogStorePage({
             </form>
           </section>
         </div>
+      ) : tab === 'store' ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+          <div className="flex items-start gap-3 border-b border-slate-100 pb-5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700"><ImagePlus size={19} /></span>
+            <div>
+              <h2 className="text-lg font-black text-slate-950">بيانات وصور المتجر</h2>
+              <p className="mt-1 text-xs font-semibold leading-6 text-slate-500">غيّر اللوجو أو صورة الغلاف من هنا. رفع صورة جديدة يستبدل الصورة الحالية بعد نجاح الحفظ.</p>
+            </div>
+          </div>
+
+          <form action={updateCatalogStore} className="mt-6 space-y-6">
+            <input type="hidden" name="store_id" value={storeId} />
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">لوجو المتجر</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">يفضل صورة مربعة واضحة.</p>
+                  </div>
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    {store.logo_url ? <Image src={store.logo_url} alt={`لوجو ${store.name_ar}`} fill sizes="80px" className="object-cover" /> : <div className="flex h-full items-center justify-center text-slate-300"><Store size={28} /></div>}
+                  </div>
+                </div>
+                <label className={`${labelClass} mt-4`}>
+                  تغيير اللوجو
+                  <input name="logo" type="file" accept="image/jpeg,image/png,image/webp" className={`${inputClass} h-auto py-2`} />
+                  <span className="mt-1.5 block text-[11px] font-semibold text-slate-400">JPG / PNG / WEBP — بحد أقصى 10MB</span>
+                </label>
+                {store.logo_url ? (
+                  <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-bold text-rose-700">
+                    <input type="checkbox" name="remove_logo" className="h-4 w-4 accent-rose-600" /> إزالة اللوجو الحالي
+                  </label>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                <div>
+                  <p className="text-sm font-black text-slate-900">صورة الغلاف</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">الصورة العريضة التي تمثل المتجر في الواجهة.</p>
+                </div>
+                <div className="relative mt-4 aspect-[16/7] overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  {store.cover_image_url ? <Image src={store.cover_image_url} alt={`غلاف ${store.name_ar}`} fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-slate-300"><ImagePlus size={34} /></div>}
+                </div>
+                <label className={`${labelClass} mt-4`}>
+                  تغيير صورة الغلاف
+                  <input name="cover" type="file" accept="image/jpeg,image/png,image/webp" className={`${inputClass} h-auto py-2`} />
+                  <span className="mt-1.5 block text-[11px] font-semibold text-slate-400">JPG / PNG / WEBP — بحد أقصى 10MB</span>
+                </label>
+                {store.cover_image_url ? (
+                  <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs font-bold text-rose-700">
+                    <input type="checkbox" name="remove_cover" className="h-4 w-4 accent-rose-600" /> إزالة صورة الغلاف الحالية
+                  </label>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className={labelClass}>
+                اسم المتجر بالعربية *
+                <input name="name_ar" defaultValue={store.name_ar} required className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                اسم المتجر بالإنجليزية
+                <input name="name_en" defaultValue={store.name_en ?? ''} className={inputClass} dir="ltr" />
+              </label>
+              <label className={`${labelClass} md:col-span-2`}>
+                الوصف المختصر
+                <textarea name="short_description_ar" defaultValue={store.short_description_ar ?? ''} className={textareaClass} />
+              </label>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-100 pt-5">
+              <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-black text-white shadow-sm shadow-violet-200 transition hover:bg-violet-700">
+                <Save size={16} /> حفظ بيانات المتجر والصور
+              </button>
+            </div>
+          </form>
+        </section>
       ) : (
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
           <div className="flex items-start gap-3">
