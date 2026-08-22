@@ -84,6 +84,7 @@ const ICONS: Record<NowAdminGroup, typeof Store> = {
 
 function getTableHref(definition: NowTableDefinition) {
   if (definition.table === 'app_settings') return '/admin/now/settings';
+  if (definition.table === 'admin_members') return '/admin/now/team';
   if (definition.table === 'orders') return '/admin/now/orders';
   if (definition.mutationMode === 'workflow') return '/admin/now/review';
   return `/admin/now/data/${definition.table}`;
@@ -91,6 +92,7 @@ function getTableHref(definition: NowTableDefinition) {
 
 function capability(definition: NowTableDefinition) {
   if (definition.table === 'app_settings') return 'تعديل إعدادات التطبيق';
+  if (definition.table === 'admin_members') return 'إدارة فريق العمل';
   if (definition.table === 'orders') return 'متابعة وتشغيل';
   if (definition.mutationMode === 'crud') return 'إضافة وتعديل';
   if (definition.mutationMode === 'update-only') return 'تعديل';
