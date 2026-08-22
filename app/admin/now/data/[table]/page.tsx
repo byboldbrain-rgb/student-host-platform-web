@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Braces,
@@ -21,9 +22,9 @@ import {
   getCreateTemplate,
   getRowPrimaryKey,
   getRowTitle,
+  resolveNowTableAccess,
 } from '../../lib/table-data';
-import { canMutateNowTable, getNowTableDefinition } from '../../lib/table-registry';
-import { requireNowAdmin } from '../../lib/admin-data';
+import { canMutateNowTable } from '../../lib/table-registry';
 
 function renderValue(value: unknown) {
   if (value === null) {
@@ -65,20 +66,24 @@ export default async function NavientyNowTablePage({
   }>;
 }) {
   const { table } = await params;
-  const definition = getNowTableDefinition(table);
+  const resolved = await resolveNowTableAccess(table);
 
-  if (!definition) {
+  if (!resolved) {
     notFound();
   }
 
   const query = await searchParams;
   const page = Math.max(Number.parseInt(query.page ?? '1', 10) || 1, 1);
   const search = query.q?.trim() || '';
-  const [{ access }, result] = await Promise.all([
-    requireNowAdmin(),
-    getAdminTableRows({ tableName: definition.table, page, pageSize: 50, search }),
-  ]);
-  const canMutate = canMutateNowTable(access, definition);
+  const result = await getAdminTableRows({
+    tableName: table,
+    page,
+    pageSize: 50,
+    search,
+  });
+  const definition = result.definition;
+  const canMutate =
+    result.isRegistered && canMutateNowTable(resolved.access, definition);
   const canCreate = canMutate && definition.mutationMode === 'crud';
 
   return (
@@ -125,6 +130,19 @@ export default async function NavientyNowTablePage({
           </span>
         </div>
       </section>
+
+      {!result.isRegistered ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
+          <AlertTriangle className="mt-0.5 shrink-0" size={20} />
+          <div>
+            <p className="font-black">Schema Coverage Guard اكتشف الجدول تلقائيًا.</p>
+            <p>
+              الجدول ظاهر بالكامل للقراءة، لكن التعديل مقفول لحد ما يتم تسجيله في Admin Registry
+              وتحديد permission وworkflow آمنين. كده أي Table جديد مش هيختفي من الـAdmin.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {query.success ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-800">
@@ -240,9 +258,7 @@ export default async function NavientyNowTablePage({
               <summary className="cursor-pointer list-none p-5 hover:bg-slate-50">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-black text-slate-950">
-                      {getRowTitle(definition, row)}
-                    </p>
+                    <p className="font-black text-slate-950">{getRowTitle(definition, row)}</p>
                     <code className="mt-1 block text-[11px] text-slate-500" dir="ltr">
                       {primaryKeyJson}
                     </code>
@@ -274,7 +290,10 @@ export default async function NavientyNowTablePage({
                       <p className="text-[11px] font-black text-violet-700" dir="ltr">
                         {column}
                       </p>
-                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs leading-5 text-slate-700" dir="auto">
+                      <pre
+                        className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs leading-5 text-slate-700"
+                        dir="auto"
+                      >
                         {renderValue(value)}
                       </pre>
                     </div>
