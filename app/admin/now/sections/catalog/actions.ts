@@ -16,6 +16,9 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
 };
 
+type AdminClient = ReturnType<typeof createAdminClient>;
+type UploadedImage = { url: string; storagePath: string };
+
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === 'string' ? value.trim() : '';
@@ -26,11 +29,22 @@ function optionalText(formData: FormData, key: string) {
   return value || null;
 }
 
-function parseMoney(formData: FormData, key: string, label: string, required = true) {
+function requiredMoney(formData: FormData, key: string, label: string): number {
   const raw = text(formData, key);
-  if (!raw && !required) return null;
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) throw new Error(`${label} يجب أن يكون رقمًا صحيحًا أكبر من أو يساوي صفر.`);
+  if (!raw || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} يجب أن يكون رقمًا صحيحًا أكبر من أو يساوي صفر.`);
+  }
+  return value;
+}
+
+function optionalMoney(formData: FormData, key: string, label: string): number | null {
+  const raw = text(formData, key);
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} يجب أن يكون رقمًا صحيحًا أكبر من أو يساوي صفر.`);
+  }
   return value;
 }
 
@@ -71,10 +85,10 @@ function revalidateCatalog(storeId?: string, productId?: string) {
 }
 
 async function uploadImage(
-  admin: ReturnType<typeof createAdminClient>,
+  admin: AdminClient,
   entry: FormDataEntryValue | null,
   prefix: string,
-) {
+): Promise<UploadedImage | null> {
   if (!(entry instanceof File) || entry.size === 0) return null;
   const extension = IMAGE_EXTENSIONS[entry.type];
   if (!extension) throw new Error('صيغة الصورة يجب أن تكون JPG أو PNG أو WEBP.');
@@ -93,24 +107,25 @@ async function uploadImage(
   return { url: data.publicUrl, storagePath };
 }
 
-async function removeStoragePaths(admin: ReturnType<typeof createAdminClient>, paths: Array<string | null | undefined>) {
+async function removeStoragePaths(admin: AdminClient, paths: Array<string | null | undefined>) {
   const clean = paths.filter((path): path is string => Boolean(path));
   if (clean.length === 0) return;
   await admin.storage.from(IMAGE_BUCKET).remove(clean);
 }
 
-async function assertStoreExists(admin: ReturnType<typeof createAdminClient>, storeId: string) {
-  const { data, error } = await admin.schema('now').from('stores').select('id,category_id').eq('id', storeId).maybeSingle();
+async function assertStoreExists(admin: AdminClient, storeId: string) {
+  const { data, error } = await admin
+    .schema('now')
+    .from('stores')
+    .select('id,category_id')
+    .eq('id', storeId)
+    .maybeSingle();
   if (error) throw new Error(mutationError(error));
   if (!data) throw new Error('المتجر غير موجود.');
   return data as { id: string; category_id: string };
 }
 
-async function assertCategoryBelongsToStore(
-  admin: ReturnType<typeof createAdminClient>,
-  storeId: string,
-  categoryId: string,
-) {
+async function assertCategoryBelongsToStore(admin: AdminClient, storeId: string, categoryId: string) {
   const { data, error } = await admin
     .schema('now')
     .from('catalog_categories')
@@ -122,8 +137,13 @@ async function assertCategoryBelongsToStore(
   if (!data) throw new Error('الفئة المختارة لا تتبع هذا المتجر.');
 }
 
-async function inferProductType(admin: ReturnType<typeof createAdminClient>, categoryId: string) {
-  const { data, error } = await admin.schema('now').from('store_categories').select('slug').eq('id', categoryId).maybeSingle();
+async function inferProductType(admin: AdminClient, storeCategoryId: string) {
+  const { data, error } = await admin
+    .schema('now')
+    .from('store_categories')
+    .select('slug')
+    .eq('id', storeCategoryId)
+    .maybeSingle();
   if (error) throw new Error(mutationError(error));
   const slug = (data as { slug?: string } | null)?.slug ?? '';
   if (slug === 'restaurants') return 'food';
@@ -132,10 +152,11 @@ async function inferProductType(admin: ReturnType<typeof createAdminClient>, cat
 }
 
 export async function createCatalogStore(formData: FormData) {
+  await requireNowTableAccess('stores', true);
+  const id = randomUUID();
+
   try {
-    await requireNowTableAccess('stores', true);
     const admin = createAdminClient();
-    const id = randomUUID();
     const nameAr = text(formData, 'name_ar');
     const nameEn = text(formData, 'name_en');
     const categoryId = text(formData, 'category_id');
@@ -150,12 +171,12 @@ export async function createCatalogStore(formData: FormData) {
     if (cityResult.error) throw new Error(mutationError(cityResult.error));
     if (!categoryResult.data || !cityResult.data) throw new Error('الفئة أو المدينة المختارة غير صحيحة.');
 
-    const uploaded: Array<{ url: string; storagePath: string } | null> = [];
+    const uploaded: UploadedImage[] = [];
     try {
       const logo = await uploadImage(admin, formData.get('logo'), `stores/${id}`);
-      uploaded.push(logo);
+      if (logo) uploaded.push(logo);
       const cover = await uploadImage(admin, formData.get('cover'), `stores/${id}`);
-      uploaded.push(cover);
+      if (cover) uploaded.push(cover);
 
       const { error } = await admin.schema('now').from('stores').insert({
         id,
@@ -186,21 +207,22 @@ export async function createCatalogStore(formData: FormData) {
         throw new Error(mutationError(hoursResult.error));
       }
     } catch (error) {
-      await removeStoragePaths(admin, uploaded.map((item) => item?.storagePath));
+      await removeStoragePaths(admin, uploaded.map((item) => item.storagePath));
       throw error;
     }
-
-    revalidateCatalog(id);
-    redirectMessage(catalogPath(id), 'success', 'تم إنشاء المتجر. أضف المنتجات واضبط مواعيد العمل.');
   } catch (error) {
     redirectMessage(catalogPath(), 'error', error instanceof Error ? error.message : 'تعذر إنشاء المتجر.');
   }
+
+  revalidateCatalog(id);
+  redirectMessage(catalogPath(id), 'success', 'تم إنشاء المتجر. أضف المنتجات واضبط مواعيد العمل.');
 }
 
 export async function createCatalogCategory(formData: FormData) {
+  await requireNowTableAccess('catalog_categories', true);
   const storeId = text(formData, 'store_id');
+
   try {
-    await requireNowTableAccess('catalog_categories', true);
     const admin = createAdminClient();
     await assertStoreExists(admin, storeId);
     const id = randomUUID();
@@ -222,30 +244,33 @@ export async function createCatalogCategory(formData: FormData) {
       await removeStoragePaths(admin, [image?.storagePath]);
       throw new Error(mutationError(error));
     }
-
-    revalidateCatalog(storeId);
-    redirectMessage(catalogPath(storeId, '?tab=products'), 'success', 'تمت إضافة الفئة.');
   } catch (error) {
     redirectMessage(catalogPath(storeId, '?tab=products'), 'error', error instanceof Error ? error.message : 'تعذر إضافة الفئة.');
   }
+
+  revalidateCatalog(storeId);
+  redirectMessage(catalogPath(storeId, '?tab=products'), 'success', 'تمت إضافة الفئة.');
 }
 
 export async function createCatalogProduct(formData: FormData) {
+  await requireNowTableAccess('products', true);
   const storeId = text(formData, 'store_id');
+  const id = randomUUID();
+
   try {
-    await requireNowTableAccess('products', true);
     const admin = createAdminClient();
     const store = await assertStoreExists(admin, storeId);
     const categoryId = text(formData, 'catalog_category_id');
     const nameAr = text(formData, 'name_ar');
     const nameEn = text(formData, 'name_en');
-    const basePrice = parseMoney(formData, 'base_price', 'السعر');
-    const compareAtPrice = parseMoney(formData, 'compare_at_price', 'السعر قبل الخصم', false);
+    const basePrice = requiredMoney(formData, 'base_price', 'السعر');
+    const compareAtPrice = optionalMoney(formData, 'compare_at_price', 'السعر قبل الخصم');
     if (!nameAr || !categoryId) throw new Error('اسم المنتج والفئة حقول مطلوبة.');
-    if (compareAtPrice !== null && compareAtPrice < basePrice) throw new Error('السعر قبل الخصم يجب أن يكون أكبر من أو يساوي السعر الحالي.');
+    if (compareAtPrice !== null && compareAtPrice < basePrice) {
+      throw new Error('السعر قبل الخصم يجب أن يكون أكبر من أو يساوي السعر الحالي.');
+    }
     await assertCategoryBelongsToStore(admin, storeId, categoryId);
 
-    const id = randomUUID();
     const image = await uploadImage(admin, formData.get('image'), `stores/${storeId}/products/${id}`);
     const productType = await inferProductType(admin, store.category_id);
     const { error } = await admin.schema('now').from('products').insert({
@@ -283,20 +308,21 @@ export async function createCatalogProduct(formData: FormData) {
         throw new Error(mutationError(imageResult.error));
       }
     }
-
-    revalidateCatalog(storeId, id);
-    redirectMessage(catalogPath(storeId, '?tab=products'), 'success', 'تمت إضافة المنتج.');
   } catch (error) {
     redirectMessage(catalogPath(storeId, '?tab=products'), 'error', error instanceof Error ? error.message : 'تعذر إضافة المنتج.');
   }
+
+  revalidateCatalog(storeId, id);
+  redirectMessage(catalogPath(storeId, '?tab=products'), 'success', 'تمت إضافة المنتج.');
 }
 
 export async function updateCatalogProduct(formData: FormData) {
+  await requireNowTableAccess('products', true);
   const storeId = text(formData, 'store_id');
   const productId = text(formData, 'product_id');
   const path = catalogPath(storeId, `/products/${productId}`);
+
   try {
-    await requireNowTableAccess('products', true);
     const admin = createAdminClient();
     await assertStoreExists(admin, storeId);
 
@@ -309,13 +335,16 @@ export async function updateCatalogProduct(formData: FormData) {
       .maybeSingle();
     if (productResult.error) throw new Error(mutationError(productResult.error));
     if (!productResult.data) throw new Error('المنتج غير موجود.');
+    const previousProductImageUrl = (productResult.data as { image_url?: string | null }).image_url ?? null;
 
     const categoryId = text(formData, 'catalog_category_id');
     const nameAr = text(formData, 'name_ar');
-    const basePrice = parseMoney(formData, 'base_price', 'السعر');
-    const compareAtPrice = parseMoney(formData, 'compare_at_price', 'السعر قبل الخصم', false);
+    const basePrice = requiredMoney(formData, 'base_price', 'السعر');
+    const compareAtPrice = optionalMoney(formData, 'compare_at_price', 'السعر قبل الخصم');
     if (!nameAr || !categoryId) throw new Error('اسم المنتج والفئة حقول مطلوبة.');
-    if (compareAtPrice !== null && compareAtPrice < basePrice) throw new Error('السعر قبل الخصم يجب أن يكون أكبر من أو يساوي السعر الحالي.');
+    if (compareAtPrice !== null && compareAtPrice < basePrice) {
+      throw new Error('السعر قبل الخصم يجب أن يكون أكبر من أو يساوي السعر الحالي.');
+    }
     await assertCategoryBelongsToStore(admin, storeId, categoryId);
 
     const image = await uploadImage(admin, formData.get('image'), `stores/${storeId}/products/${productId}`);
@@ -331,7 +360,12 @@ export async function updateCatalogProduct(formData: FormData) {
     };
     if (image) payload.image_url = image.url;
 
-    const { error } = await admin.schema('now').from('products').update(payload).eq('id', productId).eq('store_id', storeId);
+    const { error } = await admin
+      .schema('now')
+      .from('products')
+      .update(payload)
+      .eq('id', productId)
+      .eq('store_id', storeId);
     if (error) {
       await removeStoragePaths(admin, [image?.storagePath]);
       throw new Error(mutationError(error));
@@ -347,42 +381,52 @@ export async function updateCatalogProduct(formData: FormData) {
         .order('sort_order', { ascending: true })
         .limit(1)
         .maybeSingle();
-      if (coverResult.error) throw new Error(mutationError(coverResult.error));
-
-      const previousPath = (coverResult.data as { storage_path?: string | null } | null)?.storage_path ?? null;
-      if (coverResult.data) {
-        const imageUpdate = await admin
-          .schema('now')
-          .from('product_images')
-          .update({ image_url: image.url, storage_path: image.storagePath, is_active: true })
-          .eq('id', (coverResult.data as { id: string }).id);
-        if (imageUpdate.error) throw new Error(mutationError(imageUpdate.error));
-      } else {
-        const imageInsert = await admin.schema('now').from('product_images').insert({
-          product_id: productId,
-          image_url: image.url,
-          storage_path: image.storagePath,
-          is_cover: true,
-          is_active: true,
-          sort_order: 0,
-        });
-        if (imageInsert.error) throw new Error(mutationError(imageInsert.error));
+      if (coverResult.error) {
+        await admin.schema('now').from('products').update({ image_url: previousProductImageUrl }).eq('id', productId);
+        await removeStoragePaths(admin, [image.storagePath]);
+        throw new Error(mutationError(coverResult.error));
       }
-      if (previousPath && previousPath !== image.storagePath) await removeStoragePaths(admin, [previousPath]);
-    }
 
-    revalidateCatalog(storeId, productId);
-    redirectMessage(path, 'success', 'تم حفظ تعديلات المنتج.');
+      const previousStoragePath = (coverResult.data as { storage_path?: string | null } | null)?.storage_path ?? null;
+      const coverId = (coverResult.data as { id?: string } | null)?.id;
+      const imageMutation = coverId
+        ? await admin
+            .schema('now')
+            .from('product_images')
+            .update({ image_url: image.url, storage_path: image.storagePath, is_active: true })
+            .eq('id', coverId)
+        : await admin.schema('now').from('product_images').insert({
+            product_id: productId,
+            image_url: image.url,
+            storage_path: image.storagePath,
+            is_cover: true,
+            is_active: true,
+            sort_order: 0,
+          });
+
+      if (imageMutation.error) {
+        await admin.schema('now').from('products').update({ image_url: previousProductImageUrl }).eq('id', productId);
+        await removeStoragePaths(admin, [image.storagePath]);
+        throw new Error(mutationError(imageMutation.error));
+      }
+      if (previousStoragePath && previousStoragePath !== image.storagePath) {
+        await removeStoragePaths(admin, [previousStoragePath]);
+      }
+    }
   } catch (error) {
     redirectMessage(path, 'error', error instanceof Error ? error.message : 'تعذر تعديل المنتج.');
   }
+
+  revalidateCatalog(storeId, productId);
+  redirectMessage(path, 'success', 'تم حفظ تعديلات المنتج.');
 }
 
 export async function deleteCatalogProduct(formData: FormData) {
+  await requireNowTableAccess('products', true);
   const storeId = text(formData, 'store_id');
   const productId = text(formData, 'product_id');
+
   try {
-    await requireNowTableAccess('products', true);
     if (formData.get('confirm_delete') !== 'yes') throw new Error('أكد الحذف النهائي أولًا.');
     const admin = createAdminClient();
 
@@ -396,25 +440,41 @@ export async function deleteCatalogProduct(formData: FormData) {
     if (productResult.error) throw new Error(mutationError(productResult.error));
     if (!productResult.data) throw new Error('المنتج غير موجود.');
 
-    const imagesResult = await admin.schema('now').from('product_images').select('storage_path').eq('product_id', productId);
+    const imagesResult = await admin
+      .schema('now')
+      .from('product_images')
+      .select('storage_path')
+      .eq('product_id', productId);
     if (imagesResult.error) throw new Error(mutationError(imagesResult.error));
-    const storagePaths = ((imagesResult.data ?? []) as Array<{ storage_path?: string | null }>).map((image) => image.storage_path);
+    const storagePaths = ((imagesResult.data ?? []) as Array<{ storage_path?: string | null }>).map(
+      (image) => image.storage_path,
+    );
 
-    const { error } = await admin.schema('now').from('products').delete().eq('id', productId).eq('store_id', storeId);
+    const { error } = await admin
+      .schema('now')
+      .from('products')
+      .delete()
+      .eq('id', productId)
+      .eq('store_id', storeId);
     if (error) throw new Error(mutationError(error));
     await removeStoragePaths(admin, storagePaths);
-
-    revalidateCatalog(storeId, productId);
-    redirectMessage(catalogPath(storeId, '?tab=products'), 'success', 'تم حذف المنتج نهائيًا.');
   } catch (error) {
-    redirectMessage(catalogPath(storeId, `/products/${productId}`), 'error', error instanceof Error ? error.message : 'تعذر حذف المنتج.');
+    redirectMessage(
+      catalogPath(storeId, `/products/${productId}`),
+      'error',
+      error instanceof Error ? error.message : 'تعذر حذف المنتج.',
+    );
   }
+
+  revalidateCatalog(storeId, productId);
+  redirectMessage(catalogPath(storeId, '?tab=products'), 'success', 'تم حذف المنتج نهائيًا.');
 }
 
 export async function updateCatalogStoreHours(formData: FormData) {
+  await requireNowTableAccess('store_business_hours', true);
   const storeId = text(formData, 'store_id');
+
   try {
-    await requireNowTableAccess('store_business_hours', true);
     const admin = createAdminClient();
     await assertStoreExists(admin, storeId);
 
@@ -422,7 +482,9 @@ export async function updateCatalogStoreHours(formData: FormData) {
       const isOpen = formData.get(`is_open_${day}`) === 'on';
       const openTime = text(formData, `open_time_${day}`);
       const closeTime = text(formData, `close_time_${day}`);
-      if (isOpen && (!openTime || !closeTime)) throw new Error('حدد وقت الفتح والإغلاق لكل يوم مفتوح.');
+      if (isOpen && (!openTime || !closeTime)) {
+        throw new Error('حدد وقت الفتح والإغلاق لكل يوم مفتوح.');
+      }
       return {
         store_id: storeId,
         day_of_week: day,
@@ -437,10 +499,10 @@ export async function updateCatalogStoreHours(formData: FormData) {
       .from('store_business_hours')
       .upsert(rows, { onConflict: 'store_id,day_of_week' });
     if (error) throw new Error(mutationError(error));
-
-    revalidateCatalog(storeId);
-    redirectMessage(catalogPath(storeId, '?tab=hours'), 'success', 'تم حفظ مواعيد المتجر.');
   } catch (error) {
     redirectMessage(catalogPath(storeId, '?tab=hours'), 'error', error instanceof Error ? error.message : 'تعذر حفظ المواعيد.');
   }
+
+  revalidateCatalog(storeId);
+  redirectMessage(catalogPath(storeId, '?tab=hours'), 'success', 'تم حفظ مواعيد المتجر.');
 }
