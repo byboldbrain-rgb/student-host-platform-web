@@ -463,16 +463,24 @@ function propertyMatchesSakanPage(
 }
 
 export async function getCachedSakanPageData(path: string) {
-  const [seoPage, allPopularSource] = await Promise.all([
-    getCachedSakanSeoPageByPath(path),
-    getCachedPopularProperties(),
-  ])
+  const seoPage = await getCachedSakanSeoPageByPath(path)
 
   if (!seoPage) {
     return {
       seoPage: null,
       properties: [],
     }
+  }
+
+  let allPopularSource: CachedPropertyListing[] = []
+
+  try {
+    allPopularSource = await getCachedPopularProperties()
+  } catch (error) {
+    console.error(
+      '[sakan] Popular properties query failed; continuing with SEO data only.',
+      error
+    )
   }
 
   const properties = allPopularSource
