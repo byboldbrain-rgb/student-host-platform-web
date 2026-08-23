@@ -49,7 +49,7 @@ function isActive(pathname: string, href: string) {
 
 function BrandLogo() {
   return (
-    <Link href="/admin" aria-label="Navienty admin home" className="group flex items-center gap-2">
+    <Link href="/admin/now" aria-label="Navienty Now home" className="group flex items-center gap-2">
       <img
         src="https://i.ibb.co/p6CBgjz0/Navienty-13.png"
         alt="Navienty icon"

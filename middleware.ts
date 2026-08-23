@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { getSafeAdminRedirectPath } from '@/src/lib/admin-redirect'
+
 type SupportedLanguage = 'en' | 'ar'
 
 const SUPPORTED_LANGUAGES: SupportedLanguage[] = ['en', 'ar']
@@ -437,7 +439,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request,
   })
 
@@ -508,7 +510,17 @@ export async function middleware(request: NextRequest) {
 
   if (!user && !isAdminLoginRoute) {
     const url = request.nextUrl.clone()
+    const requestedPath = getSafeAdminRedirectPath(
+      `${request.nextUrl.pathname}${request.nextUrl.search}`
+    )
+
     url.pathname = '/admin/login'
+    url.search = ''
+
+    if (requestedPath) {
+      url.searchParams.set('next', requestedPath)
+    }
+
     return NextResponse.redirect(url)
   }
 
@@ -529,12 +541,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const defaultRoute = await getDefaultAdminRoute(supabase, adminUser)
-
   if (isAdminLoginRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = defaultRoute
-    return NextResponse.redirect(url)
+    const requestedPath = getSafeAdminRedirectPath(
+      request.nextUrl.searchParams.get('next')
+    )
+    const destination =
+      requestedPath || (await getDefaultAdminRoute(supabase, adminUser))
+
+    return NextResponse.redirect(
+      new URL(destination, request.url)
+    )
   }
 
   if (isUnauthorizedRoute || isAdminChangePasswordRoute) {

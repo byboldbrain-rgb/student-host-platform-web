@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { getSafeAdminRedirectPath } from '@/src/lib/admin-redirect'
 import { createClient } from '@/src/lib/supabase/client'
 
 async function getFoodEditorAllowedPath(
@@ -488,7 +489,11 @@ export default function AdminLoginPage() {
       return
     }
 
-    const redirectPath = await getDefaultAdminRoute(supabase, adminUser)
+    const requestedPath = getSafeAdminRedirectPath(
+      new URLSearchParams(window.location.search).get('next')
+    )
+    const redirectPath =
+      requestedPath || (await getDefaultAdminRoute(supabase, adminUser))
 
     setLoading(false)
     router.push(redirectPath)
