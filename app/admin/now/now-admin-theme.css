@@ -89,3 +89,81 @@
 .now-admin-shell a {
   -webkit-tap-highlight-color: transparent;
 }
+
+.now-admin-shell .orders-operations {
+  color-scheme: light;
+}
+
+.now-admin-shell .orders-operations dialog {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  .now-admin-shell .orders-operations .bg-white,
+  .now-admin-shell .orders-operations dialog {
+    background-color: #ffffff !important;
+  }
+
+  .now-admin-shell .orders-operations .bg-slate-50 {
+    background-color: #f8fafc !important;
+  }
+
+  .now-admin-shell .orders-operations .bg-slate-100 {
+    background-color: #f1f5f9 !important;
+  }
+
+  .now-admin-shell .orders-operations .text-slate-950 {
+    color: #020617 !important;
+  }
+
+  .now-admin-shell .orders-operations .text-slate-900 {
+    color: #0f172a !important;
+  }
+
+  .now-admin-shell .orders-operations .text-slate-800 {
+    color: #1e293b !important;
+  }
+
+  .now-admin-shell .orders-operations .text-slate-700 {
+    color: #334155 !important;
+  }
+
+  .now-admin-shell .orders-operations .text-slate-600 {
+    color: #475569 !important;
+  }
+
+  .now-admin-shell .orders-operations .text-slate-500 {
+    color: #64748b !important;
+  }
+
+  .now-admin-shell .orders-operations .border-slate-100 {
+    border-color: #f1f5f9 !important;
+  }
+
+  .now-admin-shell .orders-operations .border-slate-200 {
+    border-color: #e2e8f0 !important;
+  }
+
+  .now-admin-shell .orders-operations .border-slate-300 {
+    border-color: #cbd5e1 !important;
+  }
+
+  .now-admin-shell .orders-operations input,
+  .now-admin-shell .orders-operations select,
+  .now-admin-shell .orders-operations textarea {
+    color-scheme: light;
+    background-color: #ffffff;
+    color: #020617;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .now-admin-shell .orders-operations *,
+  .now-admin-shell .orders-operations *::before,
+  .now-admin-shell .orders-operations *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

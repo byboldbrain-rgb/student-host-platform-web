@@ -1,121 +1,231 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import {
   ArrowRight,
+  Ban,
   CheckCircle2,
   Clock3,
+  Copy,
   MapPin,
   MessageCircle,
-  PackageCheck,
   Phone,
   ReceiptText,
-  ShieldCheck,
-  Store,
+  ShieldAlert,
   UserRound,
 } from 'lucide-react';
 
-import { Notice, PageHeader } from '../../components/ui-kit';
-import { getOrderStatusLabel, OrderStatusBadge, PaymentStatusBadge } from '../../components/status-badge';
-import SubmitButton from '../../components/submit-button';
-import { getAdminOrder, requireNowAdmin } from '../../lib/admin-data';
-import type { AdminOrderDetail, OrderStatus } from '../../lib/types';
-import { transitionOrderStatus } from './actions';
+import { OrderStatusBadge, PaymentStatusBadge } from '../../components/status-badge';
+import {
+  AdminOrderNotFoundError,
+  getAdminOrderWithClient,
+  requireNowAdmin,
+} from '../../lib/admin-data';
+import type { AdminOrderDetail } from '../../lib/types';
+import {
+  OrderItems,
+  SectionHeading,
+  StatusTimeline,
+} from '../components/order-detail-sections';
+import OrdersClientEnhancements, { RefreshOrdersButton } from '../components/orders-client-enhancements';
+import { getNextOrderAction } from '../order-domain';
+import {
+  formatMoney,
+  formatOrderAge,
+  formatOrderDateTime,
+  phoneDigits,
+  safeOrdersReturnPath,
+  type OrdersSearchParams,
+} from '../order-helpers';
+import QuickOrderActions from '../quick-order-actions';
 
-function formatDate(value: string | null) { if (!value) return '—'; return new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Cairo' }).format(new Date(value)); }
-function numberValue(value: number | string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
-function money(value: number | string, symbol: string) { return `${numberValue(value).toLocaleString('ar-EG')} ${symbol}`; }
-function phoneDigits(value: string) { return value.replace(/\D/g, ''); }
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-function nextTransition(status: OrderStatus): { status: OrderStatus; label: string; description: string; note: string } | null {
-  switch (status) {
-    case 'waiting_confirmation': return { status: 'confirmed', label: 'تأكيد الطلب', description: 'أكد بعد التأكد من توافر المنتجات والمبلغ.', note: 'تم تأكيد توافر المنتجات والمبلغ.' };
-    case 'confirmed': return { status: 'preparing', label: 'بدء التجهيز', description: 'اضغط عندما يبدأ المتجر تجهيز الطلب.', note: 'بدأ المتجر تجهيز الطلب.' };
-    case 'preparing': return { status: 'out_for_delivery', label: 'خرج للتوصيل', description: 'اضغط بعد تسليم الطلب للمندوب.', note: 'تم تسليم الطلب للمندوب.' };
-    case 'out_for_delivery': return { status: 'delivered', label: 'تأكيد التوصيل', description: 'اضغط بعد التأكد أن العميل استلم الطلب.', note: 'تم توصيل الطلب بنجاح.' };
-    default: return null;
+export default async function NavientyNowOrderDetailsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<OrdersSearchParams>;
+}) {
+  const [{ id }, query, { supabase, access }] = await Promise.all([
+    params,
+    searchParams,
+    requireNowAdmin(),
+  ]);
+
+  if (!access.permissions.view_orders) {
+    redirect('/admin/unauthorized');
   }
-}
-function canCancel(status: OrderStatus) { return !['delivered', 'cancelled'].includes(status); }
 
-function Timeline({ order }: { order: AdminOrderDetail }) {
-  if (order.status_history.length === 0) return <p className="text-sm font-semibold text-slate-500">لا يوجد سجل حالات بعد.</p>;
-  return <div className="space-y-4">{order.status_history.map((item, index) => (
-    <div key={item.id} className="relative flex gap-3">
-      {index < order.status_history.length - 1 ? <div className="absolute right-[7px] top-5 h-[calc(100%+8px)] w-px bg-slate-200" /> : null}
-      <div className="relative z-10 mt-1.5 h-4 w-4 shrink-0 rounded-full border-4 border-white bg-violet-600 shadow" />
-      <div className="min-w-0 flex-1 rounded-xl bg-slate-50 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-black text-slate-800">{item.old_status ? `${getOrderStatusLabel(item.old_status)} ← ${getOrderStatusLabel(item.new_status)}` : getOrderStatusLabel(item.new_status)}</p><p className="text-[11px] font-semibold text-slate-400">{formatDate(item.created_at)}</p></div>
-        {item.note ? <p className="mt-2 text-xs font-semibold leading-6 text-slate-500">{item.note}</p> : null}
-      </div>
-    </div>
-  ))}</div>;
-}
-
-export default async function NavientyNowOrderDetailsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const [{ id }, query, { access }] = await Promise.all([params, searchParams, requireNowAdmin()]);
   let order: AdminOrderDetail;
-  try { order = await getAdminOrder(id); } catch { notFound(); }
-  const errorRaw = Array.isArray(query.error) ? query.error[0] : query.error;
-  const successRaw = Array.isArray(query.success) ? query.success[0] : query.success;
-  const transition = nextTransition(order.status);
-  const manageOrders = access.permissions.manage_orders;
-  const whatsappUrl = `https://wa.me/${phoneDigits(order.customer.phone)}`;
+  try {
+    order = await getAdminOrderWithClient(supabase, id);
+  } catch (error) {
+    if (error instanceof AdminOrderNotFoundError) notFound();
+    throw error;
+  }
+
+  const returnTo = safeOrdersReturnPath(first(query.return_to));
+  const operation = getNextOrderAction(order.status);
+  const requiresPrescription = order.items.some((item) => item.requires_prescription);
+  const hasAgeRestriction = order.items.some((item) => item.is_age_restricted);
+  const whatsappNumber = phoneDigits(order.customer.phone);
 
   return (
-    <div className="space-y-6">
-      <div><Link href="/admin/now/orders" className="inline-flex items-center gap-1 text-xs font-black text-slate-500 hover:text-violet-700"><ArrowRight size={15} /> العودة للطلبات</Link></div>
-      <PageHeader
-        eyebrow="تفاصيل الطلب"
-        title={`الطلب ${order.order_code}`}
-        description={`تم إنشاؤه ${formatDate(order.timestamps.created_at)} · ${order.store.name_ar}`}
-        actions={<div className="flex flex-wrap items-center gap-2"><OrderStatusBadge status={order.status} /><PaymentStatusBadge status={order.payment_status} /></div>}
-      />
+    <div className="orders-operations space-y-4 text-slate-950">
+      <OrdersClientEnhancements />
 
-      {errorRaw ? <Notice tone="warning" title="تعذر تنفيذ الخطوة">{decodeURIComponent(errorRaw)}</Notice> : null}
-      {successRaw ? <Notice tone="success" title={decodeURIComponent(successRaw)} /> : null}
-      {!manageOrders ? <Notice tone="info" title="صلاحية مشاهدة فقط">يمكنك مراجعة كل تفاصيل الطلب لكن لا يمكنك تغيير حالته.</Notice> : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href={returnTo} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
+          <ArrowRight aria-hidden="true" size={15} />
+          العودة لنفس قائمة الطلبات
+        </Link>
+        <RefreshOrdersButton />
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="space-y-6">
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700"><Store size={18} /></span><div><p className="text-[10px] font-black text-slate-400">المتجر</p><p className="mt-1 font-black text-slate-800">{order.store.icon ?? '🏪'} {order.store.name_ar}</p></div></div></article>
-            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><ReceiptText size={18} /></span><div><p className="text-[10px] font-black text-slate-400">الإجمالي</p><p className="mt-1 text-lg font-black text-slate-900">{money(order.summary.total_amount, order.summary.currency_symbol)}</p></div></div></article>
-            <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-1"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-700"><PackageCheck size={18} /></span><div><p className="text-[10px] font-black text-slate-400">عدد المنتجات</p><p className="mt-1 text-lg font-black text-slate-900">{order.items.reduce((sum, item) => sum + item.quantity, 0).toLocaleString('ar-EG')}</p></div></div></article>
-          </section>
-
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4"><h2 className="font-black text-slate-950">محتويات الطلب</h2></div>
-            <div className="divide-y divide-slate-100">{order.items.map((item) => (
-              <div key={item.id} className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
-                <div className="min-w-0"><p className="font-black text-slate-800">{item.name_ar}{item.variant_name_ar ? ` — ${item.variant_name_ar}` : ''}</p><p className="mt-1 text-xs font-semibold text-slate-400">الكمية: {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>{item.requires_prescription || item.is_age_restricted ? <div className="mt-2 flex flex-wrap gap-2">{item.requires_prescription ? <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-800">يحتاج روشتة</span> : null}{item.is_age_restricted ? <span className="rounded-full bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-800">تحقق من العمر</span> : null}</div> : null}</div>
-                <div className="shrink-0 text-left"><p className="font-black text-slate-900">{money(item.line_total, order.summary.currency_symbol)}</p><p className="mt-1 text-[11px] font-semibold text-slate-400">{money(item.unit_price, order.summary.currency_symbol)} للوحدة</p></div>
-              </div>
-            ))}</div>
-            <div className="space-y-2 bg-slate-50 p-5 text-sm"><div className="flex justify-between"><span className="font-semibold text-slate-500">المنتجات</span><span className="font-black">{money(order.summary.subtotal, order.summary.currency_symbol)}</span></div><div className="flex justify-between"><span className="font-semibold text-slate-500">التوصيل</span><span className="font-black">{money(order.summary.delivery_fee, order.summary.currency_symbol)}</span></div><div className="flex justify-between border-t border-slate-200 pt-3 text-base"><span className="font-black">الإجمالي</span><span className="font-black text-violet-700">{money(order.summary.total_amount, order.summary.currency_symbol)}</span></div></div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Clock3 size={17} className="text-violet-700" /><h2 className="font-black text-slate-950">سجل الطلب</h2></div><div className="mt-5"><Timeline order={order} /></div></section>
+      <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-blue-800">تفاصيل الطلب</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">
+                الطلب <bdi dir="ltr">{order.order_code}</bdi>
+              </h1>
+              <button
+                type="button"
+                data-copy-value={order.order_code}
+                aria-label={`نسخ كود الطلب ${order.order_code}`}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              >
+                <Copy aria-hidden="true" size={15} />
+              </button>
+            </div>
+            <p className="mt-1 text-xs font-medium leading-5 text-slate-600">
+              {order.store.name_ar} · <time dateTime={order.timestamps.created_at}>{formatOrderDateTime(order.timestamps.created_at)} بتوقيت القاهرة</time> · <span data-order-created-at={order.timestamps.created_at}>{formatOrderAge(order.timestamps.created_at)}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <OrderStatusBadge status={order.status} />
+            <PaymentStatusBadge status={order.payment_status} />
+          </div>
         </div>
+      </header>
 
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          {manageOrders ? (
-            <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
-              <p className="text-[10px] font-black text-violet-600">الخطوة التالية</p>
-              {transition ? <><h2 className="mt-2 text-xl font-black text-slate-950">{transition.label}</h2><p className="mt-2 text-xs font-semibold leading-6 text-slate-500">{transition.description}</p><form action={transitionOrderStatus} className="mt-4"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="new_status" value={transition.status} /><input type="hidden" name="note" value={transition.note} /><SubmitButton idleText={transition.label} className="w-full bg-violet-600 text-white hover:bg-violet-700" /></form></> : order.status === 'awaiting_whatsapp_send' ? <><h2 className="mt-2 text-lg font-black">تواصل مع العميل على واتساب</h2><p className="mt-2 text-xs font-semibold leading-6 text-slate-500">الطلب لم ينتقل بعد لمرحلة التأكيد.</p><a href={whatsappUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white"><MessageCircle size={16} /> فتح واتساب</a></> : <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-black text-emerald-800"><CheckCircle2 size={18} /> لا توجد خطوة تشغيلية مطلوبة</div>}
+      {!access.permissions.manage_orders ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-950" role="note">
+          <UserRound aria-hidden="true" className="mt-0.5 shrink-0" size={18} />
+          <div><p className="text-sm font-semibold">صلاحية عرض فقط</p><p className="mt-1 text-xs font-medium leading-5">يمكنك مراجعة الطلب والاتصال بالعميل، لكن أدوات تغيير الحالة والإلغاء مخفية.</p></div>
+        </div>
+      ) : null}
+
+      {requiresPrescription || hasAgeRestriction ? (
+        <section aria-labelledby="order-requirements-title" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <div className="flex items-start gap-3">
+            <ShieldAlert aria-hidden="true" className="mt-0.5 shrink-0" size={19} />
+            <div>
+              <h2 id="order-requirements-title" className="text-sm font-semibold">متطلبات تحتاج مراجعة قبل متابعة التنفيذ</h2>
+              <ul className="mt-2 space-y-1 text-xs font-medium leading-5">
+                {requiresPrescription ? <li>• يتضمن الطلب منتجًا واحدًا على الأقل يتطلب روشتة.</li> : null}
+                {hasAgeRestriction ? <li>• يتضمن الطلب منتجًا واحدًا على الأقل مقيدًا بالعمر.</li> : null}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <main className="min-w-0 space-y-4">
+          <OrderItems order={order} />
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <SectionHeading icon={Clock3}>سجل الحالات</SectionHeading>
+            <StatusTimeline order={order} />
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <SectionHeading icon={MessageCircle}>تسليم الطلب عبر واتساب</SectionHeading>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-3"><dt className="text-[10px] font-semibold text-slate-500">تم فتح واتساب</dt><dd className="mt-1 text-xs font-semibold text-slate-900">{formatOrderDateTime(order.whatsapp.opened_at)}</dd></div>
+              <div className="rounded-xl bg-slate-50 p-3"><dt className="text-[10px] font-semibold text-slate-500">تم تأكيد الإرسال</dt><dd className="mt-1 text-xs font-semibold text-slate-900">{formatOrderDateTime(order.whatsapp.sent_confirmed_at)}</dd></div>
+            </dl>
+            {order.whatsapp.message ? (
+              <details className="mt-3 rounded-xl border border-slate-200 bg-white">
+                <summary className="min-h-11 cursor-pointer px-3 py-3 text-xs font-semibold text-slate-800">عرض نص رسالة واتساب</summary>
+                <p className="whitespace-pre-wrap border-t border-slate-100 px-3 py-3 text-xs font-medium leading-6 text-slate-700">{order.whatsapp.message}</p>
+              </details>
+            ) : null}
+          </section>
+        </main>
+
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <section className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-semibold text-blue-800">الإجراء التشغيلي</p>
+            {operation ? (
+              <div className="mt-2">
+                <h2 className="text-lg font-semibold text-slate-950">{operation.label}</h2>
+                <p className="mt-1 text-xs font-medium leading-5 text-slate-600">{operation.description}</p>
+              </div>
+            ) : order.status === 'awaiting_whatsapp_send' ? (
+              <div className="mt-2"><h2 className="text-base font-semibold text-slate-950">إكمال التواصل عبر واتساب</h2><p className="mt-1 text-xs font-medium leading-5 text-slate-600">لا يوجد انتقال يدوي مدعوم قبل تسليم الطلب إلى واتساب.</p></div>
+            ) : (
+              <div className="mt-3 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold leading-5 text-emerald-950">
+                <CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
+                لا توجد خطوة تشغيلية تالية متاحة لهذه الحالة.
+              </div>
+            )}
+            {access.permissions.manage_orders ? (
+              <div className="mt-4">
+                <QuickOrderActions
+                  orderId={order.id}
+                  orderCode={order.order_code}
+                  status={order.status}
+                  customerPhone={order.customer.phone}
+                  variant="detail"
+                />
+              </div>
+            ) : null}
+          </section>
+
+          {order.cancellation_reason ? (
+            <section className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-950">
+              <div className="flex items-center gap-2"><Ban aria-hidden="true" size={16} /><h2 className="text-sm font-semibold">سبب الإلغاء</h2></div>
+              <p className="mt-2 text-xs font-medium leading-5">{order.cancellation_reason}</p>
             </section>
           ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2"><UserRound size={17} className="text-violet-700" /><h2 className="font-black">العميل</h2></div>
-            <p className="mt-4 text-base font-black text-slate-900">{order.customer.name}</p><p dir="ltr" className="mt-1 text-right text-sm font-semibold text-slate-500">{order.customer.phone}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2"><a href={`tel:${order.customer.phone}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-700"><Phone size={14} /> اتصال</a><a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800"><MessageCircle size={14} /> واتساب</a></div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <SectionHeading icon={UserRound}>العميل</SectionHeading>
+            <p className="mt-3 text-sm font-semibold text-slate-950">{order.customer.name}</p>
+            <p dir="ltr" className="mt-1 text-right text-xs font-medium text-slate-600">{order.customer.phone}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <a href={`tel:${order.customer.phone}`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"><Phone aria-hidden="true" size={14} /> اتصال</a>
+              {whatsappNumber ? <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-emerald-50 text-xs font-semibold text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-100"><MessageCircle aria-hidden="true" size={14} /> واتساب</a> : null}
+            </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><MapPin size={17} className="text-violet-700" /><h2 className="font-black">عنوان التوصيل</h2></div><p className="mt-4 text-sm font-black text-slate-800">{order.delivery.area_name_ar}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{order.delivery.address}</p>{order.delivery.landmark ? <p className="mt-2 text-xs font-semibold text-slate-400">علامة مميزة: {order.delivery.landmark}</p> : null}{order.delivery.notes ? <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold leading-6 text-amber-900">ملاحظة العميل: {order.delivery.notes}</div> : null}</section>
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <SectionHeading icon={MapPin}>التوصيل</SectionHeading>
+            <p className="mt-3 text-sm font-semibold text-slate-950">{order.delivery.area_name_ar}</p>
+            <p className="mt-1 text-xs font-medium leading-5 text-slate-700">{order.delivery.address}</p>
+            {order.delivery.landmark ? <p className="mt-2 text-xs font-medium text-slate-600"><strong className="font-semibold">علامة مميزة:</strong> {order.delivery.landmark}</p> : null}
+            {order.delivery.notes ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium leading-5 text-amber-950"><strong className="font-semibold">ملاحظة العميل:</strong> {order.delivery.notes}</div> : null}
+          </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><ReceiptText size={17} className="text-violet-700" /><h2 className="font-black">الدفع</h2></div><div className="mt-4 flex items-center justify-between gap-3"><div><p className="text-sm font-black text-slate-800">{order.payment.payment_method_name}</p><p className="mt-1 text-xs font-semibold text-slate-400">{money(order.summary.total_amount, order.summary.currency_symbol)}</p></div><PaymentStatusBadge status={order.payment_status} /></div></section>
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <SectionHeading icon={ReceiptText}>الدفع</SectionHeading>
+            <div className="mt-3"><p className="text-sm font-semibold text-slate-950">{order.payment.payment_method_name}</p><p className="mt-1 text-xs font-medium text-slate-600">{formatMoney(order.summary.total_amount, order.summary.currency_symbol, order.summary.currency_code)}</p><div className="mt-2"><PaymentStatusBadge status={order.payment_status} /></div></div>
+          </section>
 
-          {manageOrders && canCancel(order.status) ? <details className="rounded-2xl border border-rose-100 bg-white"><summary className="cursor-pointer list-none p-4 text-xs font-black text-rose-700">إلغاء الطلب</summary><form action={transitionOrderStatus} className="border-t border-rose-100 p-4"><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="new_status" value="cancelled" /><input type="hidden" name="note" value="إلغاء الطلب بواسطة فريق تشغيل Navienty Now." /><label className="text-xs font-black text-slate-700">سبب الإلغاء<textarea required minLength={3} name="cancellation_reason" placeholder="مثال: المنتج غير متوفر" className="mt-2 min-h-20 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-rose-300" /></label><SubmitButton idleText="تأكيد إلغاء الطلب" className="mt-3 w-full bg-rose-600 text-white hover:bg-rose-700" /></form></details> : null}
+          <details className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="min-h-11 cursor-pointer px-4 py-3 text-xs font-semibold text-slate-700">بيانات مرجعية</summary>
+            <dl className="space-y-3 border-t border-slate-100 px-4 py-3 text-xs">
+              <div><dt className="font-medium text-slate-500">المصدر</dt><dd className="mt-1 break-words font-semibold text-slate-900">{order.source}</dd></div>
+              <div><dt className="font-medium text-slate-500">معرّف طلب العميل</dt><dd dir="ltr" className="mt-1 break-all text-right font-mono text-[10px] text-slate-800">{order.client_request_id}</dd></div>
+              <div><dt className="font-medium text-slate-500">آخر تحديث</dt><dd className="mt-1 font-semibold text-slate-900">{formatOrderDateTime(order.timestamps.updated_at)}</dd></div>
+            </dl>
+          </details>
         </aside>
       </div>
     </div>
