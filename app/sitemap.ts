@@ -5,6 +5,7 @@ import { getCachedSakanSeoPages } from './properties/data'
 import { SITE_URL } from '@/src/lib/site'
 
 const STATIC_PAGES_LAST_MODIFIED = new Date('2026-07-17T00:00:00.000Z')
+const PRIVACY_POLICY_LAST_MODIFIED = new Date('2026-08-30T00:00:00.000Z')
 
 type SitemapPropertyUniversity = {
   university_id?: string | number | null
@@ -259,6 +260,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: STATIC_PAGES_LAST_MODIFIED,
       changeFrequency: 'monthly',
       priority: 0.7,
+    },
+    {
+      url: `${SITE_URL}/privacy-policy`,
+      lastModified: PRIVACY_POLICY_LAST_MODIFIED,
+      changeFrequency: 'yearly',
+      priority: 0.5,
     },
     {
       url: `${SITE_URL}/community`,
