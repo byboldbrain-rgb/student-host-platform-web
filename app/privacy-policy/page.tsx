@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import type { CSSProperties } from 'react'
+import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'سياسة الخصوصية | Navienty Now',
@@ -290,14 +291,14 @@ export default function PrivacyPolicyPage() {
     <main dir="rtl" style={styles.page}>
       <div style={styles.container}>
         <nav style={styles.topBar}>
-          <a href="/" style={styles.brand}>
+          <Link href="/" style={styles.brand}>
             <span style={styles.brandMark}>NOW</span>
             <span>Navienty Now</span>
-          </a>
+          </Link>
 
-          <a href="/" style={styles.backLink}>
+          <Link href="/" style={styles.backLink}>
             العودة إلى الرئيسية
-          </a>
+          </Link>
         </nav>
 
         <header style={styles.hero}>
