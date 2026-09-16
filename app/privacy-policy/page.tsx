@@ -1,14 +1,15 @@
-import type { Metadata } from 'next'
-import type { CSSProperties } from 'react'
-import Link from 'next/link'
+import type { Metadata } from 'next';
+import type { CSSProperties } from 'react';
 
 export const metadata: Metadata = {
   title: 'سياسة الخصوصية | Navienty Now',
-  description: 'سياسة الخصوصية الخاصة بتطبيق وخدمات Navienty Now.',
+  description:
+    'سياسة الخصوصية الخاصة بتطبيق وخدمات Navienty Now.',
   alternates: {
-    canonical: 'https://www.navienty.com/privacy-policy',
+    canonical:
+      'https://navienty.com/privacy-policy',
   },
-}
+};
 
 const dataGroups = [
   {
@@ -56,7 +57,7 @@ const dataGroups = [
       'تُستخدم هذه البيانات لقياس أداء الميزات وتحسين الاقتراحات وتجربة الاستخدام.',
     ],
   },
-]
+];
 
 const uses = [
   'إنشاء الطلبات وتأكيدها وإدارتها وتوصيلها.',
@@ -68,7 +69,7 @@ const uses = [
   'قياس استخدام الميزات وتحسين الأداء وتجربة المستخدم.',
   'حماية الخدمة ومنع إساءة الاستخدام والاحتيال والمشكلات الأمنية.',
   'الامتثال للالتزامات القانونية والتنظيمية عند انطباقها.',
-]
+];
 
 const sharingCases = [
   {
@@ -91,7 +92,7 @@ const sharingCases = [
     title: 'الالتزامات القانونية',
     text: 'قد نفصح عن البيانات إذا كان ذلك مطلوبًا بموجب القانون أو لحماية المستخدمين وحقوق Navienty وسلامة الخدمة.',
   },
-]
+];
 
 const rights = [
   'طلب معرفة البيانات المرتبطة بك.',
@@ -99,16 +100,20 @@ const rights = [
   'طلب حذف الحساب والبيانات المرتبطة به، مع مراعاة أي التزامات قانونية للاحتفاظ ببعض السجلات.',
   'إيقاف إشعارات التطبيق من إعدادات الجهاز.',
   'إلغاء إذن الموقع من إعدادات الجهاز، مع العلم أن ذلك قد يمنع إتمام طلبات التوصيل.',
-]
+];
 
-const styles: Record<string, CSSProperties> = {
+const styles: Record<
+  string,
+  CSSProperties
+> = {
   page: {
     minHeight: '100vh',
     margin: 0,
     background:
       'linear-gradient(180deg, #F3FBF6 0%, #FFFFFF 32%, #F7F9F8 100%)',
     color: '#14231A',
-    fontFamily: 'Tahoma, Arial, sans-serif',
+    fontFamily:
+      'Tahoma, Arial, sans-serif',
   },
   container: {
     width: 'calc(100% - 32px)',
@@ -153,9 +158,11 @@ const styles: Record<string, CSSProperties> = {
   hero: {
     padding: 'clamp(24px, 5vw, 48px)',
     borderRadius: 28,
-    background: 'linear-gradient(135deg, #00B14F 0%, #008F41 100%)',
+    background:
+      'linear-gradient(135deg, #00B14F 0%, #008F41 100%)',
     color: '#FFFFFF',
-    boxShadow: '0 22px 55px rgba(0, 177, 79, 0.18)',
+    boxShadow:
+      '0 22px 55px rgba(0, 177, 79, 0.18)',
     marginBottom: 24,
   },
   eyebrow: {
@@ -183,7 +190,8 @@ const styles: Record<string, CSSProperties> = {
     padding: '9px 14px',
     borderRadius: 999,
     background: 'rgba(255,255,255,0.16)',
-    border: '1px solid rgba(255,255,255,0.28)',
+    border:
+      '1px solid rgba(255,255,255,0.28)',
     fontSize: 13,
     fontWeight: 700,
   },
@@ -193,7 +201,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 22,
     background: '#FFFFFF',
     border: '1px solid #E2ECE6',
-    boxShadow: '0 12px 34px rgba(20, 35, 26, 0.05)',
+    boxShadow:
+      '0 12px 34px rgba(20, 35, 26, 0.05)',
   },
   sectionTitle: {
     margin: '0 0 14px',
@@ -209,7 +218,8 @@ const styles: Record<string, CSSProperties> = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(250px, 1fr))',
     gap: 14,
     marginTop: 18,
   },
@@ -284,57 +294,103 @@ const styles: Record<string, CSSProperties> = {
     color: '#718078',
     fontSize: 13,
   },
-}
+};
 
 export default function PrivacyPolicyPage() {
   return (
-    <main dir="rtl" style={styles.page}>
+    <main
+      dir="rtl"
+      style={styles.page}
+    >
       <div style={styles.container}>
         <nav style={styles.topBar}>
-          <Link href="/" style={styles.brand}>
-            <span style={styles.brandMark}>NOW</span>
+          <a
+            href="/"
+            style={styles.brand}
+          >
+            <span style={styles.brandMark}>
+              NOW
+            </span>
             <span>Navienty Now</span>
-          </Link>
+          </a>
 
-          <Link href="/" style={styles.backLink}>
+          <a
+            href="/"
+            style={styles.backLink}
+          >
             العودة إلى الرئيسية
-          </Link>
+          </a>
         </nav>
 
         <header style={styles.hero}>
-          <p style={styles.eyebrow}>الخصوصية والأمان</p>
-          <h1 style={styles.title}>سياسة الخصوصية</h1>
+          <p style={styles.eyebrow}>
+            الخصوصية والأمان
+          </p>
+
+          <h1 style={styles.title}>
+            سياسة الخصوصية
+          </h1>
+
           <p style={styles.heroText}>
-            توضح هذه السياسة كيفية جمع واستخدام وحماية البيانات عند استخدام
-            تطبيق وخدمات Navienty Now. باستخدام الخدمة، فإنك تقر بأنك قرأت هذه
+            توضح هذه السياسة كيفية جمع
+            واستخدام وحماية البيانات عند
+            استخدام تطبيق وخدمات
+            Navienty Now. باستخدام الخدمة،
+            فإنك تقر بأنك قرأت هذه
             السياسة وفهمتها.
           </p>
-          <span style={styles.updateBadge}>آخر تحديث: 30 أغسطس 2026</span>
+
+          <span style={styles.updateBadge}>
+            آخر تحديث: 30 أغسطس 2026
+          </span>
         </header>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>1. نطاق السياسة</h2>
+          <h2 style={styles.sectionTitle}>
+            1. نطاق السياسة
+          </h2>
+
           <p style={styles.paragraph}>
-            تنطبق هذه السياسة على تطبيق Navienty Now وخدمات الطلب والتوصيل
-            والميزات المرتبطة به. تدير Navienty هذه الخدمة من مصر، ويمكن التواصل
-            معنا باستخدام البيانات الموجودة في نهاية هذه الصفحة.
+            تنطبق هذه السياسة على تطبيق
+            Navienty Now وخدمات الطلب
+            والتوصيل والميزات المرتبطة
+            به. تدير Navienty هذه الخدمة
+            من مصر، ويمكن التواصل معنا
+            باستخدام البيانات الموجودة
+            في نهاية هذه الصفحة.
           </p>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>2. البيانات التي نجمعها</h2>
+          <h2 style={styles.sectionTitle}>
+            2. البيانات التي نجمعها
+          </h2>
+
           <p style={styles.paragraph}>
-            نجمع البيانات اللازمة لتشغيل الخدمة وإتمام الطلبات وتحسين تجربة
-            الاستخدام. قد تشمل البيانات الفئات التالية:
+            نجمع البيانات اللازمة لتشغيل
+            الخدمة وإتمام الطلبات وتحسين
+            تجربة الاستخدام. قد تشمل
+            البيانات الفئات التالية:
           </p>
+
           <div style={styles.grid}>
             {dataGroups.map((group) => (
-              <div key={group.title} style={styles.dataCard}>
-                <h3 style={styles.dataTitle}>{group.title}</h3>
+              <div
+                key={group.title}
+                style={styles.dataCard}
+              >
+                <h3 style={styles.dataTitle}>
+                  {group.title}
+                </h3>
+
                 <ul style={styles.list}>
-                  {group.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
+                  {group.items.map(
+                    (item) => (
+                      <li key={item}>
+                        {item}
+                      </li>
+                    ),
+                  )}
                 </ul>
               </div>
             ))}
@@ -342,7 +398,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>3. كيفية استخدام البيانات</h2>
+          <h2 style={styles.sectionTitle}>
+            3. كيفية استخدام البيانات
+          </h2>
+
           <ul style={styles.list}>
             {uses.map((item) => (
               <li key={item}>{item}</li>
@@ -351,98 +410,180 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>4. مشاركة البيانات</h2>
+          <h2 style={styles.sectionTitle}>
+            4. مشاركة البيانات
+          </h2>
+
           <p style={styles.paragraph}>
-            لا نبيع البيانات الشخصية. وقد نشارك القدر الضروري منها فقط في
-            الحالات التالية:
+            لا نبيع البيانات الشخصية.
+            وقد نشارك القدر الضروري منها
+            فقط في الحالات التالية:
           </p>
+
           {sharingCases.map((item) => (
-            <div key={item.title} style={styles.partnerCard}>
-              <h3 style={styles.partnerTitle}>{item.title}</h3>
-              <p style={styles.partnerText}>{item.text}</p>
+            <div
+              key={item.title}
+              style={styles.partnerCard}
+            >
+              <h3 style={styles.partnerTitle}>
+                {item.title}
+              </h3>
+
+              <p style={styles.partnerText}>
+                {item.text}
+              </p>
             </div>
           ))}
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>5. الإعلانات والتتبع</h2>
+          <h2 style={styles.sectionTitle}>
+            5. الإعلانات والتتبع
+          </h2>
+
           <div style={styles.notice}>
-            لا تستخدم Navienty Now البيانات الشخصية أو الموقع أو المعرّفات أو
-            سجل الطلبات لتتبع المستخدم عبر تطبيقات ومواقع شركات أخرى، ولا نشارك
-            البيانات مع وسطاء بيانات أو شبكات إعلانية بغرض الإعلانات الموجهة.
+            لا تستخدم Navienty Now
+            البيانات الشخصية أو الموقع أو
+            المعرّفات أو سجل الطلبات
+            لتتبع المستخدم عبر تطبيقات
+            ومواقع شركات أخرى، ولا نشارك
+            البيانات مع وسطاء بيانات أو
+            شبكات إعلانية بغرض الإعلانات
+            الموجهة.
           </div>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>6. الاحتفاظ بالبيانات</h2>
+          <h2 style={styles.sectionTitle}>
+            6. الاحتفاظ بالبيانات
+          </h2>
+
           <p style={styles.paragraph}>
-            نحتفظ بالبيانات طالما كانت ضرورية لتقديم الخدمة وإدارة الطلبات وحل
-            النزاعات ومنع الاحتيال والامتثال للمتطلبات القانونية والمحاسبية. وقد
-            نحتفظ ببعض سجلات المعاملات بعد حذف الحساب عندما يفرض القانون ذلك.
+            نحتفظ بالبيانات طالما كانت
+            ضرورية لتقديم الخدمة وإدارة
+            الطلبات وحل النزاعات ومنع
+            الاحتيال والامتثال للمتطلبات
+            القانونية والمحاسبية. وقد
+            نحتفظ ببعض سجلات المعاملات بعد
+            حذف الحساب عندما يفرض القانون
+            ذلك.
           </p>
+
           <p style={styles.paragraph}>
-            يُحذف أو يُعطّل رمز إشعارات الجهاز عندما يصبح غير صالح أو عند حذف
-            الحساب أو عندما لا يعود مطلوبًا لتقديم الخدمة.
+            يُحذف أو يُعطّل رمز إشعارات
+            الجهاز عندما يصبح غير صالح أو
+            عند حذف الحساب أو عندما لا
+            يعود مطلوبًا لتقديم الخدمة.
           </p>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>7. حماية البيانات</h2>
+          <h2 style={styles.sectionTitle}>
+            7. حماية البيانات
+          </h2>
+
           <p style={styles.paragraph}>
-            نطبق إجراءات تقنية وتنظيمية مناسبة لحماية البيانات من الوصول أو
-            الاستخدام أو التعديل أو الإفصاح غير المصرح به. ومع ذلك، لا توجد
-            وسيلة نقل أو تخزين إلكتروني آمنة بنسبة مطلقة.
+            نطبق إجراءات تقنية وتنظيمية
+            مناسبة لحماية البيانات من
+            الوصول أو الاستخدام أو
+            التعديل أو الإفصاح غير
+            المصرح به. ومع ذلك، لا توجد
+            وسيلة نقل أو تخزين إلكتروني
+            آمنة بنسبة مطلقة.
           </p>
         </section>
 
-        <section id="privacy-rights" style={styles.card}>
-          <h2 style={styles.sectionTitle}>8. حقوق واختيارات المستخدم</h2>
+        <section
+          id="privacy-rights"
+          style={styles.card}
+        >
+          <h2 style={styles.sectionTitle}>
+            8. حقوق واختيارات المستخدم
+          </h2>
+
           <p style={styles.paragraph}>
-            يمكن للمستخدم التواصل معنا لممارسة الحقوق التالية:
+            يمكن للمستخدم التواصل معنا
+            لممارسة الحقوق التالية:
           </p>
+
           <ul style={styles.list}>
             {rights.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
-          <p style={{ ...styles.paragraph, marginTop: 16 }}>
-            يمكن إرسال الطلب من داخل التطبيق إذا كانت الخاصية متاحة، أو عبر
-            البريد الإلكتروني الموضح أدناه. وقد نطلب معلومات معقولة للتحقق من
-            هوية صاحب الطلب.
+
+          <p
+            style={{
+              ...styles.paragraph,
+              marginTop: 16,
+            }}
+          >
+            يمكن إرسال الطلب من داخل
+            التطبيق إذا كانت الخاصية
+            متاحة، أو عبر البريد
+            الإلكتروني الموضح أدناه.
+            وقد نطلب معلومات معقولة
+            للتحقق من هوية صاحب الطلب.
           </p>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>9. خدمات الأطراف الأخرى</h2>
+          <h2 style={styles.sectionTitle}>
+            9. خدمات الأطراف الأخرى
+          </h2>
+
           <p style={styles.paragraph}>
-            قد يحتوي التطبيق على روابط أو انتقالات إلى خدمات أخرى مثل WhatsApp.
-            لا تتحكم Navienty في ممارسات الخصوصية الخاصة بهذه الخدمات، ويُنصح
-            بمراجعة سياساتها قبل استخدامها.
+            قد يحتوي التطبيق على روابط
+            أو انتقالات إلى خدمات أخرى
+            مثل WhatsApp. لا تتحكم
+            Navienty في ممارسات الخصوصية
+            الخاصة بهذه الخدمات، ويُنصح
+            بمراجعة سياساتها قبل
+            استخدامها.
           </p>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>10. خصوصية الأطفال</h2>
+          <h2 style={styles.sectionTitle}>
+            10. خصوصية الأطفال
+          </h2>
+
           <p style={styles.paragraph}>
-            الخدمة غير موجهة للأطفال دون سن 13 عامًا، ولا نتعمد جمع بياناتهم دون
-            موافقة ولي الأمر عندما تكون هذه الموافقة مطلوبة قانونًا. إذا اعتقدت
-            أن طفلًا قدم بياناته دون تصريح، فتواصل معنا لطلب مراجعتها وحذفها.
+            الخدمة غير موجهة للأطفال
+            دون سن 13 عامًا، ولا نتعمد
+            جمع بياناتهم دون موافقة ولي
+            الأمر عندما تكون هذه الموافقة
+            مطلوبة قانونًا. إذا اعتقدت
+            أن طفلًا قدم بياناته دون
+            تصريح، فتواصل معنا لطلب
+            مراجعتها وحذفها.
           </p>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>11. تحديثات السياسة</h2>
+          <h2 style={styles.sectionTitle}>
+            11. تحديثات السياسة
+          </h2>
+
           <p style={styles.paragraph}>
-            قد نحدّث هذه السياسة عند تغيير الخدمة أو المتطلبات القانونية. سننشر
-            النسخة المحدثة على هذه الصفحة مع تعديل تاريخ آخر تحديث، وقد نعرض
-            إشعارًا داخل التطبيق عند وجود تغيير جوهري.
+            قد نحدّث هذه السياسة عند
+            تغيير الخدمة أو المتطلبات
+            القانونية. سننشر النسخة
+            المحدثة على هذه الصفحة مع
+            تعديل تاريخ آخر تحديث، وقد
+            نعرض إشعارًا داخل التطبيق
+            عند وجود تغيير جوهري.
           </p>
         </section>
 
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>12. التواصل معنا</h2>
+          <h2 style={styles.sectionTitle}>
+            12. التواصل معنا
+          </h2>
+
           <div style={styles.contactBox}>
             <strong>Navienty</strong>
+
             <span>
               البريد الإلكتروني:{' '}
               <a
@@ -452,6 +593,7 @@ export default function PrivacyPolicyPage() {
                 contact@navienty.com
               </a>
             </span>
+
             <span>
               الهاتف:{' '}
               <a
@@ -462,10 +604,11 @@ export default function PrivacyPolicyPage() {
                 +20 101 866 8663
               </a>
             </span>
+
             <span>
               صفحة التواصل:{' '}
               <a
-                href="https://www.navienty.com/contact"
+                href="https://navienty.com/contact"
                 style={styles.contactLink}
               >
                 navienty.com/contact
@@ -474,32 +617,60 @@ export default function PrivacyPolicyPage() {
           </div>
 
           <details style={styles.details}>
-            <summary style={styles.summary}>English Privacy Summary</summary>
+            <summary style={styles.summary}>
+              English Privacy Summary
+            </summary>
+
             <div
               dir="ltr"
-              style={{ marginTop: 16, color: '#46564C', lineHeight: 1.85 }}
+              style={{
+                marginTop: 16,
+                color: '#46564C',
+                lineHeight: 1.85,
+              }}
             >
               <p>
-                Navienty Now collects the information required to create,
-                manage, and deliver orders. This may include name, phone
-                number, delivery address, precise delivery location, selected
-                payment method, order history, user notes, an internal user ID,
-                a push notification token, and product interaction data.
+                Navienty Now collects the
+                information required to
+                create, manage, and deliver
+                orders. This may include
+                name, phone number, delivery
+                address, precise delivery
+                location, selected payment
+                method, order history, user
+                notes, an internal user user ID,
+                a push notification token,
+                and product interaction
+                data.
               </p>
+
               <p>
-                We use this information for app functionality, service
-                availability, order notifications, analytics, security, and
-                personalized in-app recommendations. We do not sell personal
-                data and do not use it for cross-app tracking or targeted
-                advertising.
+                We use this information for
+                app functionality, service
+                availability, order
+                notifications, analytics,
+                security, and personalized
+                in-app recommendations. We
+                do not sell personal data
+                and do not use it for
+                cross-app tracking or
+                targeted advertising.
               </p>
+
               <p>
-                Necessary information may be shared with stores, delivery
-                providers, Supabase, Expo, WhatsApp when selected by the user,
-                and authorities when legally required.
+                Necessary information may
+                be shared with stores,
+                delivery providers,
+                Supabase, Expo, WhatsApp
+                when selected by the user,
+                and authorities when
+                legally required.
               </p>
+
               <p>
-                Users may request access, correction, or deletion by contacting
+                Users may request access,
+                correction, or deletion by
+                contacting
                 contact@navienty.com.
               </p>
             </div>
@@ -507,9 +678,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <footer style={styles.footer}>
-          © 2026 Navienty. جميع الحقوق محفوظة.
+          © 2026 Navienty. جميع الحقوق
+          محفوظة.
         </footer>
       </div>
     </main>
-  )
+  );
 }
