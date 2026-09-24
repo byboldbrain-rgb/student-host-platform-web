@@ -2,10 +2,10 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Navienty WhatsApp',
-    short_name: 'WhatsApp',
-    description: 'Navienty WhatsApp Admin Inbox',
-    start_url: '/admin/whatsapp',
+    name: 'Navienty Now Admin',
+    short_name: 'Navienty Now',
+    description: 'Navienty Now Orders Admin',
+    start_url: '/admin/now/orders',
     scope: '/admin',
     display: 'standalone',
     background_color: '#ffffff',
