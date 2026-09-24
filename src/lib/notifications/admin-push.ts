@@ -140,3 +140,121 @@ export async function notifyAdminsByRole(input: NotifyAdminsByRoleInput) {
     })
   )
 }
+
+export async function notifyNowOrderAdmins(input: {
+  orderId: string
+  orderCode: string
+  storeName?: string | null
+  customerName?: string | null
+  totalAmount?: number | string | null
+  currencySymbol?: string | null
+}) {
+  if (!configureWebPush()) {
+    console.warn('Order push skipped: missing VAPID keys.')
+    return { sentCount: 0 }
+  }
+
+  const supabase = createAdminClient()
+
+  const [{ data: platformAdmins, error: adminsError }, { data: nowMembers, error: membersError }] =
+    await Promise.all([
+      supabase
+        .from('admin_users')
+        .select('id, role')
+        .eq('is_active', true),
+      supabase
+        .schema('now')
+        .from('admin_members')
+        .select('user_id')
+        .eq('is_active', true)
+        .eq('can_view_orders', true),
+    ])
+
+  if (adminsError || membersError) {
+    console.error(
+      'Failed to resolve admins eligible for order push:',
+      adminsError?.message || membersError?.message,
+    )
+    return { sentCount: 0 }
+  }
+
+  const nowMemberIds = new Set((nowMembers || []).map((member) => member.user_id))
+  const eligibleAdminIds = (platformAdmins || [])
+    .filter((admin) => admin.role === 'super_admin' || nowMemberIds.has(admin.id))
+    .map((admin) => admin.id)
+
+  if (eligibleAdminIds.length === 0) {
+    return { sentCount: 0 }
+  }
+
+  const { data: subscriptions, error: subscriptionsError } = await supabase
+    .from('admin_push_subscriptions')
+    .select('id, admin_user_id, endpoint, p256dh, auth')
+    .in('admin_user_id', eligibleAdminIds)
+    .eq('is_active', true)
+    .eq('now_orders_enabled', true)
+
+  if (subscriptionsError) {
+    console.error('Failed to load order push subscriptions:', subscriptionsError.message)
+    return { sentCount: 0 }
+  }
+
+  const rows = (subscriptions || []) as PushSubscriptionRow[]
+
+  if (rows.length === 0) {
+    return { sentCount: 0 }
+  }
+
+  const numericTotal = Number(input.totalAmount ?? 0)
+  const totalText = Number.isFinite(numericTotal) && numericTotal > 0
+    ? ` · ${numericTotal.toLocaleString('ar-EG')} ${input.currencySymbol || 'ج'}`
+    : ''
+  const storeText = input.storeName ? input.storeName : 'Navienty Now'
+  const customerText = input.customerName ? ` · ${input.customerName}` : ''
+
+  const payload = JSON.stringify({
+    title: `طلب جديد #${input.orderCode}`,
+    body: `${storeText}${customerText}${totalText}`,
+    url: `/admin/now/orders/${input.orderId}`,
+    tag: `now-order-${input.orderId}`,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    badgeCount: 1,
+    renotify: false,
+    requireInteraction: true,
+    notificationType: 'now_new_order',
+  })
+
+  let sentCount = 0
+
+  await Promise.allSettled(
+    rows.map(async (row) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: row.endpoint,
+            keys: {
+              p256dh: row.p256dh,
+              auth: row.auth,
+            },
+          },
+          payload,
+        )
+        sentCount += 1
+      } catch (error: any) {
+        const statusCode = error?.statusCode
+
+        if (statusCode === 404 || statusCode === 410) {
+          await supabase
+            .from('admin_push_subscriptions')
+            .delete()
+            .eq('id', row.id)
+        } else {
+          console.error('Failed to send new order push notification:', error)
+        }
+      }
+    }),
+  )
+
+  return { sentCount }
+}

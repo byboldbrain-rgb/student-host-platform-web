@@ -10,6 +10,7 @@ import {
   getAdminOrdersWithClient,
   requireNowAdmin,
 } from '../lib/admin-data';
+import OrderNotificationsButton from './components/order-notifications-button';
 import OrdersClientEnhancements from './components/orders-client-enhancements';
 import OrdersList from './components/orders-list';
 import OrdersPagination from './components/orders-pagination';
@@ -118,16 +119,19 @@ export default async function NavientyNowOrdersPage({
         </div>
       </details>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <h2 className="text-sm font-semibold text-slate-950">
           {hasFilters
             ? 'النتائج المطابقة'
             : 'أحدث الطلبات'}
         </h2>
 
-        <p className="text-xs font-medium text-slate-600">
-          {formatCount(data.pagination.total_filtered)} طلب · التحديث يدوي
-        </p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <p className="text-xs font-medium text-slate-600">
+            {formatCount(data.pagination.total_filtered)} طلب · التحديث يدوي
+          </p>
+          <OrderNotificationsButton />
+        </div>
       </div>
 
       {data.items.length ? (
