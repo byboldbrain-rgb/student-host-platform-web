@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { PackageCheck, type LucideIcon } from 'lucide-react';
+import { ImageIcon, PackageCheck, type LucideIcon } from 'lucide-react';
 
 import type { AdminOrderDetail } from '../../lib/types';
 import { getOrderStatusLabel } from '../order-domain';
@@ -83,19 +83,40 @@ export function OrderItems({ order }: { order: AdminOrderDetail }) {
       <ul className="divide-y divide-slate-100">
         {order.items.map((item) => (
           <li key={item.id} className="flex flex-col justify-between gap-3 px-4 py-4 sm:flex-row sm:items-start sm:px-5">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-6 text-slate-950">
-                {item.name_ar}{item.variant_name_ar ? ` — ${item.variant_name_ar}` : ''}
-              </p>
-              <p className="mt-1 text-xs font-medium text-slate-600">
-                الكمية: {formatCount(item.quantity)}{item.sku ? <span> · <bdi dir="ltr">{item.sku}</bdi></span> : null}
-              </p>
-              {item.requires_prescription || item.is_age_restricted ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {item.requires_prescription ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-950">يتطلب روشتة</span> : null}
-                  {item.is_age_restricted ? <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-950">مقيد بالعمر</span> : null}
-                </div>
-              ) : null}
+            <div className="flex min-w-0 items-start gap-3">
+              {item.image_url ? (
+                // Product artwork is database-driven and can use more than one approved media host.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.image_url}
+                  alt={item.name_ar}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-16 w-16 shrink-0 rounded-xl border border-slate-200 bg-white object-cover sm:h-[72px] sm:w-[72px]"
+                />
+              ) : (
+                <span
+                  aria-label="لا توجد صورة للمنتج"
+                  className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-slate-400 sm:h-[72px] sm:w-[72px]"
+                >
+                  <ImageIcon aria-hidden="true" size={20} />
+                </span>
+              )}
+
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-6 text-slate-950">
+                  {item.name_ar}{item.variant_name_ar ? ` — ${item.variant_name_ar}` : ''}
+                </p>
+                <p className="mt-1 text-xs font-medium text-slate-600">
+                  الكمية: {formatCount(item.quantity)}{item.sku ? <span> · <bdi dir="ltr">{item.sku}</bdi></span> : null}
+                </p>
+                {item.requires_prescription || item.is_age_restricted ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {item.requires_prescription ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-950">يتطلب روشتة</span> : null}
+                    {item.is_age_restricted ? <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-950">مقيد بالعمر</span> : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className="shrink-0 sm:text-left">
               <p className="text-sm font-semibold tabular-nums text-slate-950">
