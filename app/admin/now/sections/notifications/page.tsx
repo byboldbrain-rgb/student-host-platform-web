@@ -2,6 +2,8 @@ import {
   Activity,
   Bell,
   CheckCircle2,
+  MousePointerClick,
+  Percent,
   Send,
   Smartphone,
 } from 'lucide-react';
@@ -78,7 +80,16 @@ async function countActiveSubscriptions(platform?: 'ios' | 'android') {
 async function loadNotificationDashboard() {
   const admin = createAdminClient();
 
-  const [total, ios, android, pendingResult, metricsResult] = await Promise.all([
+  const [
+    total,
+    ios,
+    android,
+    pendingResult,
+    sentResult,
+    deliveredResult,
+    openedResult,
+    metricsResult,
+  ] = await Promise.all([
     countActiveSubscriptions(),
     countActiveSubscriptions('ios'),
     countActiveSubscriptions('android'),
@@ -88,6 +99,24 @@ async function loadNotificationDashboard() {
       .select('id', { count: 'exact', head: true })
       .eq('resource_type', 'campaign')
       .in('status', ['pending', 'processing']),
+    admin
+      .schema('now')
+      .from('customer_notification_outbox')
+      .select('id', { count: 'exact', head: true })
+      .eq('resource_type', 'campaign')
+      .not('sent_at', 'is', null),
+    admin
+      .schema('now')
+      .from('customer_notification_outbox')
+      .select('id, customer_notification_tickets!inner(id)', { count: 'exact', head: true })
+      .eq('resource_type', 'campaign')
+      .eq('customer_notification_tickets.status', 'ok'),
+    admin
+      .schema('now')
+      .from('customer_notification_outbox')
+      .select('id', { count: 'exact', head: true })
+      .eq('resource_type', 'campaign')
+      .not('first_opened_at', 'is', null),
     admin
       .schema('now')
       .from('notification_delivery_metrics_daily')
@@ -100,13 +129,25 @@ async function loadNotificationDashboard() {
   ]);
 
   if (pendingResult.error) throw new Error(pendingResult.error.message);
+  if (sentResult.error) throw new Error(sentResult.error.message);
+  if (deliveredResult.error) throw new Error(deliveredResult.error.message);
+  if (openedResult.error) throw new Error(openedResult.error.message);
   if (metricsResult.error) throw new Error(metricsResult.error.message);
+
+  const sentCount = sentResult.count ?? 0;
+  const deliveredCount = deliveredResult.count ?? 0;
+  const openedCount = openedResult.count ?? 0;
+  const clickRate = deliveredCount > 0 ? (openedCount / deliveredCount) * 100 : 0;
 
   return {
     total,
     ios,
     android,
     pending: pendingResult.count ?? 0,
+    sentCount,
+    deliveredCount,
+    openedCount,
+    clickRate,
     metrics: (metricsResult.data ?? []) as CampaignMetric[],
   };
 }
@@ -188,6 +229,42 @@ export default async function NotificationsPage({
           {ERROR_MESSAGES[errorCode] ?? 'تعذر إرسال الإشعار.'}
         </div>
       ) : null}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-black text-[#111827]">أداء الـPush Notifications</h2>
+          <p className="mt-1 text-xs font-medium text-gray-500">
+            الأرقام تشمل حملات الـPush المرسلة من لوحة الإدارة وتتحدث تلقائيًا من بيانات الإرسال والاستلام والفتح.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="إشعارات اتبعتت"
+            value={dashboard.sentCount.toLocaleString('ar-EG')}
+            helper="خرجت من الـOutbox وتم إرسالها للمزوّد"
+            icon={<Send size={19} />}
+          />
+          <StatCard
+            label="عملاء استلموها"
+            value={dashboard.deliveredCount.toLocaleString('ar-EG')}
+            helper="Delivery Receipt ناجح من Expo / APNs / FCM"
+            icon={<CheckCircle2 size={19} />}
+          />
+          <StatCard
+            label="عملاء ضغطوا عليها"
+            value={dashboard.openedCount.toLocaleString('ar-EG')}
+            helper="تم تسجيل فتح الإشعار داخل التطبيق"
+            icon={<MousePointerClick size={19} />}
+          />
+          <StatCard
+            label="معدل الضغط"
+            value={`${dashboard.clickRate.toLocaleString('ar-EG', { maximumFractionDigits: 1 })}%`}
+            helper="الضغطات ÷ الإشعارات التي تم تسليمها"
+            icon={<Percent size={19} />}
+          />
+        </div>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -321,7 +398,7 @@ export default async function NotificationsPage({
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-[#111827]">آخر حملات Push</h2>
-              <p className="mt-1 text-xs font-medium text-gray-500">نتائج مجمعة من نظام التتبع الحالي.</p>
+              <p className="mt-1 text-xs font-medium text-gray-500">لكل حملة: اتبعتت لكام عميل، وصلت لكام عميل، وكام عميل ضغط عليها.</p>
             </div>
             <Activity size={18} className="text-gray-400" />
           </div>
@@ -353,23 +430,25 @@ export default async function NotificationsPage({
                     </div>
                     <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                       <div className="rounded-xl bg-white px-2 py-2">
-                        <p className="text-[10px] font-semibold text-gray-400">Processed</p>
+                        <p className="text-[10px] font-semibold text-gray-400">اتبعتت</p>
                         <p className="mt-1 text-xs font-black text-gray-800">{processed.toLocaleString('ar-EG')}</p>
                       </div>
                       <div className="rounded-xl bg-white px-2 py-2">
-                        <p className="text-[10px] font-semibold text-gray-400">Delivered</p>
+                        <p className="text-[10px] font-semibold text-gray-400">وصلت</p>
                         <p className="mt-1 text-xs font-black text-gray-800">{receipts.toLocaleString('ar-EG')}</p>
                       </div>
                       <div className="rounded-xl bg-white px-2 py-2">
-                        <p className="text-[10px] font-semibold text-gray-400">Opened</p>
+                        <p className="text-[10px] font-semibold text-gray-400">ضغطوا</p>
                         <p className="mt-1 text-xs font-black text-gray-800">{opens.toLocaleString('ar-EG')}</p>
                       </div>
                       <div className="rounded-xl bg-white px-2 py-2">
-                        <p className="text-[10px] font-semibold text-gray-400">Failed</p>
+                        <p className="text-[10px] font-semibold text-gray-400">فشلت</p>
                         <p className="mt-1 text-xs font-black text-gray-800">{failed.toLocaleString('ar-EG')}</p>
                       </div>
                     </div>
-                    <p className="mt-2 text-[10px] font-semibold text-gray-400">Open rate: {openRate.toLocaleString('ar-EG', { maximumFractionDigits: 1 })}%</p>
+                    <p className="mt-2 text-[10px] font-semibold text-gray-400">
+                      معدل الضغط: {openRate.toLocaleString('ar-EG', { maximumFractionDigits: 1 })}%
+                    </p>
                   </div>
                 );
               })
