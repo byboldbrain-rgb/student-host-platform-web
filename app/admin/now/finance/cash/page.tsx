@@ -3,16 +3,17 @@ import { Wallet } from 'lucide-react';
 import { PageHeader } from '../../components/ui-kit';
 import { addCashAccountAction, addCashTransactionAction } from '../actions';
 import { Card, StatusPill, financeInput, financeLabel, money, primaryButton } from '../components/finance-ui';
-import { getCash } from '../lib/finance-data';
+import { getCashLedger } from '../lib/cash-data';
 
 export default async function CashPage() {
-  const data = await getCash();
+  const data = await getCashLedger();
   const accountById = new Map(data.accounts.map((account) => [account.id, account]));
   const movementByAccount = new Map<string, number>();
   for (const txn of data.transactions) {
     const signed = Number(txn.amount ?? 0) * (txn.direction === 'in' ? 1 : -1);
     movementByAccount.set(txn.account_id, (movementByAccount.get(txn.account_id) ?? 0) + signed);
   }
+  const recentTransactions = data.transactions.slice(0, 150);
 
   return <div className="space-y-5">
     <PageHeader eyebrow="Finance · Treasury" title="الكاش والمحافظ" description="Profit مش هو Cash. هنا بنتابع رصيد الكاش، InstaPay والمحافظ والحركة الفعلية، ونقارن Book Balance بالرصيد الحقيقي." icon={<Wallet size={16} />} />
@@ -22,7 +23,7 @@ export default async function CashPage() {
         const book = Number(account.opening_balance ?? 0) + (movementByAccount.get(account.id) ?? 0);
         const actual = account.actual_balance === null ? null : Number(account.actual_balance);
         const difference = actual === null ? null : actual - book;
-        return <div key={account.id} className="rounded-[22px] border border-gray-100 bg-white p-5"><div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-semibold uppercase text-gray-400">{account.account_type}</p><p className="mt-1 font-semibold text-gray-950">{account.account_name}</p></div><StatusPill tone={difference === null ? 'neutral' : Math.abs(difference) < .01 ? 'success' : 'danger'}>{difference === null ? 'Not reconciled' : Math.abs(difference) < .01 ? 'Matched' : 'Difference'}</StatusPill></div><p className="mt-4 text-2xl font-semibold">{money(book)}</p><p className="mt-1 text-[10px] font-medium text-gray-400">Book balance</p>{actual !== null ? <p className={`mt-2 text-xs font-semibold ${Math.abs(difference ?? 0) < .01 ? 'text-emerald-700' : 'text-rose-700'}`}>Actual {money(actual)} · Diff {money(difference)}</p> : null}</div>;
+        return <div key={account.id} className="rounded-[22px] border border-gray-100 bg-white p-5"><div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-semibold uppercase text-gray-400">{account.account_type}</p><p className="mt-1 font-semibold text-gray-950">{account.account_name}</p></div><StatusPill tone={difference === null ? 'neutral' : Math.abs(difference) < .01 ? 'success' : 'danger'}>{difference === null ? 'Not reconciled' : Math.abs(difference) < .01 ? 'Matched' : 'Difference'}</StatusPill></div><p className="mt-4 text-2xl font-semibold">{money(book)}</p><p className="mt-1 text-[10px] font-medium text-gray-400">Book balance · full ledger</p>{actual !== null ? <p className={`mt-2 text-xs font-semibold ${Math.abs(difference ?? 0) < .01 ? 'text-emerald-700' : 'text-rose-700'}`}>Actual {money(actual)} · Diff {money(difference)}</p> : null}</div>;
       })}
     </section>
 
@@ -36,8 +37,8 @@ export default async function CashPage() {
       </Card>
     </section>
 
-    <Card title="آخر الحركات" description="Cash ledger منفصل عن P&L علشان نعرف السيولة الفعلية.">
-      <div className="overflow-x-auto"><table className="w-full min-w-[800px] text-right text-xs"><thead><tr className="border-b border-gray-100 text-[10px] uppercase text-gray-400"><th className="p-3">Account</th><th className="p-3">Direction</th><th className="p-3">Category</th><th className="p-3">Counterparty</th><th className="p-3">Amount</th><th className="p-3">Reconciled</th></tr></thead><tbody>{data.transactions.map((txn) => <tr key={txn.id} className="border-b border-gray-50"><td className="p-3 font-semibold">{accountById.get(txn.account_id)?.account_name ?? '—'}</td><td className={`p-3 font-semibold ${txn.direction === 'in' ? 'text-emerald-700' : 'text-rose-700'}`}>{txn.direction.toUpperCase()}</td><td className="p-3">{txn.category}</td><td className="p-3">{txn.counterparty ?? '—'}</td><td className="p-3 font-semibold">{money(txn.amount)}</td><td className="p-3"><StatusPill tone={txn.reconciled ? 'success' : 'neutral'}>{txn.reconciled ? 'Yes' : 'No'}</StatusPill></td></tr>)}</tbody></table></div>
+    <Card title="آخر الحركات" description="Book Balance يتحسب من كل الـledger؛ الجدول يعرض آخر 150 حركة فقط للحفاظ على سرعة الصفحة.">
+      <div className="overflow-x-auto"><table className="w-full min-w-[800px] text-right text-xs"><thead><tr className="border-b border-gray-100 text-[10px] uppercase text-gray-400"><th className="p-3">Account</th><th className="p-3">Direction</th><th className="p-3">Category</th><th className="p-3">Counterparty</th><th className="p-3">Amount</th><th className="p-3">Reconciled</th></tr></thead><tbody>{recentTransactions.map((txn) => <tr key={txn.id} className="border-b border-gray-50"><td className="p-3 font-semibold">{accountById.get(txn.account_id)?.account_name ?? '—'}</td><td className={`p-3 font-semibold ${txn.direction === 'in' ? 'text-emerald-700' : 'text-rose-700'}`}>{txn.direction.toUpperCase()}</td><td className="p-3">{txn.category}</td><td className="p-3">{txn.counterparty ?? '—'}</td><td className="p-3 font-semibold">{money(txn.amount)}</td><td className="p-3"><StatusPill tone={txn.reconciled ? 'success' : 'neutral'}>{txn.reconciled ? 'Yes' : 'No'}</StatusPill></td></tr>)}</tbody></table></div>
     </Card>
   </div>;
 }
