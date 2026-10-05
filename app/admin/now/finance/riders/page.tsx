@@ -16,7 +16,10 @@ export default async function RiderFinancePage({ searchParams }: { searchParams:
     if (!row.settled) unsettledByRider.set(row.rider_employee_id, (unsettledByRider.get(row.rider_employee_id) ?? 0) + Number(row.amount ?? 0));
   }
   const purchasesByRider = new Map<string, number>();
-  for (const row of data.costs) purchasesByRider.set(row.rider_employee_id, (purchasesByRider.get(row.rider_employee_id) ?? 0) + Number(row.actual_product_cost ?? 0));
+  for (const row of data.costs) {
+    if (row.settlement_id) continue;
+    purchasesByRider.set(row.rider_employee_id, (purchasesByRider.get(row.rider_employee_id) ?? 0) + Number(row.actual_product_cost ?? 0));
+  }
 
   return (
     <div className="space-y-5">
@@ -35,7 +38,7 @@ export default async function RiderFinancePage({ searchParams }: { searchParams:
           ) : <p className="text-sm font-medium text-gray-500">أضف Pickup Riders من صفحة الموظفين أولًا.</p>}
         </Card>
 
-        <Card title="Rider Exposure" description="رصيد العهد غير المسواة مقابل المشتريات المسجلة على كل مندوب.">
+        <Card title="Rider Exposure" description="رصيد العهد غير المسواة مقابل المشتريات غير المسواة فقط لكل مندوب.">
           <div className="grid gap-3 md:grid-cols-2">
             {data.riders.map((rider) => {
               const advances = unsettledByRider.get(rider.id) ?? 0;
@@ -44,16 +47,16 @@ export default async function RiderFinancePage({ searchParams }: { searchParams:
               const settlement = data.settlements.find((row) => row.rider_employee_id === rider.id);
               return (
                 <div key={rider.id} className="rounded-[20px] border border-gray-100 bg-[#fcfcfd] p-4">
-                  <div className="flex items-center justify-between gap-3"><div><p className="font-semibold text-gray-950">{rider.full_name}</p><p className="mt-1 text-[10px] font-medium text-gray-400">Pickup Rider</p></div><StatusPill tone={settlement?.status === 'closed' ? 'success' : advances > 0 ? 'warning' : 'neutral'}>{settlement?.status === 'closed' ? 'Settled today' : advances > 0 ? 'Open' : 'No advance'}</StatusPill></div>
+                  <div className="flex items-center justify-between gap-3"><div><p className="font-semibold text-gray-950">{rider.full_name}</p><p className="mt-1 text-[10px] font-medium text-gray-400">Pickup Rider</p></div><StatusPill tone={settlement?.status === 'closed' && advances === 0 && purchases === 0 ? 'success' : advances > 0 || purchases > 0 ? 'warning' : 'neutral'}>{settlement?.status === 'closed' && advances === 0 && purchases === 0 ? 'Settled today' : advances > 0 || purchases > 0 ? 'Open' : 'No exposure'}</StatusPill></div>
                   <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-[14px] bg-white p-2.5"><p className="text-[9px] font-semibold uppercase text-gray-400">Advances</p><p className="mt-1 text-xs font-semibold">{money(advances)}</p></div><div className="rounded-[14px] bg-white p-2.5"><p className="text-[9px] font-semibold uppercase text-gray-400">Purchases</p><p className="mt-1 text-xs font-semibold">{money(purchases)}</p></div><div className="rounded-[14px] bg-white p-2.5"><p className="text-[9px] font-semibold uppercase text-gray-400">Expected Cash</p><p className={`mt-1 text-xs font-semibold ${expected < 0 ? 'text-rose-700' : ''}`}>{money(expected)}</p></div></div>
-                  {settlement?.status !== 'closed' && (advances > 0 || purchases > 0) ? (
+                  {(advances > 0 || purchases > 0) ? (
                     <form action={closeRiderSettlementAction} className="mt-4 border-t border-gray-100 pt-4">
                       <input type="hidden" name="rider_employee_id" value={rider.id} /><input type="hidden" name="settlement_date" value={date} />
                       <label className={financeLabel}>الكاش المرتجع فعليًا<input required step="0.01" name="actual_return_amount" type="number" defaultValue={Math.max(0, expected)} className={financeInput} /></label>
                       <label className={`${financeLabel} mt-2`}>Notes<input name="notes" className={financeInput} /></label>
                       <button className={`${primaryButton} mt-3`}><CircleCheck size={14} /> Close Settlement</button>
                     </form>
-                  ) : settlement ? <div className="mt-3 text-[11px] font-semibold text-emerald-700">Variance: {money(settlement.variance_amount)}</div> : null}
+                  ) : settlement ? <div className="mt-3 text-[11px] font-semibold text-emerald-700">Latest variance: {money(settlement.variance_amount)}</div> : null}
                 </div>
               );
             })}
