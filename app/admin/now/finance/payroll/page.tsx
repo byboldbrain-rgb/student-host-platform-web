@@ -1,9 +1,10 @@
 import { Banknote, Calculator } from 'lucide-react';
 
 import { PageHeader } from '../../components/ui-kit';
-import { generatePayrollAction, markPayrollPaidAction } from '../actions';
-import { Card, StatusPill, financeInput, financeLabel, money, primaryButton, secondaryButton } from '../components/finance-ui';
+import { markPayrollPaidAction } from '../actions';
+import { Card, StatusPill, financeInput, money, primaryButton, secondaryButton } from '../components/finance-ui';
 import { getPayroll, monthStart } from '../lib/finance-data';
+import { generatePayrollAction } from '../payroll-actions';
 
 export default async function PayrollPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const params = await searchParams;
