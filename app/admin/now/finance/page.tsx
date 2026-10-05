@@ -42,6 +42,7 @@ export default async function FinanceDashboardPage({
   }).join(' ');
   const averageOrder = summary.completed_orders ? summary.gmv / summary.completed_orders : 0;
   const productMargin = summary.collections - summary.actual_product_cost;
+  const otherOperatingExpenses = Math.max(0, summary.operating_expenses - summary.payroll_cost);
   const readinessChecks = [
     { label: 'Actual purchase costs', detail: `${summary.known_purchase_orders}/${summary.completed_orders} orders`, ok: summary.missing_purchase_cost_orders === 0, href: `/admin/now/finance/orders?date=${date}` },
     { label: 'Trip allocation', detail: summary.missing_trip_orders ? `${summary.missing_trip_orders} orders missing` : 'All delivered orders allocated', ok: summary.missing_trip_orders === 0, href: `/admin/now/finance/trips?date=${date}` },
@@ -122,7 +123,7 @@ export default async function FinanceDashboardPage({
         <Kpi label="Customer collections" value={money(summary.collections)} note={`Delivery ${money(summary.delivery_revenue)} · Fees ${money(summary.payment_fee_revenue)}`} icon={<Wallet size={17} />} tone="blue" />
         <Kpi label="Actual product cost" value={money(summary.actual_product_cost)} note={`${summary.known_purchase_orders}/${summary.completed_orders} orders costed`} icon={<HandCoins size={17} />} tone={summary.missing_purchase_cost_orders ? 'warning' : 'neutral'} />
         <Kpi label="Trip cost" value={money(summary.trip_cost)} note={summary.missing_trip_orders ? `${summary.missing_trip_orders} orders need allocation` : 'All trips allocated'} icon={<Route size={17} />} tone={summary.missing_trip_orders ? 'warning' : 'neutral'} />
-        <Kpi label="Payroll accrual" value={money(summary.payroll_cost)} note={`${data.activeEmployees} active employees`} icon={<Banknote size={17} />} />
+        <Kpi label="Operating expenses" value={money(summary.operating_expenses)} note={`Payroll ${money(summary.payroll_cost)} · Other ${money(otherOperatingExpenses)}`} icon={<Banknote size={17} />} />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.55fr_.9fr]">
@@ -178,9 +179,10 @@ export default async function FinanceDashboardPage({
               { label: 'Actual product cost', value: -summary.actual_product_cost, tone: 'text-rose-600', bar: summary.collections ? (summary.actual_product_cost / summary.collections) * 100 : 0 },
               { label: 'Trip & variable cost', value: -(summary.trip_cost + summary.other_variable_cost), tone: 'text-rose-600', bar: summary.collections ? ((summary.trip_cost + summary.other_variable_cost) / summary.collections) * 100 : 0 },
               { label: 'Payroll', value: -summary.payroll_cost, tone: 'text-rose-600', bar: summary.collections ? (summary.payroll_cost / summary.collections) * 100 : 0 },
-              { label: 'Operating expenses', value: -summary.operating_expenses, tone: 'text-rose-600', bar: summary.collections ? (summary.operating_expenses / summary.collections) * 100 : 0 },
+              { label: 'Other operating expenses', value: -otherOperatingExpenses, tone: 'text-rose-600', bar: summary.collections ? (otherOperatingExpenses / summary.collections) * 100 : 0 },
             ].map((row) => <div key={row.label}><div className="mb-1.5 flex items-center justify-between gap-3"><span className="text-[11px] font-bold text-slate-600">{row.label}</span><span className={`text-[11px] font-bold ${row.tone}`}>{row.value < 0 ? '−' : ''}{money(Math.abs(row.value))}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${row.value < 0 ? 'bg-slate-300' : 'bg-blue-600'}`} style={{ width: `${Math.min(100, Math.max(row.value === 0 ? 0 : 3, row.bar))}%` }} /></div></div>)}
-            <div className="flex items-center justify-between rounded-[16px] bg-slate-950 px-4 py-4 text-white"><div><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Operating profit</p><p className="mt-1 text-xs font-medium text-slate-400">after direct costs, payroll and OpEx</p></div><p className={`text-xl font-bold ${!complete ? 'text-amber-300' : profitPositive ? 'text-emerald-300' : 'text-rose-300'}`}>{complete ? money(summary.operating_profit) : 'Pending'}</p></div>
+            <div className="flex items-center justify-between rounded-[14px] border border-slate-200 bg-slate-50 px-4 py-3"><span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">Total operating expenses</span><span className="text-sm font-bold text-slate-950">{money(summary.operating_expenses)}</span></div>
+            <div className="flex items-center justify-between rounded-[16px] bg-slate-950 px-4 py-4 text-white"><div><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">Operating profit</p><p className="mt-1 text-xs font-medium text-slate-400">after direct costs and total OpEx</p></div><p className={`text-xl font-bold ${!complete ? 'text-amber-300' : profitPositive ? 'text-emerald-300' : 'text-rose-300'}`}>{complete ? money(summary.operating_profit) : 'Pending'}</p></div>
           </div>
         </Card>
 
@@ -188,7 +190,7 @@ export default async function FinanceDashboardPage({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-[17px] bg-slate-50 p-4"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Product spread</p><p className={`mt-2 text-xl font-bold ${productMargin >= 0 ? 'text-slate-950' : 'text-rose-700'}`}>{money(productMargin)}</p><p className="mt-1 text-[10px] font-medium text-slate-500">collections − actual COGS</p></div>
             <div className="rounded-[17px] bg-slate-50 p-4"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Trip / order</p><p className="mt-2 text-xl font-bold text-slate-950">{money(summary.completed_orders ? summary.trip_cost / summary.completed_orders : 0)}</p><p className="mt-1 text-[10px] font-medium text-slate-500">line-haul allocation</p></div>
-            <div className="rounded-[17px] bg-slate-50 p-4"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Payroll / order</p><p className="mt-2 text-xl font-bold text-slate-950">{money(summary.completed_orders ? summary.payroll_cost / summary.completed_orders : 0)}</p><p className="mt-1 text-[10px] font-medium text-slate-500">daily people cost</p></div>
+            <div className="rounded-[17px] bg-slate-50 p-4"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">OpEx / order</p><p className="mt-2 text-xl font-bold text-slate-950">{money(summary.completed_orders ? summary.operating_expenses / summary.completed_orders : 0)}</p><p className="mt-1 text-[10px] font-medium text-slate-500">includes payroll</p></div>
             <div className="rounded-[17px] bg-slate-50 p-4"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">Open rider cash</p><p className={`mt-2 text-xl font-bold ${data.openRiderCash > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{money(data.openRiderCash)}</p><p className="mt-1 text-[10px] font-medium text-slate-500">unsettled advances</p></div>
           </div>
         </Card>
