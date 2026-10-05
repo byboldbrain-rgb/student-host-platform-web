@@ -77,6 +77,7 @@ export default function NowAdminShell({ access, children }: { access: AdminAcces
       items: [
         { label: 'الرئيسية', href: '/admin/now', icon: LayoutDashboard, show: true },
         { label: 'الطلبات', href: '/admin/now/orders', icon: ClipboardList, show: permissions.view_orders },
+        { label: 'Finance OS', href: '/admin/now/finance', icon: Banknote, show: permissions.manage_finance },
         { label: 'المراجعات المعلقة', href: '/admin/now/review', icon: ClipboardCheck, show: reviewVisible },
       ],
     },
