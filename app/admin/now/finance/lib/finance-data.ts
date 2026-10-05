@@ -67,9 +67,7 @@ function numberify<T extends Record<string, unknown>>(row: T, keys: Array<keyof 
   const copy = { ...row };
   for (const key of keys) {
     const value = copy[key];
-    if (value !== null && value !== undefined) {
-      copy[key] = Number(value) as T[keyof T];
-    }
+    if (value !== null && value !== undefined) copy[key] = Number(value) as T[keyof T];
   }
   return copy;
 }
@@ -88,8 +86,9 @@ export function normalizeDate(value?: string | null) {
 }
 
 export function monthStart(value?: string | null) {
-  const date = normalizeDate(value);
-  return `${date.slice(0, 7)}-01`;
+  if (/^\d{4}-\d{2}$/.test(value ?? '')) return `${value}-01`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value ?? '')) return `${(value as string).slice(0, 7)}-01`;
+  return `${cairoToday().slice(0, 7)}-01`;
 }
 
 export async function requireFinanceAdmin() {
@@ -100,9 +99,7 @@ export async function requireFinanceAdmin() {
 
 export async function getFinanceSummary(date = cairoToday()) {
   const { admin } = await requireFinanceAdmin();
-  const { data, error } = await admin.schema('now').rpc('finance_dashboard_summary', {
-    p_date: normalizeDate(date),
-  });
+  const { data, error } = await admin.schema('now').rpc('finance_dashboard_summary', { p_date: normalizeDate(date) });
   if (error) throw new Error(error.message);
   return numberify((data ?? {}) as FinanceSummary, [
     'completed_orders', 'gmv', 'collections', 'delivery_revenue', 'payment_fee_revenue',
@@ -156,10 +153,7 @@ export async function getFinanceDashboard(date = cairoToday()) {
 
 export async function getOrderEconomics(date = cairoToday(), limit = 100) {
   const { admin } = await requireFinanceAdmin();
-  const { data, error } = await admin.schema('now').rpc('list_finance_order_economics', {
-    p_date: normalizeDate(date),
-    p_limit: limit,
-  });
+  const { data, error } = await admin.schema('now').rpc('list_finance_order_economics', { p_date: normalizeDate(date), p_limit: limit });
   if (error) throw new Error(error.message);
   return ((data ?? []) as OrderEconomics[]).map((row) =>
     numberify(row, ['subtotal', 'delivery_fee', 'payment_fee', 'discounts', 'total_amount', 'actual_product_cost', 'trip_cost', 'other_variable_cost', 'contribution_profit']),
@@ -184,7 +178,7 @@ export async function getRiderFinance(date = cairoToday()) {
 
   const [{ data: advances, error: advancesError }, { data: costs, error: costsError }, { data: settlements, error: settlementsError }] = await Promise.all([
     admin.schema('now').from('finance_rider_advances').select('*').in('rider_employee_id', riderIds).order('sent_at', { ascending: false }).limit(200),
-    admin.schema('now').from('finance_order_costs').select('order_id,rider_employee_id,purchased_at,actual_product_cost').in('rider_employee_id', riderIds).order('purchased_at', { ascending: false }).limit(300),
+    admin.schema('now').from('finance_order_costs').select('order_id,rider_employee_id,purchased_at,actual_product_cost,settlement_id').in('rider_employee_id', riderIds).order('purchased_at', { ascending: false }).limit(300),
     admin.schema('now').from('finance_rider_settlements').select('*').eq('settlement_date', normalized).order('created_at', { ascending: false }),
   ]);
   if (advancesError) throw new Error(advancesError.message);
@@ -258,7 +252,7 @@ export async function getFinanceReport(days = 30) {
   const rows = await Promise.all(dates.map(async (date) => {
     const { data, error } = await admin.schema('now').rpc('finance_dashboard_summary', { p_date: date });
     if (error) throw new Error(error.message);
-    return numberify((data ?? {}) as FinanceSummary, ['completed_orders','gmv','collections','actual_product_cost','trip_cost','payroll_cost','operating_expenses','contribution_profit','operating_profit'] as Array<keyof FinanceSummary>);
+    return numberify((data ?? {}) as FinanceSummary, ['completed_orders','gmv','collections','actual_product_cost','trip_cost','payroll_cost','operating_expenses','contribution_profit','operating_profit','missing_purchase_cost_orders','missing_trip_orders'] as Array<keyof FinanceSummary>);
   }));
   return rows;
 }
