@@ -7,9 +7,9 @@ export default async function FinanceLayout({ children }: { children: ReactNode 
   await requireFinanceAdmin();
 
   return (
-    <div className="space-y-5">
+    <div className="-mt-6 space-y-0 md:-mt-8 lg:-mt-8">
       <FinanceNav />
-      {children}
+      <div className="pt-6 md:pt-8">{children}</div>
     </div>
   );
 }
