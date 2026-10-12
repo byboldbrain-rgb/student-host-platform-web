@@ -37,6 +37,7 @@ import {
   type OrdersSearchParams,
 } from '../order-helpers';
 import QuickOrderActions from '../quick-order-actions';
+import ManualDispatchForm from '../components/manual-dispatch-form';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -187,6 +188,8 @@ export default async function NavientyNowOrderDetailsPage({
               </div>
             ) : null}
           </section>
+
+          {access.permissions.manage_orders ? <ManualDispatchForm orderId={order.id} /> : null}
 
           {order.cancellation_reason ? (
             <section className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-950">
