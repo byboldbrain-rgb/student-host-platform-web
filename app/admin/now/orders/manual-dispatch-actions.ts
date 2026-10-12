@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/src/lib/supabase/admin';
-import { requireNowAdmin } from '../lib/admin-data';
+import { getAdminOrderWithClient, requireNowAdmin } from '../lib/admin-data';
 
 export type DispatchLogState = { outcome: 'idle' | 'success' | 'error'; message: string };
 const reasons = new Set(['same_area','same_store','available','customer_group','fast_prep','next_trip','other']);
@@ -36,9 +36,11 @@ export async function saveManualDispatchDecision(
   if (!auth.user) return { outcome: 'error', message: 'انتهت الجلسة. سجّل دخولك مجددًا.' };
 
   // Verify that the order exists using the scoped app schema; no status changes occur.
-  const { data: order, error: orderError } = await supabase.schema('now').from('orders')
-    .select('id').eq('id',orderId).maybeSingle();
-  if (orderError || !order) return { outcome: 'error', message: 'الطلب غير متاح أو تعذر التحقق منه.' };
+  try {
+    await getAdminOrderWithClient(supabase, orderId);
+  } catch {
+    return { outcome: 'error', message: 'الطلب غير متاح أو تعذر التحقق منه.' };
+  }
 
   const admin = createAdminClient();
   const { error } = await admin.schema('now').from('manual_dispatch_decisions').insert({
