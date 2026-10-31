@@ -111,11 +111,15 @@ async function loadNotificationDashboard() {
       .select('id, customer_notification_tickets!inner(id)', { count: 'exact', head: true })
       .eq('resource_type', 'campaign')
       .eq('customer_notification_tickets.status', 'ok'),
+    // Match the same set used by deliveredResult. Counting every opened
+    // outbox row (including rows with failed delivery receipts) inflates
+    // the numerator and makes the dashboard's click-through rate misleading.
     admin
       .schema('now')
       .from('customer_notification_outbox')
-      .select('id', { count: 'exact', head: true })
+      .select('id, customer_notification_tickets!inner(id)', { count: 'exact', head: true })
       .eq('resource_type', 'campaign')
+      .eq('customer_notification_tickets.status', 'ok')
       .not('first_opened_at', 'is', null),
     admin
       .schema('now')
@@ -137,6 +141,9 @@ async function loadNotificationDashboard() {
   const sentCount = sentResult.count ?? 0;
   const deliveredCount = deliveredResult.count ?? 0;
   const openedCount = openedResult.count ?? 0;
+  // Both counts are distinct campaign outbox rows with >=1 successful
+  // provider receipt. This measures recorded notification taps, not
+  // impressions or users who opened the app without tapping the push.
   const clickRate = deliveredCount > 0 ? (openedCount / deliveredCount) * 100 : 0;
 
   return {
@@ -246,21 +253,21 @@ export default async function NotificationsPage({
             icon={<Send size={19} />}
           />
           <StatCard
-            label="عملاء استلموها"
+            label="إشعارات وصلت بنجاح"
             value={dashboard.deliveredCount.toLocaleString('ar-EG')}
-            helper="Delivery Receipt ناجح من Expo / APNs / FCM"
+            helper="إيصالات نجاح من مزوّد الإشعارات؛ مش تأكيد إن العميل شافها"
             icon={<CheckCircle2 size={19} />}
           />
           <StatCard
-            label="عملاء ضغطوا عليها"
+            label="إشعارات تم الضغط عليها"
             value={dashboard.openedCount.toLocaleString('ar-EG')}
-            helper="تم تسجيل فتح الإشعار داخل التطبيق"
+            helper="ضغطات مسجلة من التطبيق على إشعارات ناجحة التسليم"
             icon={<MousePointerClick size={19} />}
           />
           <StatCard
             label="معدل الضغط"
             value={`${dashboard.clickRate.toLocaleString('ar-EG', { maximumFractionDigits: 1 })}%`}
-            helper="الضغطات ÷ الإشعارات التي تم تسليمها"
+            helper="الضغطات المسجلة ÷ الإشعارات ذات إيصال تسليم ناجح"
             icon={<Percent size={19} />}
           />
         </div>
@@ -407,7 +414,7 @@ export default async function NotificationsPage({
             {dashboard.metrics.length ? (
               dashboard.metrics.map((metric) => {
                 const processed = numberValue(metric.processed_count);
-                const failed = numberValue(metric.failed_count);
+                const failed = numberValue(metric.receipt_error_count);
                 const receipts = numberValue(metric.receipt_ok_count);
                 const opens = numberValue(metric.opened_outbox_count);
                 const openRate = numberValue(metric.open_rate_pct);
@@ -442,12 +449,12 @@ export default async function NotificationsPage({
                         <p className="mt-1 text-xs font-black text-gray-800">{opens.toLocaleString('ar-EG')}</p>
                       </div>
                       <div className="rounded-xl bg-white px-2 py-2">
-                        <p className="text-[10px] font-semibold text-gray-400">فشلت</p>
+                        <p className="text-[10px] font-semibold text-gray-400">فشل التسليم</p>
                         <p className="mt-1 text-xs font-black text-gray-800">{failed.toLocaleString('ar-EG')}</p>
                       </div>
                     </div>
                     <p className="mt-2 text-[10px] font-semibold text-gray-400">
-                      معدل الضغط: {openRate.toLocaleString('ar-EG', { maximumFractionDigits: 1 })}%
+                      معدل الضغط المسجل (على إشعارات ذات إيصال نجاح): {openRate.toLocaleString('ar-EG', { maximumFractionDigits: 1 })}%
                     </p>
                   </div>
                 );
